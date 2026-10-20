@@ -1,7 +1,12 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **borrador para revisión — no se ha programado nada.**
+Estado: **Fases 0 y 1 en preparación — cambio local, aún sin publicar.**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
+
+### Estado de ejecución
+- Fase 0: agregación de línea base lista en `scripts/sql/ai-usage-baseline.sql`; faltan ejecutarla contra Supabase de desarrollo y evaluar 50–100 casos anonimizados. No hay credenciales de base de datos en este checkout.
+- Fase 1: catálogo y enrutamiento por tarea implementados con `AI_TASK_ROUTING_ENABLED=false` por defecto. Los candidatos nuevos no se activan hasta aprobar la evaluación.
+- El fallback entre OpenAI y Anthropic queda pendiente: cada `ai_configs` solo contiene una llave/proveedor; no se debe intentar el otro proveedor sin credencial y autorización de gasto.
 
 ## 1. Estado actual (leído del código)
 
@@ -13,7 +18,7 @@ Fecha de la investigación de precios y modelos: 19-oct-2026.
 | Consumo | `ai_usage_log` guarda tokens y modelo, **sin costo ni precio**. |
 | Asistente de chat / reportes a la medida | No existen. |
 | Facturación | `account_subscriptions` + `entitlements.ts` (planes `ai`, `yeastar_voice`, `whatsapp_voice`). No hay cobro por uso. |
-| Última migración | `149_yeastar_extension_scope.sql` → la siguiente es la **150**. |
+| Última migración | `150_ai_usage_latency.sql` → la siguiente es la **151**. |
 
 ## 2. Modelos vigentes y precios oficiales (USD por 1M tokens)
 
@@ -47,7 +52,7 @@ Criterio acordado: **calidad + precisión + precio razonable**, no "lo más bara
 | Asistente: preguntas simples y ruteo | `gpt-6-luna` / `claude-haiku-5-5` | — | Barato; decide si escala. |
 | Asistente: datos, reportes, acciones | `claude-sonnet-5-5` | `gpt-5.6-terra` | Razonamiento + uso de herramientas; precisión en cifras. |
 
-Respaldo automático: si el proveedor principal responde 5xx/429/timeout, se reintenta con el alternativo (misma tarea, mismo cobro estimado).
+El enrutamiento actual selecciona un modelo para el proveedor ya configurado. No hay fallback automático al otro proveedor: la configuración actual solo contiene una llave y un cambio tras un timeout podría generar una segunda llamada facturable.
 
 **Puntos a verificar en la evaluación (no asumidos):**
 1. `gpt-6-luna` tiene razonamiento (esfuerzo por defecto `medium`); en Chat Completions los tokens de razonamiento cuentan dentro de `max_completion_tokens`. Nuestro `MAX_OUTPUT_TOKENS = 1024` podría truncar o encarecer respuestas → probar con esfuerzo `low`/`none`.
@@ -81,7 +86,7 @@ Ejemplo mensual de una cuenta mediana (3,000 auto-respuestas, 1,500 análisis, 2
 precio al cliente = costo real / (1 − 0.50) = costo real × 2
 ```
 
-Esto aplica a **todo** consumo (IA, minutos de llamada, transcripción). Las cifras de la tabla anterior marcadas "×1.5" son solo referencia histórica: **el multiplicador vigente es ×2**; se guarda en `ai_billing_settings` (no en código).
+Esto aplica a **todo** consumo (IA, minutos de llamada, transcripción): **el multiplicador vigente es ×2**; se guarda en `ai_billing_settings` (no en código).
 
 **Unidad de crédito (interpretación del ejemplo del cliente):** US$1 de compra = **1,000 créditos**; por tanto **1 crédito = US$0.001 de precio = US$0.0005 de costo real**. El crédito es una unidad de *dinero*, no de tokens: los tokens valen distinto en cada modelo, así que "1,000 tokens por dólar" no puede ser fijo.
 
@@ -130,12 +135,12 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 - `ai_credit_wallets`: `account_id` PK, saldo en micro-USD, umbral de aviso, modo (`byo` | `credits`).
 - `ai_credit_ledger` (solo inserción): compra, consumo, reembolso, ajuste, regalo, vencimiento; `idempotency_key` único; `balance_after`.
 - `ai_credit_packs`: catálogo de paquetes.
-- Extender `ai_usage_log` (el `CHECK` de `mode` se redefinió en las migraciones 039, 071 y 087: partir de la **087**, la más reciente, y agregar los modos nuevos como `assistant` sin perder los existentes): agregar `task`, `cost_micro`, `price_micro`, `fx_rate`, `pricing_version`, `billed`.
+- Extender `ai_usage_log` (el `CHECK` de `mode` se redefinió en las migraciones 039, 071 y 087: partir de la **087**, la más reciente, y agregar los modos nuevos como `assistant` sin perder los existentes): agregar `task`, `cost_micro`, `price_micro`, `fx_rate`, `pricing_version`, `billed`. La migración 150 agrega `latency_ms` para la línea base de rendimiento.
 - Función SQL `ai_credit_debit(...)` `SECURITY DEFINER` con bloqueo de fila: valida saldo y descuenta en una sola transacción. Para llamadas largas (asistente/reportes): **reservar** el máximo estimado y **liquidar** con el uso real.
 - RLS: wallet y ledger legibles para `supervisor+` de la cuenta; **escritura solo con service role** (se documenta con comentario en la migración para que no parezca un olvido).
 
 ### 5.3 Flujo de cada llamada de IA
-1. `generateForTask(task, ctx)` (nuevo) resuelve proveedor/modelo desde el catálogo, con llaves **de la plataforma** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY` en el servidor; nunca `NEXT_PUBLIC_*`).
+1. `generateForTask(task, ctx)` resuelve el candidato del catálogo para el proveedor y la llave configurados actualmente. Las llaves administradas por la plataforma corresponden a una fase posterior; nunca se exponen con `NEXT_PUBLIC_*`.
 2. Revisa saldo → llama al proveedor → calcula costo real con tokens reportados → debita → registra en `ai_usage_log` y ledger.
 3. Sin saldo: auto-respuesta **entrega a un humano** (comportamiento seguro ya existente), análisis se pone en pausa/cola, asistente avisa y ofrece recargar. Nunca falla en silencio.
 4. Avisos de saldo bajo (80 % / 95 % / 0 %) vía el sistema de notificaciones (agregar el tipo nuevo hará fallar `tsc` en los `Record<NotificationType, …>` hasta completarlos — es la red de seguridad).
@@ -154,7 +159,7 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 
 ### 6.1 Alcance
 - Responde dudas de la plataforma y de la operación del cliente; genera **reportes a la medida** con sus datos; propone **acciones con confirmación**.
-- **Solo supervisor y administrador** (`requireRole('supervisor')`; por jerarquía `owner` también entra — confirmar que es lo deseado). Nunca comparar strings de rol.
+- **Supervisor, administrador y owner** (`requireRole('supervisor')`; `owner` accede por jerarquía). Nunca comparar strings de rol.
 - Nuevo entitlement `ai_assistant` en `entitlements.ts` (el mapa `PLAN_FEATURES` es exhaustivo: `tsc` marcará cada lugar).
 - Aislamiento por tenant: **todas las herramientas usan el cliente Supabase con RLS del usuario**, nunca service role, y `account_id` jamás viene de la entrada del modelo. Aunque el modelo se equivoque o sea manipulado, RLS bloquea datos de otra cuenta.
 
@@ -208,10 +213,7 @@ Lo que ya existe en el repo y resuelve la atribución **sin depender de la clave
 - `fetchCdrDetail` ya lee del CDR de Yeastar `call_duration`, `talk_duration`, `ring_duration`, etc. → se puede facturar sobre `talk_duration` (tiempo hablado) en vez de la duración total.
 - Conciliación contra el CDR de Yeastar (consulta de CDR de su OpenAPI): total de llamadas/minutos de la central vs suma de los tenants; la diferencia = llamadas sin tenant (fuera de todos los rangos) → alerta.
 
-**Costo de transcripción — lo que NO está confirmado:**
-- El texto hoy llega de `cdr/getaicontext` de **Yeastar** (su propia IA), no de OpenAI/Claude con nuestras llaves; solo el *resumen* (`call-summary.ts`) usa nuestro proveedor y ese sí es medible por token.
-- No he encontrado el precio de la transcripción de Yeastar ni cómo se factura (por minuto, plan fijo o créditos). Opciones: **(A)** si Yeastar cobra por minuto: costo = minutos del tenant × tarifa; **(B)** si es plan fijo: costo mensual prorrateado `costo_plan × minutos_tenant / minutos_totales`; **(C)** transcribir nosotros con `gpt-4o-mini-transcribe` (por tenant y por token/minuto, medible con la llave del tenant) — su precio por minuto tampoco está verificado. Se decide cuando conozcamos el contrato con Yeastar.
-- Hasta confirmar `duration_seconds` vs `talk_duration`, tomaré como base de cobro la que coincida con lo que Yeastar factura.
+**Costo de transcripción — actualización del dueño del producto:** Yeastar no cobra por usar la transcripción; la PBX utiliza una llave de OpenAI configurada para generar el texto. NexoOmni ingiere después el resultado desde Yeastar, pero no observa la llamada a OpenAI ni registra sus tokens. Por ello, los minutos de CDR permiten atribución por tenant, pero el costo exacto requiere confirmar el modelo configurado y conciliar contra el uso de OpenAI por proyecto/llave. Si todos los tenants comparten una sola llave, OpenAI no separa el gasto por tenant y el costo individual será una estimación prorrateada por duración hasta habilitar credenciales o proyectos separados. El estimado US$0.003/min no es una tarifa confirmada ni debe cobrarse como exacta antes de esa conciliación.
 
 ### Pantallas y alertas
 - **Cliente (supervisor/admin/owner):** saldo en créditos y en MXN estimado, consumo del mes por actividad (respuestas, análisis, llamadas, transcripción, asistente), proyección de agotamiento, historial de recargas.
@@ -223,8 +225,8 @@ Lo que ya existe en el repo y resuelve la atribución **sin depender de la clave
 
 | Fase | Entrega | Validación |
 | --- | --- | --- |
-| 0 | Línea base y evaluación: medianas reales de tokens por `mode` en `ai_usage_log`; comparativo de calidad (luna vs haiku 5.5 vs actual) con conversaciones reales; leer precio de transcripción; confirmar FX. | Informe con números; **decisión de modelos**. |
-| 1 | Catálogo de modelos y enrutamiento (`models.ts`, `generateForTask`), respaldo entre proveedores, defaults actualizados, sin tocar facturación; quitar los modelos fijos en worker/config/UI. | Pruebas unitarias, `tsc`, `lint`. |
+| 0 | Línea base: medianas/p95 de tokens y latencia por modo/modelo desde `ai_usage_log`; evaluación ciega de 50–100 casos anonimizados; conciliación de la transcripción de Yeastar con el uso real de OpenAI y confirmación de FX. | Ejecutar SQL en Supabase de desarrollo, informe de calidad/costo y decisión de modelos. |
+| 1 | Catálogo de modelos y `generateForTask`; rutas por tarea; salida registra proveedor, modelo y latencia; candidatos opt-in con `AI_TASK_ROUTING_ENABLED`. Fallback cruzado se aplaza hasta guardar/proveer ambas llaves. | Pruebas unitarias, `tsc`, `lint`; activar solo tras aprobar Fase 0. |
 | 2 | Precios, ajustes, wallet, ledger, `ai_credit_debit`, extensión de `ai_usage_log`; aritmética entera con pruebas de casos fijos; **modo sombra**. | Pruebas + validación manual de RLS en base de desarrollo. |
 | 2b | Llaves por tenant (`tenant_provider_keys`, panel de plataforma) y **conciliación diaria** con OpenAI/Anthropic. | Revisión humana (secretos/RLS); cuadre contra un mes real. |
 | 2c | Consumo de llamadas: Zernio (`/v1/usage/calls`) y Yeastar (minutos por tenant desde `yeastar_call_transcriptions`/CDR); costo de transcripción cuando se confirme el contrato. | Cuadre contra la factura de Zernio y el CDR. |

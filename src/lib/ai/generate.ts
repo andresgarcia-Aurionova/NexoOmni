@@ -4,30 +4,48 @@ import {
   type AiUsage,
   type ChatMessage,
   type GenerateResult,
-} from './types'
-import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
-import { generateOpenAi } from './providers/openai'
-import { generateAnthropic } from './providers/anthropic'
+  type ProviderResult,
+} from './types';
+import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults';
+import { resolveAiTaskConfig, type AiTask } from './model-routing';
+import { generateOpenAi } from './providers/openai';
+import { generateAnthropic } from './providers/anthropic';
 
 export interface GenerateArgs {
-  config: AiConfig
+  config: AiConfig;
+  task?: AiTask;
   /** Fully-built system prompt (see `buildSystemPrompt`). */
-  systemPrompt: string
+  systemPrompt: string;
   /** Recent conversation turns, oldest first. */
-  messages: ChatMessage[]
+  messages: ChatMessage[];
   /** Override the reply-sized default for long analytical outputs. */
-  maxOutputTokens?: number
+  maxOutputTokens?: number;
   /** Override the default per-call timeout for slow analytical calls. */
-  timeoutMs?: number
+  timeoutMs?: number;
+}
+
+export interface GenerateTextResult {
+  text: string;
+  usage: AiUsage | null;
+  provider: AiConfig['provider'];
+  model: string;
+  latencyMs: number;
+}
+
+export interface GenerateReplyResult extends GenerateResult {
+  provider: AiConfig['provider'];
+  model: string;
+  latencyMs: number;
 }
 
 /** Generate arbitrary structured assistance with the configured provider. */
-export async function generateText(args: GenerateArgs): Promise<{
-  text: string
-  usage: AiUsage | null
-}> {
-  const { config, systemPrompt, messages } = args
-  const timeoutMs = args.timeoutMs ?? aiRequestTimeoutMs()
+export async function generateText(
+  args: GenerateArgs
+): Promise<GenerateTextResult> {
+  const { systemPrompt, messages } = args;
+  const config = resolveAiTaskConfig(args.config, args.task ?? 'reply');
+  const timeoutMs = args.timeoutMs ?? aiRequestTimeoutMs();
+  const startedAt = Date.now();
   const providerArgs = {
     apiKey: config.apiKey,
     model: config.model,
@@ -35,19 +53,34 @@ export async function generateText(args: GenerateArgs): Promise<{
     messages,
     timeoutMs,
     maxOutputTokens: args.maxOutputTokens,
-  }
+  };
 
+  let result: ProviderResult;
   switch (config.provider) {
     case 'openai':
-      return generateOpenAi(providerArgs)
+      result = await generateOpenAi(providerArgs);
+      break;
     case 'anthropic':
-      return generateAnthropic(providerArgs)
+      result = await generateAnthropic(providerArgs);
+      break;
     default:
       throw new AiError(`Unsupported AI provider: ${config.provider}`, {
         code: 'unsupported_provider',
         status: 400,
-      })
+      });
   }
+  return {
+    ...result,
+    provider: config.provider,
+    model: config.model,
+    latencyMs: Date.now() - startedAt,
+  };
+}
+
+export async function generateForTask(
+  args: GenerateArgs & { task: AiTask }
+): Promise<GenerateTextResult> {
+  return generateText(args);
 }
 
 /**
@@ -55,9 +88,16 @@ export async function generateText(args: GenerateArgs): Promise<{
  * Dispatches to the right adapter, then parses the handoff sentinel out
  * of the raw text. Throws `AiError` on any provider/network failure.
  */
-export async function generateReply(args: GenerateArgs): Promise<GenerateResult> {
-  const result = await generateText(args)
-  return parseGeneration(result.text, result.usage)
+export async function generateReply(
+  args: GenerateArgs
+): Promise<GenerateReplyResult> {
+  const result = await generateText(args);
+  return {
+    ...parseGeneration(result.text, result.usage),
+    provider: result.provider,
+    model: result.model,
+    latencyMs: result.latencyMs,
+  };
 }
 
 /**
@@ -70,14 +110,14 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
  */
 export function parseGeneration(
   raw: string,
-  usage: AiUsage | null = null,
+  usage: AiUsage | null = null
 ): GenerateResult {
-  const withQueue = raw.match(/\[\[HANDOFF:([^\]]{1,80})\]\]/i)
-  const handoff = raw.includes(HANDOFF_SENTINEL) || withQueue !== null
+  const withQueue = raw.match(/\[\[HANDOFF:([^\]]{1,80})\]\]/i);
+  const handoff = raw.includes(HANDOFF_SENTINEL) || withQueue !== null;
   const text = raw
     .replace(/\[\[HANDOFF:[^\]]{1,80}\]\]/gi, '')
     .split(HANDOFF_SENTINEL)
     .join('')
-    .trim()
-  return { text, handoff, handoffQueue: withQueue?.[1]?.trim() || null, usage }
+    .trim();
+  return { text, handoff, handoffQueue: withQueue?.[1]?.trim() || null, usage };
 }

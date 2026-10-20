@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
-import { generateText } from '@/lib/ai/generate'
+import { generateForTask } from '@/lib/ai/generate'
+import { resolveAiTaskConfig } from '@/lib/ai/model-routing'
 import { logAiUsage } from '@/lib/ai/usage'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -177,9 +178,8 @@ export async function POST(request: Request) {
         ? ' Incluye además QA interno: "qa_score":0-100, "qa_empathy_score":0-100, "qa_objection_handling_score":0-100, "qa_script_adherence_score":0-100, "qa_summary":"...", "qa_findings":["..."]. Evalúa solo lo observable; si no hubo objeciones o guion aplicable, indícalo y usa una puntuación neutral. ' + (policy.qa_scoring_criteria ? `Criterios propios: ${policy.qa_scoring_criteria}` : '')
         : ''
       const memoryPrompt = ' Incluye también memoria del cliente (Nexo Memory): "customer_stage":"..." (p.ej. prospecto, cotización, propuesta, cliente), "risk_level":"low|medium|high", "opportunity_score":0-100, "interests":[{"text":"...","confidence":0-1}], "objections":[{"text":"...","confidence":0-1}], "commitments":[{"description":"...","owner":"agent|customer","due_date":"YYYY-MM-DD|null","due_time":"HH:MM|null"}], "important_facts":["..."] (hechos nuevos y relevantes, no saludos ni trivialidades). Para "commitments", resuelve fechas relativas ("mañana", "el viernes") a una fecha absoluta usando como referencia de "hoy" la fecha/hora actual: ' + new Date().toISOString() + '. "due_time" solo si el cliente o agente mencionó una hora concreta (p.ej. "a las 3pm" -> "15:00"), si no la mencionó usa null — no inventes una hora. Omite cualquier campo del que no tengas evidencia clara en la conversación.'
-      const analysisConfig = { ...config, model: config.analysisModel ?? config.model }
       const queues = await loadAccountQueues(db, job.account_id)
-      const result = await generateText({ config: analysisConfig, messages, systemPrompt: 'Analiza la conversación. Responde únicamente JSON: {"summary":"...","sentiment":"positive|neutral|negative|mixed","sentiment_score":0,"next_best_action":"...","reasons":["..."]}. Usa español y no inventes datos.' + qaPrompt + memoryPrompt + INSIGHTS_PROMPT + departmentsPrompt(queues.map((q) => q.name)) })
+      const result = await generateForTask({ config, task: 'analysis', messages, systemPrompt: 'Analiza la conversación. Responde únicamente JSON: {"summary":"...","sentiment":"positive|neutral|negative|mixed","sentiment_score":0,"next_best_action":"...","reasons":["..."]}. Usa español y no inventes datos.' + qaPrompt + memoryPrompt + INSIGHTS_PROMPT + departmentsPrompt(queues.map((q) => q.name)) })
       const match = result.text.match(/\{[\s\S]*\}/)
       if (!match) throw new Error('La IA no devolvió JSON válido.')
       const rawValue = JSON.parse(match[0]) as Record<string, unknown>
@@ -199,7 +199,7 @@ export async function POST(request: Request) {
         handoff_required: insights.handoff_required,
         recommended_department: insights.recommended_department,
         recommended_queue_id: recommendedQueueId,
-        model: analysisConfig.model,
+        model: result.model,
         analyzed_message_count: messages.length,
         analyzed_at: new Date().toISOString(),
         error_message: null,
@@ -220,7 +220,7 @@ export async function POST(request: Request) {
         await routeConversationToQueue(db, job.account_id, job.conversation_id, recommendedQueueId)
       }
       await db.from('ai_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
-      await logAiUsage(db, { accountId: job.account_id, conversationId: job.conversation_id, mode: 'analysis', provider: config.provider, model: analysisConfig.model, usage: result.usage })
+      await logAiUsage(db, { accountId: job.account_id, conversationId: job.conversation_id, mode: 'analysis', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
       // Keep outbound automation useful but privacy-preserving: n8n receives
       // analysis metadata, never the transcript, customer identifiers, media,
       // summary or the model's private reasoning.
@@ -534,8 +534,8 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
         const downloaded = await downloadZernioInboundMedia(message.media_url!, zernioChannel)
         const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
         const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: config.imageAnalysisModel ?? 'gpt-4.1-mini', bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: config.voiceTranscriptionModel ?? 'gpt-4o-mini-transcribe', bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -549,8 +549,8 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
         const downloaded = await downloadPublicMedia(message.media_url!)
         const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
         const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: config.imageAnalysisModel ?? 'gpt-4.1-mini', bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: config.voiceTranscriptionModel ?? 'gpt-4o-mini-transcribe', bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -566,8 +566,8 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
         const bytes = Buffer.from(await blob.arrayBuffer())
         const mimeType = blob.type || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
         const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: config.imageAnalysisModel ?? 'gpt-4.1-mini', bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: config.voiceTranscriptionModel ?? 'gpt-4o-mini-transcribe', bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -584,8 +584,8 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       const downloaded = await downloadMedia({ downloadUrl: media.url, accessToken: token })
       const mimeType = downloaded.contentType || media.mimeType
       const value = job.kind === 'image'
-        ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: config.imageAnalysisModel ?? 'gpt-4.1-mini', bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
-        : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: config.voiceTranscriptionModel ?? 'gpt-4o-mini-transcribe', bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
+        ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
+        : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
       const messagePatch = job.kind === 'image'
         ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
         : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }

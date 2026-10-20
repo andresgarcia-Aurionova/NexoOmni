@@ -3,7 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
-import { generateText } from '@/lib/ai/generate'
+import { generateForTask } from '@/lib/ai/generate'
 import { logAiUsage } from '@/lib/ai/usage'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError } from '@/lib/ai/types'
@@ -185,8 +185,12 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       'Incluye también memoria del cliente (Nexo Memory): "customer_stage":"..." (p.ej. prospecto, cotización, propuesta, cliente), "risk_level":"low|medium|high", "opportunity_score":0-100, "interests":[{"text":"...","confidence":0-1}], "objections":[{"text":"...","confidence":0-1}], "commitments":[{"description":"...","owner":"agent|customer","due_date":"YYYY-MM-DD|null"}], "important_facts":["..."] (hechos nuevos y relevantes, no saludos ni trivialidades). Omite cualquier campo del que no tengas evidencia clara.',
       INSIGHTS_PROMPT + departmentsPrompt(queues.map((q) => q.name)),
     ].filter(Boolean).join('\n\n')
-    const analysisConfig = { ...config, model: config.analysisModel ?? config.model }
-    const result = await generateText({ config: analysisConfig, systemPrompt, messages })
+    const result = await generateForTask({
+      config,
+      task: 'analysis',
+      systemPrompt,
+      messages,
+    })
     const match = result.text.match(/\{[\s\S]*\}/)
     if (!match) throw new AiError('The AI did not return a valid analysis.', { code: 'invalid_analysis' })
     const rawValue = JSON.parse(match[0]) as Record<string, unknown>
@@ -210,7 +214,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
         handoff_required: insights.handoff_required,
         recommended_department: insights.recommended_department,
         recommended_queue_id: recommendedQueueId,
-        model: analysisConfig.model,
+        model: result.model,
         analyzed_message_count: messages.length,
         analyzed_at: new Date().toISOString(),
         error_message: null,
@@ -218,7 +222,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       .select(ANALYSIS_COLUMNS)
       .single()
     if (error) throw error
-    void logAiUsage(admin, { accountId, conversationId, mode: 'analysis', provider: config.provider, model: analysisConfig.model, usage: result.usage })
+    void logAiUsage(admin, { accountId, conversationId, mode: 'analysis', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
     if (qaPolicy?.analysis_auto_route_enabled && insights.handoff_required && recommendedQueueId) {
       await routeConversationToQueue(admin, accountId, conversationId, recommendedQueueId)
     }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { loadAiConfig } from '@/lib/ai/config'
-import { generateText } from '@/lib/ai/generate'
+import { generateForTask } from '@/lib/ai/generate'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError } from '@/lib/ai/types'
 import { logAiUsage } from '@/lib/ai/usage'
@@ -175,8 +175,9 @@ export async function POST(request: Request) {
       `Perfil operativo de la empresa: ${report.meta.operating_mode}.`,
       config.systemPrompt ? `Contexto adicional de la empresa: ${config.systemPrompt}` : '',
     ].filter(Boolean).join('\n\n')
-    const result = await generateText({
+    const result = await generateForTask({
       config,
+      task: 'report',
       systemPrompt,
       messages: [{ role: 'user', content: JSON.stringify(compactReportForModel(report)) }],
       maxOutputTokens: INSIGHT_MAX_OUTPUT_TOKENS,
@@ -189,7 +190,7 @@ export async function POST(request: Request) {
       .from('executive_report_insights')
       .upsert({ account_id: accountId, range_from: range.from, range_to: range.to, insight, generated_by: userId, generated_at: generatedAt }, { onConflict: 'account_id,range_from,range_to' })
     if (saveError) throw saveError
-    void logAiUsage(admin, { accountId, conversationId: null, mode: 'report', provider: config.provider, model: config.model, usage: result.usage })
+    void logAiUsage(admin, { accountId, conversationId: null, mode: 'report', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
     return NextResponse.json({ insight, generated_at: generatedAt })
   } catch (error) {
     if (error instanceof AiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })

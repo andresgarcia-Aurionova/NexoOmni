@@ -1,49 +1,52 @@
-import { supabaseAdmin } from './admin-client'
-import { loadAiConfig } from './config'
-import { buildConversationContext } from './context'
-import { retrieveKnowledge } from './knowledge'
-import { generateReply } from './generate'
-import { buildSystemPrompt } from './defaults'
-import { resolvePromptVariables, substitutePromptVariables } from './prompt-variables'
-import { buildHandoffSummary } from './handoff'
-import { logAiUsage } from './usage'
-import { latestUserMessage } from './query'
-import { engineSendText } from '@/lib/flows/meta-send'
-import { sendOmnichannelText } from '@/lib/omnichannel/outbound-text'
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
-import type { AiConfig } from './types'
-import type { ChannelType } from '@/types'
+import { supabaseAdmin } from './admin-client';
+import { loadAiConfig } from './config';
+import { buildConversationContext } from './context';
+import { retrieveKnowledge } from './knowledge';
+import { generateReply } from './generate';
+import { buildSystemPrompt } from './defaults';
+import {
+  resolvePromptVariables,
+  substitutePromptVariables,
+} from './prompt-variables';
+import { buildHandoffSummary } from './handoff';
+import { logAiUsage } from './usage';
+import { latestUserMessage } from './query';
+import { engineSendText } from '@/lib/flows/meta-send';
+import { sendOmnichannelText } from '@/lib/omnichannel/outbound-text';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import type { AiConfig } from './types';
+import type { ChannelType } from '@/types';
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
-  accountId: string
-  conversationId: string
-  contactId: string
+  accountId: string;
+  conversationId: string;
+  contactId: string;
   /** The account's WhatsApp config owner, used for the outbound send's
    *  audit columns (mirrors how the flow runner passes it through). */
-  configOwnerUserId: string
+  configOwnerUserId: string;
   /** Inbox channel the inbound arrived on. Checked against the agent's
    *  configured channel scope. */
-  channelType?: ChannelType
+  channelType?: ChannelType;
   /** True when an automation already answered this same inbound, so the
    *  customer isn't texted twice. */
-  automationReplied?: boolean
+  automationReplied?: boolean;
 }
 
 export interface AutoReplyGateInput {
-  accountId: string
-  conversationId: string
-  channelType?: ChannelType
-  automationReplied?: boolean
+  accountId: string;
+  conversationId: string;
+  channelType?: ChannelType;
+  automationReplied?: boolean;
 }
 
 export type AutoReplyGateResult =
   | {
-      ok: true
-      config: AiConfig
-      conv: { assigned_agent_id: string | null; ai_reply_count: number }
+      ok: true;
+      config: AiConfig;
+      conv: { assigned_agent_id: string | null; ai_reply_count: number };
     }
-  | { ok: false; reason: string }
+  | { ok: false; reason: string };
 
 /**
  * Every reason the agent may stay silent, in one place, so the inbox can
@@ -52,13 +55,14 @@ export type AutoReplyGateResult =
  */
 export async function evaluateAutoReplyGates(
   db: ReturnType<typeof supabaseAdmin>,
-  input: AutoReplyGateInput,
+  input: AutoReplyGateInput
 ): Promise<AutoReplyGateResult> {
-  const { accountId, conversationId } = input
+  const { accountId, conversationId } = input;
 
-  const config = await loadAiConfig(db, accountId)
-  if (!config) return { ok: false, reason: 'ai_inactive' }
-  if (!config.autoReplyEnabled) return { ok: false, reason: 'auto_reply_disabled' }
+  const config = await loadAiConfig(db, accountId);
+  if (!config) return { ok: false, reason: 'ai_inactive' };
+  if (!config.autoReplyEnabled)
+    return { ok: false, reason: 'auto_reply_disabled' };
 
   // Channel scope: an account can let the agent answer everywhere (null)
   // or only on the channels it was trained for.
@@ -67,7 +71,10 @@ export async function evaluateAutoReplyGates(
     config.channelTypes.length > 0 &&
     (!input.channelType || !config.channelTypes.includes(input.channelType))
   ) {
-    return { ok: false, reason: `channel_out_of_scope:${input.channelType ?? 'unknown'}` }
+    return {
+      ok: false,
+      reason: `channel_out_of_scope:${input.channelType ?? 'unknown'}`,
+    };
   }
 
   // Deterministic, user-configured responders win over the LLM — the
@@ -76,7 +83,8 @@ export async function evaluateAutoReplyGates(
   // inbound (every inbound webhook does), we trust that; otherwise we
   // fall back to the conservative "account has some active
   // auto-responder" check.
-  if (input.automationReplied) return { ok: false, reason: 'automation_replied' }
+  if (input.automationReplied)
+    return { ok: false, reason: 'automation_replied' };
   if (input.automationReplied === undefined) {
     const { data: autoResponders } = await db
       .from('automations')
@@ -84,9 +92,9 @@ export async function evaluateAutoReplyGates(
       .eq('account_id', accountId)
       .eq('is_active', true)
       .in('trigger_type', ['new_message_received', 'keyword_match'])
-      .limit(1)
+      .limit(1);
     if (autoResponders && autoResponders.length > 0) {
-      return { ok: false, reason: 'account_has_active_auto_responder' }
+      return { ok: false, reason: 'account_has_active_auto_responder' };
     }
   }
 
@@ -94,9 +102,10 @@ export async function evaluateAutoReplyGates(
     .from('conversations')
     .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
     .eq('id', conversationId)
-    .maybeSingle()
-  if (convErr || !conv) return { ok: false, reason: 'conversation_not_found' }
-  if (conv.ai_autoreply_disabled) return { ok: false, reason: 'paused_on_this_conversation' }
+    .maybeSingle();
+  if (convErr || !conv) return { ok: false, reason: 'conversation_not_found' };
+  if (conv.ai_autoreply_disabled)
+    return { ok: false, reason: 'paused_on_this_conversation' };
 
   // "A human owns this thread" must mean a person actually wrote in it, not
   // merely that routing put a name on it: queue auto-assignment stamps an
@@ -106,8 +115,9 @@ export async function evaluateAutoReplyGates(
     .select('id', { count: 'exact', head: true })
     .eq('conversation_id', conversationId)
     .eq('sender_type', 'agent')
-    .not('sender_id', 'is', null)
-  if ((humanMessages ?? 0) > 0) return { ok: false, reason: 'human_agent_already_replied' }
+    .not('sender_id', 'is', null);
+  if ((humanMessages ?? 0) > 0)
+    return { ok: false, reason: 'human_agent_already_replied' };
 
   // Cheap early-out; the authoritative cap check is the atomic claim in the
   // dispatch (this read can race a concurrent inbound).
@@ -115,14 +125,17 @@ export async function evaluateAutoReplyGates(
     return {
       ok: false,
       reason: `reply_cap_reached:${conv.ai_reply_count}/${config.autoReplyMaxPerConversation}`,
-    }
+    };
   }
 
   return {
     ok: true,
     config,
-    conv: { assigned_agent_id: conv.assigned_agent_id, ai_reply_count: conv.ai_reply_count },
-  }
+    conv: {
+      assigned_agent_id: conv.assigned_agent_id,
+      ai_reply_count: conv.ai_reply_count,
+    },
+  };
 }
 
 /**
@@ -145,29 +158,29 @@ export async function evaluateAutoReplyGates(
  * window check is needed.
  */
 export async function dispatchInboundToAiReply(
-  args: DispatchArgs,
+  args: DispatchArgs
 ): Promise<void> {
-  const { accountId, conversationId, contactId, configOwnerUserId } = args
+  const { accountId, conversationId, contactId, configOwnerUserId } = args;
 
   try {
-    const db = supabaseAdmin()
+    const db = supabaseAdmin();
 
     const gate = await evaluateAutoReplyGates(db, {
       accountId,
       conversationId,
       channelType: args.channelType,
       automationReplied: args.automationReplied,
-    })
+    });
     if (!gate.ok) {
       console.info(
-        `[ai auto-reply] skipped conversation ${conversationId}: ${gate.reason}`,
-      )
-      return
+        `[ai auto-reply] skipped conversation ${conversationId}: ${gate.reason}`
+      );
+      return;
     }
-    const { config, conv } = gate
+    const { config, conv } = gate;
 
-    const messages = await buildConversationContext(db, conversationId)
-    if (messages.length === 0) return
+    const messages = await buildConversationContext(db, conversationId);
+    if (messages.length === 0) return;
 
     // Account-wide throttle on the shared BYO key. The per-conversation
     // cap bounds one thread; this bounds a burst across many threads (a
@@ -176,13 +189,13 @@ export async function dispatchInboundToAiReply(
     // the auto-reply; the inbound still sits in the inbox for a human.
     const acctLimit = checkRateLimit(
       `ai-autoreply:${accountId}`,
-      RATE_LIMITS.aiAutoReplyAccount,
-    )
+      RATE_LIMITS.aiAutoReplyAccount
+    );
     if (!acctLimit.success) {
       console.warn(
-        `[ai auto-reply] account ${accountId} hit the per-account rate limit — skipping this inbound.`,
-      )
-      return
+        `[ai auto-reply] account ${accountId} hit the per-account rate limit — skipping this inbound.`
+      );
+      return;
     }
 
     // Ground the reply in the account's knowledge base (best-effort).
@@ -190,25 +203,35 @@ export async function dispatchInboundToAiReply(
       db,
       accountId,
       config,
-      latestUserMessage(messages),
-    )
+      latestUserMessage(messages)
+    );
 
     const routableQueues =
-      config.handoffTarget === 'ai_queue' ? await loadQueues(db, accountId) : []
+      config.handoffTarget === 'ai_queue'
+        ? await loadQueues(db, accountId)
+        : [];
 
-    const promptVariables = await resolvePromptVariables(db, accountId, config.timezone)
+    const promptVariables = await resolvePromptVariables(
+      db,
+      accountId,
+      config.timezone
+    );
     const systemPrompt = buildSystemPrompt({
-      userPrompt: config.systemPrompt ? substitutePromptVariables(config.systemPrompt, promptVariables) : config.systemPrompt,
+      userPrompt: config.systemPrompt
+        ? substitutePromptVariables(config.systemPrompt, promptVariables)
+        : config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
       handoffQueues: routableQueues.map((q) => q.name),
-    })
+    });
 
-    const { text, handoff, handoffQueue, usage } = await generateReply({
-      config,
-      systemPrompt,
-      messages,
-    })
+    const { text, handoff, handoffQueue, usage, provider, model, latencyMs } =
+      await generateReply({
+        config,
+        task: 'reply',
+        systemPrompt,
+        messages,
+      });
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
     // never adds latency to the customer-facing send: `logAiUsage`
@@ -219,10 +242,11 @@ export async function dispatchInboundToAiReply(
       accountId,
       conversationId,
       mode: 'auto_reply',
-      provider: config.provider,
-      model: config.model,
+      provider,
+      model,
+      latencyMs,
       usage,
-    })
+    });
 
     if (handoff || !text) {
       // The model can't (or shouldn't) answer — stop auto-replying on
@@ -235,42 +259,53 @@ export async function dispatchInboundToAiReply(
       const summary = buildHandoffSummary({
         messages,
         replyCount: conv.ai_reply_count ?? 0,
-      })
+      });
       const update: Record<string, unknown> = {
         ai_autoreply_disabled: true,
         ai_handoff_summary: summary,
-      }
+      };
 
       // Never stomp an existing human assignment.
       const queueId =
         config.handoffTarget === 'ai_queue'
-          ? matchQueueId(routableQueues, handoffQueue) ?? config.handoffQueueId ?? null
+          ? (matchQueueId(routableQueues, handoffQueue) ??
+            config.handoffQueueId ??
+            null)
           : config.handoffTarget === 'queue'
-            ? config.handoffQueueId ?? null
-            : null
+            ? (config.handoffQueueId ?? null)
+            : null;
 
       // The gates above already established no human has written here, so a
       // routing-time assignee may be replaced by the configured target.
       if (queueId) {
-        update.queue_id = queueId
-        update.assigned_agent_id = null
-      } else if ((config.handoffTarget ?? 'agent') === 'agent' && config.handoffAgentId) {
-        update.assigned_agent_id = config.handoffAgentId
+        update.queue_id = queueId;
+        update.assigned_agent_id = null;
+      } else if (
+        (config.handoffTarget ?? 'agent') === 'agent' &&
+        config.handoffAgentId
+      ) {
+        update.assigned_agent_id = config.handoffAgentId;
       }
-      await db.from('conversations').update(update).eq('id', conversationId)
+      await db.from('conversations').update(update).eq('id', conversationId);
 
       // Let the queue's own rules (round-robin / fewest open chats,
       // restricted to its members) pick the human.
       if (queueId) {
-        const { error: assignErr } = await db.rpc('auto_assign_inbound_conversation', {
-          p_account_id: accountId,
-          p_conversation_id: conversationId,
-        })
+        const { error: assignErr } = await db.rpc(
+          'auto_assign_inbound_conversation',
+          {
+            p_account_id: accountId,
+            p_conversation_id: conversationId,
+          }
+        );
         if (assignErr) {
-          console.error('[ai auto-reply] queue assignment failed:', assignErr.message)
+          console.error(
+            '[ai auto-reply] queue assignment failed:',
+            assignErr.message
+          );
         }
       }
-      return
+      return;
     }
 
     // Atomically claim a reply slot: the cap check + increment happen in
@@ -283,17 +318,17 @@ export async function dispatchInboundToAiReply(
       {
         conversation_id: conversationId,
         max_replies: config.autoReplyMaxPerConversation,
-      },
-    )
+      }
+    );
     if (claimErr) {
       // A real error here (vs. losing the cap race) is almost always a
       // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
       // service role, or the migration not applied. Log it loudly: a
       // silent return makes "auto-reply never fires" undiagnosable.
-      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
-      return
+      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr);
+      return;
     }
-    if (claimed !== true) return // lost the per-conversation cap race
+    if (claimed !== true) return; // lost the per-conversation cap race
 
     if (args.channelType && args.channelType !== 'whatsapp') {
       await sendOmnichannelText(db, {
@@ -302,8 +337,8 @@ export async function dispatchInboundToAiReply(
         text,
         senderType: 'bot',
         aiGenerated: true,
-      })
-      return
+      });
+      return;
     }
 
     await engineSendText({
@@ -313,41 +348,41 @@ export async function dispatchInboundToAiReply(
       contactId,
       text,
       aiGenerated: true,
-    })
+    });
   } catch (err) {
-    console.error('[ai auto-reply] dispatch failed:', err)
+    console.error('[ai auto-reply] dispatch failed:', err);
   }
 }
 
 async function loadQueues(
   db: ReturnType<typeof supabaseAdmin>,
-  accountId: string,
+  accountId: string
 ): Promise<{ id: string; name: string }[]> {
   const { data, error } = await db
     .from('conversation_queues')
     .select('id, name')
     .eq('account_id', accountId)
-    .order('name')
+    .order('name');
   if (error) {
-    console.error('[ai auto-reply] could not load queues:', error.message)
-    return []
+    console.error('[ai auto-reply] could not load queues:', error.message);
+    return [];
   }
-  return (data ?? []) as { id: string; name: string }[]
+  return (data ?? []) as { id: string; name: string }[];
 }
 
 /** Match the department the model named against the account's queues,
  *  case- and accent-insensitively. */
 function matchQueueId(
   queues: { id: string; name: string }[],
-  named: string | null,
+  named: string | null
 ): string | null {
-  if (!named) return null
+  if (!named) return null;
   const normalize = (value: string) =>
     value
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .trim()
-      .toLowerCase()
-  const target = normalize(named)
-  return queues.find((q) => normalize(q.name) === target)?.id ?? null
+      .toLowerCase();
+  const target = normalize(named);
+  return queues.find((q) => normalize(q.name) === target)?.id ?? null;
 }
