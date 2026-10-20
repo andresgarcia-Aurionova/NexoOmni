@@ -10,6 +10,12 @@ export interface LogAiUsageArgs {
   provider: AiProvider;
   model: string;
   latencyMs?: number;
+  billing?: {
+    mode: 'shadow' | 'enforced';
+    costNanoUsd: bigint;
+    priceNanoUsd: bigint;
+    creditsCharged: bigint;
+  };
   /** Provider usage; a no-op when null (nothing worth recording). */
   usage: AiUsage | null;
 }
@@ -21,6 +27,18 @@ function isMissingLatencyColumn(error: {
   return (
     (error.code === '42703' || error.code === 'PGRST204') &&
     /latency_ms/i.test(error.message ?? '')
+  );
+}
+
+function isMissingBillingColumn(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    (error.code === '42703' || error.code === 'PGRST204') &&
+    /(cost_nano_usd|price_nano_usd|credits_charged|billing_mode)/i.test(
+      error.message ?? ''
+    )
   );
 }
 
@@ -53,19 +71,38 @@ export async function logAiUsage(
       completion_tokens: args.usage.completionTokens,
       total_tokens: args.usage.totalTokens,
     };
-    const { error } = await db
-      .from('ai_usage_log')
-      .insert({ ...row, latency_ms: args.latencyMs ?? null });
+    const billingRow = args.billing
+      ? {
+          cost_nano_usd: args.billing.costNanoUsd.toString(),
+          price_nano_usd: args.billing.priceNanoUsd.toString(),
+          credits_charged: args.billing.creditsCharged.toString(),
+          billing_mode: args.billing.mode,
+        }
+      : {};
+    let { error } = await db.from('ai_usage_log').insert({
+      ...row,
+      latency_ms: args.latencyMs ?? null,
+      ...billingRow,
+    });
+
+    if (error && isMissingBillingColumn(error)) {
+      console.warn(
+        '[ai usage] billing columns are not available yet; apply migration 151 to start recording charge estimates.'
+      );
+      const retry = await db
+        .from('ai_usage_log')
+        .insert({ ...row, latency_ms: args.latencyMs ?? null });
+      error = retry.error;
+    }
+
     if (error && isMissingLatencyColumn(error)) {
       console.warn(
         '[ai usage] latency_ms column is not available yet; apply migration 150 to start recording latency.'
       );
       const retry = await db.from('ai_usage_log').insert(row);
-      if (retry.error) {
-        console.error('[ai usage] legacy log insert failed:', retry.error);
-      }
-      return;
+      error = retry.error;
     }
+
     if (error) {
       console.error('[ai usage] log insert failed:', error);
     }
