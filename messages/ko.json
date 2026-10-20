@@ -1,4 +1,55 @@
 {
+  "PlatformCredits": {
+    "title": "고객별 AI 크레딧",
+    "description": "잔액을 관리하고 이번 달 기록된 사용량을 확인합니다. 표시된 비용은 토큰과 설정된 가격으로 계산한 추정치이며 공급자의 실제 청구서가 아닙니다.",
+    "noDebitYet": "중요: 아직 AI 사용량에 따라 크레딧이 자동 차감되지 않습니다. 섀도 모드 측정값을 검증한 뒤 자동 차감을 활성화합니다.",
+    "account": "고객",
+    "availableBalance": "사용 가능 잔액(크레딧)",
+    "refresh": "새로고침",
+    "amount": "추가할 크레딧",
+    "entryType": "거래 유형",
+    "purchase": "결제된 충전",
+    "adjustment": "조정 또는 서비스 제공",
+    "reason": "사유 / 결제 참조",
+    "reasonPlaceholder": "예: SPEI 입금, 영수증 번호 또는 조정 사유",
+    "grant": "크레딧 등록",
+    "stripePending": "충전은 수동으로 기록됩니다. Stripe 자동 결제는 이후 단계에서 연결됩니다.",
+    "usageTitle": "이번 달 AI 사용량",
+    "usageDescription": "예상 비용은 공급자가 보고한 토큰 수를 기준으로 합니다. 가격이 없거나 청구 계산이 없는 호출은 '예상 없음'으로 표시됩니다.",
+    "noUsage": "이번 달에 기록된 AI 사용량이 없습니다.",
+    "task": "기능",
+    "providerModel": "공급자 · 모델",
+    "calls": "호출",
+    "credits": "예상 크레딧",
+    "estimatedCost": "예상 비용",
+    "unpriced": "예상 없음",
+    "ledgerTitle": "잔액 내역",
+    "noLedger": "아직 크레딧 거래가 없습니다.",
+    "systemEntry": "시스템 거래",
+    "loadError": "크레딧 상태를 불러오지 못했습니다.",
+    "grantError": "크레딧을 등록하지 못했습니다.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "modes": {
+      "auto_reply": "자동 답변",
+      "draft": "답변 초안",
+      "analysis": "대화 분석",
+      "report": "보고서",
+      "call_summary": "통화 요약",
+      "voice_transcription": "음성 메모 전사",
+      "image_description": "이미지 분석",
+      "embeddings": "지식 베이스"
+    },
+    "entries": {
+      "purchase": "충전",
+      "adjustment": "조정",
+      "usage": "사용량",
+      "refund": "환불",
+      "expiration": "만료"
+    }
+  },
   "NexPhoneContext": {
     "open": "통화 맥락",
     "title": "이 통화를 위한 맥락",

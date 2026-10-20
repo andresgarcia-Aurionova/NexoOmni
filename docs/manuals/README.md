@@ -80,6 +80,7 @@ al día.
 | Funcionalidad | Manual | Estado |
 |---|---|---|
 | Conectar WhatsApp (nativo o guiado) | [primeros-pasos/conexion-whatsapp.md](./primeros-pasos/conexion-whatsapp.md) | ✅ |
+| Créditos de IA y recargas manuales (operador de plataforma) | [primeros-pasos/administrar-creditos-ia.md](./primeros-pasos/administrar-creditos-ia.md) | ✅ |
 | Conectar Facebook / Instagram | [primeros-pasos/conexion-facebook-instagram.md](./primeros-pasos/conexion-facebook-instagram.md) | ✅ |
 | Miembros del equipo y roles (owner/admin/supervisor/agent/viewer) | [primeros-pasos/invitar-miembros.md](./primeros-pasos/invitar-miembros.md) | ✅ |
 | Bandeja de entrada compartida (WhatsApp/FB/IG/Chat web) | [inbox/bandeja-compartida.md](./inbox/bandeja-compartida.md) | ✅ |

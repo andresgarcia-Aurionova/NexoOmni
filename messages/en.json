@@ -1,4 +1,55 @@
 {
+  "PlatformCredits": {
+    "title": "AI credits by customer",
+    "description": "Manage balances and review recorded usage for this month. The cost shown is an estimate based on tokens and configured prices, not the provider's actual invoice.",
+    "noDebitYet": "Important: credits are not automatically deducted for AI usage yet. Automatic debits will be enabled after shadow-mode measurements are validated.",
+    "account": "Customer",
+    "availableBalance": "Available balance (credits)",
+    "refresh": "Refresh",
+    "amount": "Credits to add",
+    "entryType": "Transaction type",
+    "purchase": "Paid top-up",
+    "adjustment": "Adjustment or courtesy",
+    "reason": "Reason / payment reference",
+    "reasonPlaceholder": "For example, SPEI received, receipt number, or adjustment reason",
+    "grant": "Record credit",
+    "stripePending": "Top-ups are recorded manually. Automatic Stripe payments will be connected in a later phase.",
+    "usageTitle": "AI usage this month",
+    "usageDescription": "Estimated costs use token counts reported by the provider. Calls without a configured price or billing calculation appear as \"No estimate\".",
+    "noUsage": "No AI usage has been recorded this month.",
+    "task": "Feature",
+    "providerModel": "Provider · model",
+    "calls": "Calls",
+    "credits": "Estimated credits",
+    "estimatedCost": "Estimated cost",
+    "unpriced": "No estimate",
+    "ledgerTitle": "Balance history",
+    "noLedger": "There are no credit transactions yet.",
+    "systemEntry": "System transaction",
+    "loadError": "Could not load credit status.",
+    "grantError": "Could not record the credit grant.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "modes": {
+      "auto_reply": "Automatic reply",
+      "draft": "Reply draft",
+      "analysis": "Conversation analysis",
+      "report": "Report",
+      "call_summary": "Call summary",
+      "voice_transcription": "Voice note transcription",
+      "image_description": "Image analysis",
+      "embeddings": "Knowledge base"
+    },
+    "entries": {
+      "purchase": "Top-up",
+      "adjustment": "Adjustment",
+      "usage": "Usage",
+      "refund": "Refund",
+      "expiration": "Expiration"
+    }
+  },
   "NexPhoneContext": {
     "open": "Context",
     "title": "Context for this call",

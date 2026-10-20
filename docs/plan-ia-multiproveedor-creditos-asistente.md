@@ -1,6 +1,6 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **Fases 0 y 1 implementadas; Fase 2 con modo sombra implementado (sin cobro).**
+Estado: **Fases 0 y 1 implementadas; Fase 2 con modo sombra implementado; Fase B1 (administración manual de créditos) implementada localmente, pendiente revisión y publicación.**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
 
 ### Estado de ejecución
@@ -9,6 +9,9 @@ Fecha de la investigación de precios y modelos: 19-oct-2026.
 - Fase 1: catálogo y enrutamiento por tarea implementados con `AI_TASK_ROUTING_ENABLED=false` por defecto. Los candidatos nuevos no se activan hasta aprobar la evaluación.
 - Fase 2: migración `151_ai_credit_wallet.sql` y cálculo entero en nanodólares publicados en `main`. `billing_mode` queda en `off`; todavía no se cobra ni se bloquea IA.
 - Fase 2, modo sombra: `logAiUsage` calcula costo, precio y créditos de cada llamada con `ai_billing_settings` y `ai_model_prices` (caché de 60 s) y los guarda en `ai_usage_log`, sin tocar saldos. Solo actúa con `billing_mode = 'shadow'`; con `off` no registra nada y `enforced` aún no está implementado (no registra nada). Un modelo sin precio se omite con un aviso. La migración `152_ai_model_prices_seed.sql` siembra solo precios oficiales verificados: `gpt-5.4-mini`, `gpt-6-luna`, `gpt-5.6-terra`, `claude-haiku-5-5` y `claude-sonnet-5-5`. Quedan sin precio `gpt-4.1-mini`, `gpt-5.6-sol`, `claude-haiku-4-5-20251001` (modelo por defecto de Anthropic) y los modelos de transcripción hasta confirmarlos en la página oficial. Para activarlo: `UPDATE ai_billing_settings SET billing_mode = 'shadow', updated_at = now();`.
+- Fase A de cobertura: se registran los tokens reportados de transcripciones de notas de voz, análisis de imágenes y embeddings, además de las tareas de texto existentes. La transcripción Yeastar de llamadas sigue pendiente.
+- Fase B1 (local): el panel interno permite registrar abonos manuales idempotentes y consultar saldos, movimientos y uso mensual estimado por cliente. La migración `154_platform_ai_credit_management.sql` añade la operación SQL segura. Esto **no** descuenta créditos todavía; Stripe queda para la fase de pagos y el débito real requiere la fase E.
+- Fase B2 pendiente: el propietario confirmó administrar desde el panel interno una llave OpenAI y otra Anthropic por tenant; los clientes conservarán ajustes de comportamiento, pero no deben ver ni cambiar proveedores, modelos o llaves. **La API y la pantalla de configuración actuales todavía exponen proveedor/modelo a administradores del tenant; no se debe afirmar que esta privacidad ya está aplicada.** Falta implementar el almacenamiento/panel interno y el enrutamiento multi-proveedor. `AI_TASK_ROUTING_ENABLED` continúa apagado hasta aprobar la evaluación ciega.
 - El fallback entre OpenAI y Anthropic queda pendiente: cada `ai_configs` solo contiene una llave/proveedor; no se debe intentar el otro proveedor sin credencial y autorización de gasto.
 
 ## 1. Estado actual (leído del código)

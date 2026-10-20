@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SupportSessionDialog } from '@/components/platform/support-session-dialog'
+import { AiCreditsPanel } from '@/components/platform/ai-credits-panel'
 
 type PlanCode = 'ai' | 'yeastar_voice' | 'whatsapp_voice'
 type PlatformAccount = {
@@ -371,6 +372,8 @@ export default function PlatformPage() {
           <p className="w-full text-xs text-muted-foreground">Se aplica una vez al día mediante el cron interno (`/api/internal/message-retention`) a TODAS las cuentas. Vacío = desactivado.</p>
         </CardContent>
       </Card>
+
+      <AiCreditsPanel accounts={accounts.map(({ id, name }) => ({ id, name }))} />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="size-5" />Clientes aprovisionados</CardTitle><CardDescription>Usuarios usados frente a los asientos contratados.</CardDescription></CardHeader>

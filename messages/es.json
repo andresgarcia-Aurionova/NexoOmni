@@ -1,4 +1,55 @@
 {
+  "PlatformCredits": {
+    "title": "Créditos de IA por cliente",
+    "description": "Administra saldos y revisa el consumo registrado del mes. El costo mostrado es una estimación calculada con tokens y precios cargados, no la factura real del proveedor.",
+    "noDebitYet": "Importante: los abonos de saldo aún no se descuentan automáticamente por uso de IA. Ese débito se habilitará después de validar las mediciones en modo sombra.",
+    "account": "Cliente",
+    "availableBalance": "Saldo disponible (créditos)",
+    "refresh": "Actualizar",
+    "amount": "Créditos a abonar",
+    "entryType": "Tipo de movimiento",
+    "purchase": "Recarga cobrada",
+    "adjustment": "Ajuste o cortesía",
+    "reason": "Motivo / referencia de pago",
+    "reasonPlaceholder": "Ej. SPEI recibido, folio o motivo del ajuste",
+    "grant": "Registrar abono",
+    "stripePending": "La recarga se registra manualmente. El cobro automático con Stripe se conectará en una fase posterior.",
+    "usageTitle": "Uso de IA este mes",
+    "usageDescription": "Costos estimados con los tokens informados por el proveedor. Las llamadas sin precio o sin cálculo de cobro aparecen como «Sin estimación».",
+    "noUsage": "No hay usos de IA registrados este mes.",
+    "task": "Función",
+    "providerModel": "Proveedor · modelo",
+    "calls": "Llamadas",
+    "credits": "Créditos estimados",
+    "estimatedCost": "Costo estimado",
+    "unpriced": "Sin estimación",
+    "ledgerTitle": "Historial de saldo",
+    "noLedger": "Aún no hay movimientos de créditos.",
+    "systemEntry": "Movimiento del sistema",
+    "loadError": "No se pudo cargar el estado de créditos.",
+    "grantError": "No se pudo registrar el abono.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "modes": {
+      "auto_reply": "Respuesta automática",
+      "draft": "Borrador de respuesta",
+      "analysis": "Análisis de conversación",
+      "report": "Reporte",
+      "call_summary": "Resumen de llamada",
+      "voice_transcription": "Transcripción de nota de voz",
+      "image_description": "Análisis de imagen",
+      "embeddings": "Base de conocimiento"
+    },
+    "entries": {
+      "purchase": "Recarga",
+      "adjustment": "Ajuste",
+      "usage": "Consumo",
+      "refund": "Reembolso",
+      "expiration": "Vencimiento"
+    }
+  },
   "NexPhoneContext": {
     "open": "Contexto",
     "title": "Contexto para atender la llamada",
