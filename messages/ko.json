@@ -50,6 +50,27 @@
       "expiration": "만료"
     }
   },
+  "PlatformAiCredentials": {
+    "title": "고객별 AI 키",
+    "description": "고객별 OpenAI 및 Anthropic 키를 관리합니다. NexoOmni 플랫폼 운영자만 상태를 확인할 수 있으며 전체 키는 다시 표시되지 않습니다.",
+    "account": "고객",
+    "activeProvider": "현재 고객이 사용하는 공급자",
+    "notConfigured": "아직 활성 AI 공급자가 없습니다.",
+    "routingDisabled": "추가 키를 저장해도 활성 공급자가 바뀌거나 공급자 자동 선택이 활성화되지 않습니다. 품질 평가 후 결정할 예정입니다.",
+    "loading": "설정을 불러오는 중...",
+    "noAccounts": "사용 가능한 고객이 없습니다.",
+    "provider": "공급자",
+    "apiKey": "API 키",
+    "verifyAndSave": "확인 후 저장",
+    "verificationCost": "저장 시 키를 확인하기 위해 공급자에 짧은 요청을 보냅니다. 공급자가 해당 요청에 비용을 청구할 수 있습니다. 키는 암호화되며 마지막 네 자리만 표시됩니다.",
+    "keyStored": "저장됨 · 끝자리 {lastFour}",
+    "keyUnreadable": "저장되었지만 복호화할 수 없습니다. 다시 입력하세요.",
+    "currentlyActive": "사용 중",
+    "keyMissing": "저장된 키 없음",
+    "loadError": "키 상태를 불러오지 못했습니다.",
+    "saveError": "키를 확인하거나 저장하지 못했습니다.",
+    "saveSuccess": "{provider} 키를 확인하고 저장했습니다."
+  },
   "NexPhoneContext": {
     "open": "통화 맥락",
     "title": "이 통화를 위한 맥락",
@@ -1982,8 +2003,11 @@
     },
     "aiConfig": {
       "title": "에이전트 설정",
-      "description": "직접 발급받은 OpenAI 또는 Anthropic 키를 사용하세요. 애플리케이션이 회원님의 키로 공급자에 직접 요청하므로 사용자별 AI 비용이 없고 데이터도 회원님의 것입니다. 받은 편지함 초안, 자동 응답 및 테스트 영역에 사용됩니다.",
+      "description": "비즈니스 AI 어시스턴트의 지침과 동작을 설정합니다.",
       "adminOnlyConfig": "관리자와 소유자만 AI 설정을 변경할 수 있습니다.",
+      "providerManagedTitle": "NexoOmni에서 관리하는 공급자",
+      "providerManaged": "키와 모델은 NexoOmni 운영자가 관리합니다. 여기서는 어시스턴트의 지침과 동작을 조정할 수 있지만 공급자나 인증 정보를 보거나 변경할 수 없습니다.",
+      "notConfigured": "동작을 편집하기 전에 NexoOmni 운영자가 이 계정의 AI를 준비해야 합니다.",
       "loadFailed": "AI 설정을 불러오지 못했습니다",
       "providerAndKey": "공급자 & 키",
       "encryptionNotice": "키는 저장 시 암호화되며(AES-256-GCM), 저장 후에는 다시 표시되지 않습니다.",
@@ -2053,7 +2077,7 @@
     },
     "agentsPage": {
       "title": "AI 에이전트",
-      "description": "고객 답변을 활성화하기 전에 AI 키를 설정하고 테스트한 후 사용량을 확인하세요.",
+      "description": "고객 답변을 활성화하기 전에 어시스턴트 동작을 설정하고 AI 사용량을 확인하세요.",
       "playground": "테스트",
       "setup": "설정",
       "usage": "사용량"

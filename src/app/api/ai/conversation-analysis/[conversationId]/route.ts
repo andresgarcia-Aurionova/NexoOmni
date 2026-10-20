@@ -111,6 +111,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ conversati
 export async function POST(_: Request, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const { supabase, accountId, userId } = await requireRole('agent')
+    const admin = supabaseAdmin()
     const { conversationId } = await params
     const limit = checkRateLimit(`ai-analysis:${userId}`, RATE_LIMITS.aiDraft)
     if (!limit.success) return rateLimitResponse(limit)
@@ -145,16 +146,17 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       return NextResponse.json({ error: 'No hay mensajes de texto para analizar.' }, { status: 400 })
     }
 
-    const { data: qaPolicy } = await supabase
+    const { data: qaPolicy, error: qaPolicyError } = await admin
       .from('ai_configs')
       .select('qa_scoring_enabled, qa_scoring_criteria, analysis_max_per_conversation, analysis_auto_route_enabled')
       .eq('account_id', accountId)
       .maybeSingle()
+    if (qaPolicyError) throw qaPolicyError
     const conversationLimit = Math.max(
       MIN_DAILY_ANALYSES_PER_CONVERSATION,
       Number(qaPolicy?.analysis_max_per_conversation) || MIN_DAILY_ANALYSES_PER_CONVERSATION,
     )
-    const { count: conversationCount, error: usageError } = await supabase
+    const { count: conversationCount, error: usageError } = await admin
       .from('ai_usage_log')
       .select('id', { count: 'exact', head: true })
       .eq('account_id', accountId)
@@ -198,7 +200,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
     const insights = parseConversationInsights(rawValue)
     const recommendedQueueId = matchDepartmentQueue(queues, insights.recommended_department)
 
-    const admin = supabaseAdmin()
     const { data, error } = await admin
       .from('ai_conversation_analyses')
       .upsert({

@@ -158,7 +158,7 @@ export const RATE_LIMITS = {
    *  hold-down / script. */
   aiDraft: { limit: 20, windowMs: 60_000 },
   /** AI draft-reply generation, per account. Caps the WHOLE team's
-   *  draws on the one shared BYO provider key — without this, N agents
+   *  draws on the one shared account provider credential — without this, N agents
    *  each under their per-user limit could still stampede the account's
    *  key past the provider's own rate limit. 60/min ≈ three busy agents
    *  drafting flat-out. */
@@ -166,14 +166,14 @@ export const RATE_LIMITS = {
   /** AI auto-reply generation, per account. The per-conversation cap
    *  (`auto_reply_max_per_conversation`) bounds one thread; this bounds
    *  the whole account across threads, so a burst of inbound from many
-   *  customers at once can't run the BYO key past the provider's limit
+   *  customers at once can't run the account credential past the provider's limit
    *  or the owner's budget. 30/min is generous for organic inbound while
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
   /** Executive report insight generation is manual and deliberately small:
    * four fresh readings per account per hour lets leaders compare periods
-   * without turning refresh clicks into unbounded BYO-key spend. */
+   * without turning refresh clicks into unbounded provider spend. */
   aiReportAccount: { limit: 4, windowMs: 60 * 60_000 },
 } as const;
 

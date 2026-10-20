@@ -2,9 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { logAiUsage } from './usage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+const { mockSupabaseAdmin } = vi.hoisted(() => ({
+  mockSupabaseAdmin: vi.fn(),
+}));
+
+vi.mock('./admin-client', () => ({
+  supabaseAdmin: mockSupabaseAdmin,
+}));
+
 function fakeDb() {
   const insert = vi.fn().mockResolvedValue({ error: null });
   const db = { from: vi.fn(() => ({ insert })) };
+  mockSupabaseAdmin.mockReturnValue(db);
   return { db: db as unknown as SupabaseClient, insert, from: db.from };
 }
 
@@ -58,6 +67,7 @@ describe('logAiUsage', () => {
       })
       .mockResolvedValueOnce({ error: null });
     const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
+    mockSupabaseAdmin.mockReturnValue(db);
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await logAiUsage(db, {
@@ -116,6 +126,7 @@ describe('logAiUsage', () => {
       })
       .mockResolvedValueOnce({ error: null });
     const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
+    mockSupabaseAdmin.mockReturnValue(db);
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await logAiUsage(db, {
@@ -143,6 +154,7 @@ describe('logAiUsage', () => {
   it('never throws when the insert errors', async () => {
     const insert = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
     const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
+    mockSupabaseAdmin.mockReturnValue(db);
     await expect(
       logAiUsage(db, {
         accountId: 'acct-1',

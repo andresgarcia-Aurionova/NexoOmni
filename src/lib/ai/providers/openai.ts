@@ -20,7 +20,7 @@ interface OpenAiResponse {
 }
 
 /**
- * Call OpenAI's Chat Completions endpoint with the caller's own key.
+ * Call OpenAI's Chat Completions endpoint with the account's managed key.
  * Returns the raw assistant text + token usage (handoff parsing happens
  * in `generateReply`).
  */

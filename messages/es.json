@@ -50,6 +50,27 @@
       "expiration": "Vencimiento"
     }
   },
+  "PlatformAiCredentials": {
+    "title": "Llaves de IA por cliente",
+    "description": "Administra las llaves de OpenAI y Anthropic por cliente. Solo el operador de NexoOmni puede consultarlas; nunca se vuelven a mostrar completas.",
+    "account": "Cliente",
+    "activeProvider": "Proveedor que usa actualmente el cliente",
+    "notConfigured": "La IA aún no tiene un proveedor activo.",
+    "routingDisabled": "Guardar una llave adicional no cambia el proveedor activo ni habilita la selección automática entre proveedores. Esa decisión queda pendiente de la evaluación de calidad.",
+    "loading": "Cargando configuración...",
+    "noAccounts": "No hay clientes disponibles.",
+    "provider": "Proveedor",
+    "apiKey": "Clave de API",
+    "verifyAndSave": "Verificar y guardar",
+    "verificationCost": "Al guardar se envía una solicitud corta al proveedor para comprobar la llave. El proveedor puede cobrar esa solicitud. La clave queda cifrada y solo se muestran sus últimos cuatro caracteres.",
+    "keyStored": "Guardada · termina en {lastFour}",
+    "keyUnreadable": "Guardada, pero no se pudo descifrar; vuelve a introducirla.",
+    "currentlyActive": "En uso",
+    "keyMissing": "Sin llave guardada",
+    "loadError": "No se pudo cargar el estado de las llaves.",
+    "saveError": "No se pudo verificar o guardar la llave.",
+    "saveSuccess": "La llave de {provider} se verificó y guardó."
+  },
   "NexPhoneContext": {
     "open": "Contexto",
     "title": "Contexto para atender la llamada",
@@ -1970,8 +1991,11 @@
     },
     "aiConfig": {
       "title": "Configuración del Agente IA",
-      "description": "Usa tu propia clave de OpenAI o Anthropic. La aplicación llama directamente al proveedor con tu clave; no hay cargos de IA por usuario y tus datos siguen siendo tuyos. Esto habilita borradores en la bandeja de entrada, respuestas automáticas y el entorno de pruebas.",
+      "description": "Configura las instrucciones y el comportamiento del asistente de IA de tu negocio.",
       "adminOnlyConfig": "Solo los administradores y propietarios pueden cambiar la configuración de la IA.",
+      "providerManagedTitle": "Proveedor administrado por NexoOmni",
+      "providerManaged": "Las llaves y los modelos los administra el operador de NexoOmni. Aquí puedes ajustar las instrucciones y el comportamiento del asistente, pero no ver ni cambiar el proveedor o sus credenciales.",
+      "notConfigured": "El operador de NexoOmni debe preparar la IA para esta cuenta antes de que puedas editar su comportamiento.",
       "loadFailed": "Error al cargar la configuración de la IA",
       "providerAndKey": "Proveedor y clave",
       "encryptionNotice": "Tu clave se cifra en reposo (AES-256-GCM) y no se volverá a mostrar tras ser guardada.",
@@ -2041,7 +2065,7 @@
     },
     "agentsPage": {
       "title": "Agente de IA",
-      "description": "Configura tu clave de IA, pruébala y revisa el uso antes de activar respuestas para clientes.",
+      "description": "Configura el comportamiento del asistente y revisa el uso de IA antes de activar respuestas para clientes.",
       "playground": "Pruebas",
       "setup": "Configuración",
       "usage": "Uso"

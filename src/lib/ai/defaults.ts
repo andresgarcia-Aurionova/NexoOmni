@@ -7,7 +7,7 @@ import type { AiProvider } from './types'
 /**
  * Sensible default model per provider, pre-filled in the settings form.
  * Kept as editable free text in the UI — model IDs churn fast and a
- * BYO-key forker may want a cheaper/newer one — so these are only the
+ * Platform operators may choose a cheaper/newer one — so these are only the
  * starting point, never a hard allow-list.
  */
 export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
@@ -26,7 +26,7 @@ export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
 export const HANDOFF_SENTINEL = '[[HANDOFF]]'
 
 /** Cap on generated reply length — keeps WhatsApp replies short and
- *  bounds token spend on the caller's own key. */
+ *  bounds token spend on the account's provider credential. */
 export const MAX_OUTPUT_TOKENS = 1024
 
 /** Minimum cost-control allowance before a conversation is paused for the day. */

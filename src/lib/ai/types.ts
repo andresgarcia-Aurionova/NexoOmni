@@ -1,5 +1,5 @@
 // ============================================================
-// Shared types for the AI reply assistant (bring-your-own-key).
+// Shared types for the AI reply assistant and its platform-managed credentials.
 //
 // One small provider-agnostic surface so the inbox draft route and the
 // inbound auto-reply bot both talk to `generateReply` without caring
@@ -10,7 +10,7 @@ export type AiProvider = 'openai' | 'anthropic'
 
 /**
  * Account AI setup, decrypted and ready to use. Produced by
- * `loadAiConfig` — `apiKey` is the plaintext BYO provider key
+ * `loadAiConfig` — `apiKey` is the decrypted provider credential
  * (stored AES-256-GCM-encrypted at rest).
  */
 export interface AiConfig {

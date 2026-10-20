@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from './admin-client';
 import { resolveUsageBilling } from './billing-config';
 import type { AiProvider, AiUsage } from './types';
 
@@ -53,16 +54,13 @@ function isMissingBillingColumn(error: {
 
 /**
  * Best-effort append to `ai_usage_log` — one row per LLM call, for cost
- * visibility on the account's BYO key. NEVER throws: usage accounting
+ * visibility for the account's managed provider credential. NEVER throws: usage accounting
  * must not fail a reply the customer is waiting on, so any DB error is
  * logged and swallowed. Skips entirely when the provider didn't report
  * usage (we'd only be writing zeros).
  *
- * Pass the service-role admin client from the webhook, or the RLS-scoped
- * SSR client from a route — writes land either way (there's no
- * `authenticated` INSERT policy, so an SSR write relies on the service
- * role; callers that must persist from a route should pass the admin
- * client).
+ * The log is server-only because it stores provider/model identifiers.
+ * The service-role client is used regardless of the caller's client.
  */
 export async function logAiUsage(
   db: SupabaseClient,
@@ -70,6 +68,7 @@ export async function logAiUsage(
 ): Promise<void> {
   if (!args.usage) return;
   try {
+    const logDb = supabaseAdmin();
     const billing =
       args.billing ??
       (await resolveUsageBilling(db, {
@@ -95,7 +94,7 @@ export async function logAiUsage(
           billing_mode: billing.mode,
         }
       : {};
-    let { error } = await db.from('ai_usage_log').insert({
+    let { error } = await logDb.from('ai_usage_log').insert({
       ...row,
       latency_ms: args.latencyMs ?? null,
       ...billingRow,
@@ -105,7 +104,7 @@ export async function logAiUsage(
       console.warn(
         '[ai usage] billing columns are not available yet; apply migration 151 to start recording charge estimates.'
       );
-      const retry = await db
+      const retry = await logDb
         .from('ai_usage_log')
         .insert({ ...row, latency_ms: args.latencyMs ?? null });
       error = retry.error;
@@ -115,7 +114,7 @@ export async function logAiUsage(
       console.warn(
         '[ai usage] latency_ms column is not available yet; apply migration 150 to start recording latency.'
       );
-      const retry = await db.from('ai_usage_log').insert(row);
+      const retry = await logDb.from('ai_usage_log').insert(row);
       error = retry.error;
     }
 

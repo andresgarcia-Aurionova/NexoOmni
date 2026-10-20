@@ -18,7 +18,7 @@ import { AiError } from '@/lib/ai/types'
  * Body: { conversation_id }
  * Returns: { draft } — a suggested reply for the agent to edit + send.
  *
- * Uses the account's configured provider/key (BYO). Read-only: it never
+ * Uses the account's platform-managed provider credential. Read-only: it never
  * sends or stores anything, just hands text back to the composer.
  */
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     const userLimit = checkRateLimit(`ai-draft:${userId}`, RATE_LIMITS.aiDraft)
     if (!userLimit.success) return rateLimitResponse(userLimit)
-    // Also cap the whole team's draws on the shared BYO provider key.
+    // Also cap the whole team's draws on the shared provider credential.
     const accountLimit = checkRateLimit(
       `ai-draft-acct:${accountId}`,
       RATE_LIMITS.aiDraftAccount,
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       messages,
     })
 
-    // Record spend on the account's BYO key. Best-effort + via the
+    // Record spend on the account's provider credential. Best-effort + via the
     // service role (the log has no `authenticated` INSERT policy). This
     // must not fail or delay the draft the agent is waiting on, so:
     //  - the whole thing is wrapped (constructing the admin client throws

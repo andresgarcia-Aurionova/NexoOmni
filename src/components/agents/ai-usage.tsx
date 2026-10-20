@@ -39,20 +39,14 @@ interface UsageResponse {
     analysis: { calls: number; tokens: number };
     report: { calls: number; tokens: number };
   };
-  by_model: {
-    model: string;
-    provider: string;
-    calls: number;
-    tokens: number;
-  }[];
   daily: { date: string; tokens: number; calls: number }[];
 }
 
 const WINDOWS = [7, 30, 90] as const;
 
 /**
- * Token-spend dashboard for the account's BYO key. Admin-only (spend is
- * billing-class), mirroring the `ai_usage_log` SELECT policy and the
+ * Token-spend dashboard for the account. Admin-only (spend is billing-class),
+ * mirroring the account authorization on the usage route and the
  * `GET /api/ai/usage` route. Renders nothing for non-admins.
  */
 export function AiUsageCard() {
@@ -110,8 +104,8 @@ export function AiUsageCard() {
               <BarChart3 className="h-4 w-4 text-primary" /> Token usage
             </CardTitle>
             <CardDescription>
-              Tokens spent on your provider key by drafts and the auto-reply
-              bot. Counts only — no message content is stored here.
+              Tokens used by drafts and the auto-reply bot. Counts only — no
+              message content is stored here.
             </CardDescription>
           </div>
           <Select
@@ -184,33 +178,6 @@ export function AiUsageCard() {
                 className="h-[200px]"
               />
             </div>
-
-            {data.by_model.length > 0 && (
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  By model
-                </p>
-                <ul className="divide-y divide-border rounded-md border border-border">
-                  {data.by_model.map((m) => (
-                    <li
-                      key={`${m.provider}:${m.model}`}
-                      className="flex items-center justify-between px-3 py-2 text-sm"
-                    >
-                      <span className="min-w-0 truncate">
-                        <span className="text-foreground">{m.model}</span>{' '}
-                        <span className="text-xs text-muted-foreground">
-                          ({m.provider})
-                        </span>
-                      </span>
-                      <span className="flex-shrink-0 tabular-nums text-muted-foreground">
-                        {formatCompactNumber(m.tokens)} tok · {m.calls}{' '}
-                        {m.calls === 1 ? 'call' : 'calls'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {data.truncated && (
               <p className="text-xs text-muted-foreground">

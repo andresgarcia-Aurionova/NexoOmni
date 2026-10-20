@@ -5,21 +5,18 @@ import {
   toErrorResponse,
 } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
-import { validateAiCredentials } from '@/lib/ai/validate'
-import { embedTexts } from '@/lib/ai/embeddings'
-import { AiError, type AiProvider } from '@/lib/ai/types'
 import { MIN_DAILY_ANALYSES_PER_CONVERSATION } from '@/lib/ai/defaults'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 
 function bad(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
-const CONFIG_COLUMNS =
-  'provider, model, analysis_model, image_analysis_model, voice_transcription_model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, analysis_auto_route_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria, api_key, embeddings_api_key, timezone'
+const SAFE_CONFIG_COLUMNS =
+  'system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, analysis_auto_route_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria, timezone'
 
-const LEGACY_CONFIG_COLUMNS =
-  'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria, api_key, embeddings_api_key'
+const LEGACY_SAFE_CONFIG_COLUMNS =
+  'system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria'
 
 function isMissingModelColumn(error: { code?: string; message?: string }) {
   return error.code === '42703' || /(?:analysis_model|image_analysis_model|voice_transcription_model|handoff_target|handoff_queue_id|channel_types|analysis_auto_route_enabled|timezone)/i.test(error.message ?? '')
@@ -28,54 +25,62 @@ function isMissingModelColumn(error: { code?: string; message?: string }) {
 /**
  * GET /api/ai/config
  *
- * Any member may read the config so the inbox/settings can reflect
- * whether AI is set up. The encrypted key is NEVER returned — only a
- * `has_key` flag; the settings form shows a masked placeholder.
+ * Any member may read tenant-editable behavior settings. Provider,
+ * model, and credential data are deliberately excluded.
  */
 export async function GET() {
   try {
-    const { supabase, accountId } = await getCurrentAccount()
+    const { accountId } = await getCurrentAccount()
+    const admin = supabaseAdmin()
 
-    const primary = await supabase
-      .from('ai_configs')
-      // `api_key` is selected only to derive `has_key` — it is stripped
-      // out below and never returned to the client.
-      .select(CONFIG_COLUMNS)
-      .eq('account_id', accountId)
-      .maybeSingle()
+    const [primary, credentials] = await Promise.all([
+      admin
+        .from('ai_configs')
+        .select(SAFE_CONFIG_COLUMNS)
+        .eq('account_id', accountId)
+        .maybeSingle(),
+      admin
+        .from('ai_provider_credentials')
+        .select('provider, credential_type')
+        .eq('account_id', accountId),
+    ])
     let data: Record<string, unknown> | null = primary.data
     let error = primary.error
 
     if (error && isMissingModelColumn(error)) {
-      const fallback = await supabase
+      const fallback = await admin
         .from('ai_configs')
-        .select(LEGACY_CONFIG_COLUMNS)
+        .select(LEGACY_SAFE_CONFIG_COLUMNS)
         .eq('account_id', accountId)
         .maybeSingle()
       data = fallback.data
       error = fallback.error
     }
 
-    if (error) {
-      console.error('[ai/config GET] fetch error:', error)
+    if (error || credentials.error) {
+      console.error('[ai/config GET] fetch error:', error ?? credentials.error)
       return NextResponse.json(
         { error: 'Failed to load AI configuration' },
         { status: 500 },
       )
     }
 
-    if (!data) return NextResponse.json({ configured: false })
-    // The keys are selected only to derive the has_* flags; neither is
-    // returned to the client.
-    const { api_key, embeddings_api_key, ...safe } = data
+    const hasEmbeddingsKey = (credentials.data ?? []).some(
+      (credential) => credential.provider === 'openai' && credential.credential_type === 'embeddings'
+    )
+    if (!data) {
+      return NextResponse.json({
+        configured: false,
+        has_embeddings_key: hasEmbeddingsKey,
+      })
+    }
     return NextResponse.json({
       configured: true,
-      has_key: !!api_key,
-      has_embeddings_key: !!embeddings_api_key,
-      ...safe,
+      has_embeddings_key: hasEmbeddingsKey,
+      ...data,
       analysis_max_per_conversation: Math.max(
         MIN_DAILY_ANALYSES_PER_CONVERSATION,
-        Number(safe.analysis_max_per_conversation) || MIN_DAILY_ANALYSES_PER_CONVERSATION,
+        Number(data.analysis_max_per_conversation) || MIN_DAILY_ANALYSES_PER_CONVERSATION,
       ),
     })
   } catch (err) {
@@ -86,11 +91,8 @@ export async function GET() {
 /**
  * POST /api/ai/config  (admin+)
  *
- * Upsert the account's AI config. Validates the key with the provider
- * before persisting (mirrors the WhatsApp config verifying with Meta
- * first), then stores the key AES-256-GCM-encrypted. When `api_key` is
- * omitted the existing stored key is reused (the form sends it only
- * when the user re-enters it).
+ * Updates only tenant-editable behavior settings. Credentials and model
+ * selection are restricted to the platform operator.
  */
 export async function POST(request: Request) {
   try {
@@ -102,19 +104,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') return bad('Invalid request body')
 
-    const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic') {
-      return bad('provider must be "openai" or "anthropic"')
-    }
-    const model = typeof body.model === 'string' ? body.model.trim() : ''
-    if (!model) return bad('model is required')
-    const optionalModel = (value: unknown) => {
-      if (typeof value !== 'string' || !value.trim()) return null
-      return value.trim().slice(0, 128)
-    }
-    const analysisModel = optionalModel(body.analysis_model)
-    const imageAnalysisModel = optionalModel(body.image_analysis_model)
-    const voiceTranscriptionModel = optionalModel(body.voice_transcription_model)
     // IANA timezone for {{current_datetime}} / active-promotions date
     // filtering (see src/lib/ai/prompt-variables.ts). Intl throws on an
     // unrecognized zone — the cheapest validation without a hardcoded list.
@@ -222,96 +211,7 @@ export async function POST(request: Request) {
         ? null
         : requestedChannels
 
-    const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
-    // Embeddings key (optional, for semantic KB search): a non-empty
-    // string sets/replaces it; an explicit null clears it; absent leaves
-    // it unchanged. The form only sends it when the admin edits it.
-    const rawEmbeddingsKey =
-      typeof body.embeddings_api_key === 'string'
-        ? body.embeddings_api_key.trim()
-        : ''
-    const clearEmbeddingsKey = body.embeddings_api_key === null
-
-    // Reuse the stored key when the form didn't send a fresh one.
-    const { data: existing } = await supabase
-      .from('ai_configs')
-      .select('id, provider, model, api_key')
-      .eq('account_id', accountId)
-      .maybeSingle()
-
-    let apiKeyPlain: string
-    if (rawKey) {
-      apiKeyPlain = rawKey
-    } else if (existing?.api_key) {
-      try {
-        apiKeyPlain = decrypt(existing.api_key)
-      } catch {
-        return bad('Stored API key could not be decrypted — re-enter your key.')
-      }
-    } else {
-      return bad('api_key is required')
-    }
-
-    // Only spend a provider round-trip when the credentials that affect
-    // reachability actually changed. A save that just flips a toggle or
-    // edits the system prompt on an existing, already-validated config
-    // skips the call — no wasted token/latency on the account's key.
-    const credentialsChanged =
-      !existing ||
-      rawKey !== '' ||
-      provider !== existing.provider ||
-      model !== existing.model
-
-    if (credentialsChanged) {
-      try {
-        await validateAiCredentials({
-          provider,
-          model,
-          apiKey: apiKeyPlain,
-          systemPrompt,
-          isActive,
-          autoReplyEnabled,
-          autoReplyMaxPerConversation: maxPer,
-          handoffAgentId: null,
-          embeddingsApiKey: null,
-          timezone,
-        })
-      } catch (err) {
-        if (err instanceof AiError) {
-          return NextResponse.json(
-            { error: err.message, code: err.code },
-            { status: 400 },
-          )
-        }
-        console.error('[ai/config POST] validation error:', err)
-        return bad('Could not validate the API key with the provider.')
-      }
-    }
-
-    // Validate a new embeddings key before storing (a cheap 1-input
-    // embed), same "verify before save" discipline as the chat key.
-    if (rawEmbeddingsKey) {
-      try {
-        await embedTexts(rawEmbeddingsKey, ['ping'])
-      } catch (err) {
-        if (err instanceof AiError) {
-          return NextResponse.json(
-            { error: `Embeddings key: ${err.message}`, code: err.code },
-            { status: 400 },
-          )
-        }
-        console.error('[ai/config POST] embeddings validation error:', err)
-        return bad('Could not validate the embeddings key.')
-      }
-    }
-
-    const encryptedKey = rawKey ? encrypt(rawKey) : null
     const shared: Record<string, unknown> = {
-      provider,
-      model,
-      analysis_model: analysisModel,
-      image_analysis_model: imageAnalysisModel,
-      voice_transcription_model: voiceTranscriptionModel,
       system_prompt: systemPrompt,
       is_active: isActive,
       auto_reply_enabled: autoReplyEnabled,
@@ -337,82 +237,48 @@ export async function POST(request: Request) {
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.
     if (handoffProvided) shared.handoff_agent_id = handoffAgentId
-    if (rawEmbeddingsKey) {
-      shared.embeddings_api_key = encrypt(rawEmbeddingsKey)
-    } else if (clearEmbeddingsKey) {
-      shared.embeddings_api_key = null
-    }
-
-    const writeValues = encryptedKey ? { ...shared, api_key: encryptedKey } : shared
-    const legacyWriteValues = Object.fromEntries(
-      Object.entries(writeValues).filter(([key]) => !['analysis_model', 'image_analysis_model', 'voice_transcription_model', 'handoff_target', 'handoff_queue_id', 'channel_types', 'analysis_auto_route_enabled', 'timezone'].includes(key)),
-    )
-    if (existing) {
-      let { error: upErr } = await supabase
-        .from('ai_configs')
-        .update(writeValues)
-        .eq('account_id', accountId)
-      if (upErr && isMissingModelColumn(upErr)) {
-        const fallback = await supabase.from('ai_configs').update(legacyWriteValues).eq('account_id', accountId)
-        upErr = fallback.error
-      }
-      if (upErr) {
-        console.error('[ai/config POST] update error:', upErr)
-        return NextResponse.json(
-          { error: 'Failed to save AI configuration' },
-          { status: 500 },
-        )
-      }
-    } else {
-      const insertValues = {
-        account_id: accountId,
-        created_by: userId,
-        api_key: encryptedKey, // guaranteed non-null: rawKey required when no existing row
-        ...shared,
-      }
-      let { error: insErr } = await supabase.from('ai_configs').insert(insertValues)
-      if (insErr && isMissingModelColumn(insErr)) {
-        const legacyInsertValues = Object.fromEntries(
-          Object.entries(insertValues).filter(([key]) => !['analysis_model', 'image_analysis_model', 'voice_transcription_model'].includes(key)),
-        )
-        const fallback = await supabase.from('ai_configs').insert(legacyInsertValues)
-        insErr = fallback.error
-      }
-      if (insErr) {
-        console.error('[ai/config POST] insert error:', insErr)
-        return NextResponse.json(
-          { error: 'Failed to save AI configuration' },
-          { status: 500 },
-        )
-      }
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (err) {
-    return toErrorResponse(err)
-  }
-}
-
-/**
- * DELETE /api/ai/config  (admin+)
- *
- * Removes the account's AI config (turns everything off and forgets the
- * key). Also used to recover from a corrupted encrypted key.
- */
-export async function DELETE() {
-  try {
-    const { supabase, accountId } = await requireRole('admin')
-    const { error } = await supabase
+    const admin = supabaseAdmin()
+    const { data: existing, error: existingError } = await admin
       .from('ai_configs')
-      .delete()
+      .select('account_id')
       .eq('account_id', accountId)
-    if (error) {
-      console.error('[ai/config DELETE] error:', error)
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (!existing) {
       return NextResponse.json(
-        { error: 'Failed to delete AI configuration' },
+        { error: 'La configuración de IA debe ser creada por el operador de la plataforma.' },
+        { status: 409 },
+      )
+    }
+
+    const legacyWriteValues = Object.fromEntries(
+      Object.entries(shared).filter(([key]) => ![
+        'handoff_target',
+        'handoff_queue_id',
+        'channel_types',
+        'analysis_auto_route_enabled',
+        'timezone',
+      ].includes(key)),
+    )
+    let { error: upErr } = await admin
+      .from('ai_configs')
+      .update(shared)
+      .eq('account_id', accountId)
+    if (upErr && isMissingModelColumn(upErr)) {
+      const fallback = await admin
+        .from('ai_configs')
+        .update(legacyWriteValues)
+        .eq('account_id', accountId)
+      upErr = fallback.error
+    }
+    if (upErr) {
+      console.error('[ai/config POST] update error:', upErr)
+      return NextResponse.json(
+        { error: 'Failed to save AI configuration' },
         { status: 500 },
       )
     }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     return toErrorResponse(err)

@@ -1,24 +1,21 @@
 import { NextResponse } from 'next/server'
-import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { AiError, type AiProvider } from '@/lib/ai/types'
+import { requirePlatformOperator } from '@/lib/platform/operator'
 
 /**
- * POST /api/ai/test  (admin+)
+ * POST /api/ai/test  (platform operator only)
  *
- * "Test key" button: validate a candidate provider/model/key against
- * the provider WITHOUT saving. When `api_key` is omitted the stored
- * key is used, so an admin can re-test an existing config (e.g. after
- * changing the model). Returns `{ ok: true }` on success, 400 with the
- * provider's message on failure.
+ * Validate a candidate provider/model/key against the provider without
+ * saving it. Tenant admins cannot test arbitrary provider credentials.
  */
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const { user } = await requirePlatformOperator()
 
-    const limit = checkRateLimit(`ai-test:${userId}`, RATE_LIMITS.adminAction)
+    const limit = checkRateLimit(`ai-test:${user.id}`, RATE_LIMITS.adminAction)
     if (!limit.success) return rateLimitResponse(limit)
 
     const body = await request.json().catch(() => null)
@@ -38,28 +35,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'model is required' }, { status: 400 })
     }
 
-    const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
-    let apiKeyPlain = rawKey
+    const apiKeyPlain =
+      typeof body.api_key === 'string' ? body.api_key.trim() : ''
     if (!apiKeyPlain) {
-      const { data: existing } = await supabase
-        .from('ai_configs')
-        .select('api_key')
-        .eq('account_id', accountId)
-        .maybeSingle()
-      if (!existing?.api_key) {
-        return NextResponse.json(
-          { error: 'Enter an API key to test.' },
-          { status: 400 },
-        )
-      }
-      try {
-        apiKeyPlain = decrypt(existing.api_key)
-      } catch {
-        return NextResponse.json(
-          { error: 'Stored API key could not be decrypted — re-enter your key.' },
-          { status: 400 },
-        )
-      }
+      return NextResponse.json(
+        { error: 'Enter an API key to test.' },
+        { status: 400 },
+      )
     }
 
     try {

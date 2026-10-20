@@ -50,6 +50,27 @@
       "expiration": "Expiration"
     }
   },
+  "PlatformAiCredentials": {
+    "title": "AI keys by customer",
+    "description": "Manage OpenAI and Anthropic keys for each customer. Only the NexoOmni platform operator can view their status; full keys are never shown again.",
+    "account": "Customer",
+    "activeProvider": "Provider currently used by this customer",
+    "notConfigured": "AI does not have an active provider yet.",
+    "routingDisabled": "Saving an additional key does not change the active provider or enable automatic provider selection. That decision remains pending the quality evaluation.",
+    "loading": "Loading configuration...",
+    "noAccounts": "There are no customers available.",
+    "provider": "Provider",
+    "apiKey": "API key",
+    "verifyAndSave": "Verify and save",
+    "verificationCost": "Saving sends a short request to the provider to verify the key. The provider may charge for that request. The key is encrypted, and only its last four characters are shown.",
+    "keyStored": "Saved · ending in {lastFour}",
+    "keyUnreadable": "Saved, but it could not be decrypted; enter it again.",
+    "currentlyActive": "In use",
+    "keyMissing": "No key saved",
+    "loadError": "Could not load key status.",
+    "saveError": "Could not verify or save the key.",
+    "saveSuccess": "The {provider} key was verified and saved."
+  },
   "NexPhoneContext": {
     "open": "Context",
     "title": "Context for this call",
@@ -1982,8 +2003,11 @@
     },
     "aiConfig": {
       "title": "Agent setup",
-      "description": "Use your own OpenAI or Anthropic key. The application calls the provider directly with your key; there are no per-user AI fees, and your data stays yours. This enables inbox drafts, auto-replies, and the testing area.",
+      "description": "Configure the instructions and behavior of your business's AI assistant.",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",
+      "providerManagedTitle": "Provider managed by NexoOmni",
+      "providerManaged": "The NexoOmni operator manages keys and models. You can adjust the assistant's instructions and behavior here, but cannot view or change its provider or credentials.",
+      "notConfigured": "The NexoOmni operator must prepare AI for this account before you can edit its behavior.",
       "loadFailed": "Failed to load AI configuration",
       "providerAndKey": "Provider & key",
       "encryptionNotice": "Your key is encrypted at rest (AES-256-GCM) and never shown again after saving.",
@@ -2053,7 +2077,7 @@
     },
     "agentsPage": {
       "title": "AI Agent",
-      "description": "Configure and test your AI key, then review usage before enabling customer replies.",
+      "description": "Configure the assistant's behavior and review AI usage before enabling customer replies.",
       "playground": "Testing",
       "setup": "Setup",
       "usage": "Usage"

@@ -14,8 +14,6 @@ const DEFAULT_WINDOW_DAYS = 30
 interface UsageRow {
   created_at: string
   mode: 'auto_reply' | 'draft' | 'analysis' | 'report' | 'call_summary'
-  provider: string
-  model: string
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
@@ -24,10 +22,9 @@ interface UsageRow {
 /**
  * GET /api/ai/usage?days=30  (admin+)
  *
- * Token-spend summary for the account's BYO key over the last `days`
- * (1–90, default 30): totals, per-mode + per-model breakdowns, and a
- * zero-filled daily series for charting. Admin-only, mirroring the
- * `ai_usage_log` SELECT policy — spend is billing-class.
+ * Token-spend summary for the account over the last `days`
+ * (1–90, default 30): totals, per-mode breakdowns, and a zero-filled
+ * daily series for charting. Provider and model identifiers are internal.
  */
 export async function GET(request: Request) {
   try {
@@ -59,7 +56,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('ai_usage_log')
       .select(
-        'created_at, mode, provider, model, prompt_tokens, completion_tokens, total_tokens',
+        'created_at, mode, prompt_tokens, completion_tokens, total_tokens',
       )
       .eq('account_id', accountId)
       .gte('created_at', since.toISOString())
@@ -83,7 +80,7 @@ export async function GET(request: Request) {
     let completionTokens = 0
     let totalTokens = 0
 
-    // Per-mode + per-model tallies.
+    // Per-mode tallies.
     const byMode = {
       auto_reply: { calls: 0, tokens: 0 },
       draft: { calls: 0, tokens: 0 },
@@ -91,11 +88,6 @@ export async function GET(request: Request) {
       report: { calls: 0, tokens: 0 },
       call_summary: { calls: 0, tokens: 0 },
     }
-    const modelMap = new Map<
-      string,
-      { model: string; provider: string; calls: number; tokens: number }
-    >()
-
     // Zero-filled daily buckets so the chart shows quiet days as gaps,
     // not missing points. Local-day keys, oldest → newest — the same
     // helper every other dashboard chart uses, so day boundaries agree.
@@ -113,22 +105,12 @@ export async function GET(request: Request) {
       byMode[r.mode].calls += 1
       byMode[r.mode].tokens += r.total_tokens
 
-      const mk = `${r.provider}:${r.model}`
-      const m =
-        modelMap.get(mk) ??
-        { model: r.model, provider: r.provider, calls: 0, tokens: 0 }
-      m.calls += 1
-      m.tokens += r.total_tokens
-      modelMap.set(mk, m)
-
       const bucket = daily.get(localDayKey(r.created_at))
       if (bucket) {
         bucket.tokens += r.total_tokens
         bucket.calls += 1
       }
     }
-
-    const byModel = [...modelMap.values()].sort((a, b) => b.tokens - a.tokens)
 
     return NextResponse.json({
       window_days: days,
@@ -140,7 +122,6 @@ export async function GET(request: Request) {
         total_tokens: totalTokens,
       },
       by_mode: byMode,
-      by_model: byModel,
       daily: [...daily.values()],
     })
   } catch (err) {

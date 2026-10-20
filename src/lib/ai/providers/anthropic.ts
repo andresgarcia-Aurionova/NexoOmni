@@ -35,7 +35,7 @@ function normalizeForAnthropic(messages: ChatMessage[]): ChatMessage[] {
 }
 
 /**
- * Call Anthropic's Messages endpoint with the caller's own key.
+ * Call Anthropic's Messages endpoint with the account's managed key.
  * Returns the raw assistant text + token usage (handoff parsing happens
  * in `generateReply`).
  */

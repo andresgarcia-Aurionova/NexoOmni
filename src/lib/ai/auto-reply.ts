@@ -182,7 +182,7 @@ export async function dispatchInboundToAiReply(
     const messages = await buildConversationContext(db, conversationId);
     if (messages.length === 0) return;
 
-    // Account-wide throttle on the shared BYO key. The per-conversation
+    // Account-wide throttle on the shared provider credential. The per-conversation
     // cap bounds one thread; this bounds a burst across many threads (a
     // marketing blast landing 200 replies at once) so we never run the
     // owner's key past the provider's rate limit. Over the limit → skip
@@ -233,7 +233,7 @@ export async function dispatchInboundToAiReply(
         messages,
       });
 
-    // Record token spend on the account's BYO key. Fire-and-forget so it
+    // Record token spend for the account. Fire-and-forget so it
     // never adds latency to the customer-facing send: `logAiUsage`
     // swallows its own errors, so the floating promise can't reject.
     // Logged regardless of handoff — the provider call happened either

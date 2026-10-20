@@ -7,6 +7,14 @@ import {
 } from './billing-config';
 import { logAiUsage } from './usage';
 
+const { mockSupabaseAdmin } = vi.hoisted(() => ({
+  mockSupabaseAdmin: vi.fn(),
+}));
+
+vi.mock('./admin-client', () => ({
+  supabaseAdmin: mockSupabaseAdmin,
+}));
+
 type Result = { data: unknown; error: unknown };
 
 function fakeDb(opts: {
@@ -34,7 +42,9 @@ function fakeDb(opts: {
     }
     return { insert };
   });
-  return { db: { from } as unknown as SupabaseClient, insert, from };
+  const db = { from } as unknown as SupabaseClient;
+  mockSupabaseAdmin.mockReturnValue(db);
+  return { db, insert, from };
 }
 
 const shadowSettings: Result = {
