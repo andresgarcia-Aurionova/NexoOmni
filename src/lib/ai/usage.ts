@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveUsageBilling } from './billing-config';
 import type { AiProvider, AiUsage } from './types';
 
 export interface LogAiUsageArgs {
@@ -61,6 +62,13 @@ export async function logAiUsage(
 ): Promise<void> {
   if (!args.usage) return;
   try {
+    const billing =
+      args.billing ??
+      (await resolveUsageBilling(db, {
+        provider: args.provider,
+        model: args.model,
+        usage: args.usage,
+      }));
     const row = {
       account_id: args.accountId,
       conversation_id: args.conversationId,
@@ -71,12 +79,12 @@ export async function logAiUsage(
       completion_tokens: args.usage.completionTokens,
       total_tokens: args.usage.totalTokens,
     };
-    const billingRow = args.billing
+    const billingRow = billing
       ? {
-          cost_nano_usd: args.billing.costNanoUsd.toString(),
-          price_nano_usd: args.billing.priceNanoUsd.toString(),
-          credits_charged: args.billing.creditsCharged.toString(),
-          billing_mode: args.billing.mode,
+          cost_nano_usd: billing.costNanoUsd.toString(),
+          price_nano_usd: billing.priceNanoUsd.toString(),
+          credits_charged: billing.creditsCharged.toString(),
+          billing_mode: billing.mode,
         }
       : {};
     let { error } = await db.from('ai_usage_log').insert({

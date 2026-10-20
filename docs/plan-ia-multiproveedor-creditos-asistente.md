@@ -1,13 +1,14 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **Fases 0 y 1 implementadas; Fase 2 en preparación local.**
+Estado: **Fases 0 y 1 implementadas; Fase 2 con modo sombra implementado (sin cobro).**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
 
 ### Estado de ejecución
 
 - Fase 0: línea base agregada y exportaciones de OpenAI recibidas. Falta evaluar 50–100 casos anonimizados; `scripts/sql/ai-quality-sample.sql` prepara una muestra con redacción parcial, que requiere revisión humana antes de compartirla.
 - Fase 1: catálogo y enrutamiento por tarea implementados con `AI_TASK_ROUTING_ENABLED=false` por defecto. Los candidatos nuevos no se activan hasta aprobar la evaluación.
-- Fase 2: migración `151_ai_credit_wallet.sql`, cálculo entero en nanodólares y pruebas añadidos localmente. Falta aplicar/revisar la migración en desarrollo. `billing_mode` queda en `off`; todavía no se cobra ni se bloquea IA.
+- Fase 2: migración `151_ai_credit_wallet.sql` y cálculo entero en nanodólares publicados en `main`. `billing_mode` queda en `off`; todavía no se cobra ni se bloquea IA.
+- Fase 2, modo sombra: `logAiUsage` calcula costo, precio y créditos de cada llamada con `ai_billing_settings` y `ai_model_prices` (caché de 60 s) y los guarda en `ai_usage_log`, sin tocar saldos. Solo actúa con `billing_mode = 'shadow'`; con `off` no registra nada y `enforced` aún no está implementado (no registra nada). Un modelo sin precio se omite con un aviso. La migración `152_ai_model_prices_seed.sql` siembra solo precios oficiales verificados: `gpt-5.4-mini`, `gpt-6-luna`, `gpt-5.6-terra`, `claude-haiku-5-5` y `claude-sonnet-5-5`. Quedan sin precio `gpt-4.1-mini`, `gpt-5.6-sol`, `claude-haiku-4-5-20251001` (modelo por defecto de Anthropic) y los modelos de transcripción hasta confirmarlos en la página oficial. Para activarlo: `UPDATE ai_billing_settings SET billing_mode = 'shadow', updated_at = now();`.
 - El fallback entre OpenAI y Anthropic queda pendiente: cada `ai_configs` solo contiene una llave/proveedor; no se debe intentar el otro proveedor sin credencial y autorización de gasto.
 
 ## 1. Estado actual (leído del código)
