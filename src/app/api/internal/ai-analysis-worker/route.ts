@@ -4,6 +4,7 @@ import { buildConversationContext } from '@/lib/ai/context'
 import { generateForTask } from '@/lib/ai/generate'
 import { resolveAiTaskConfig } from '@/lib/ai/model-routing'
 import { logAiUsage } from '@/lib/ai/usage'
+import type { AiUsage } from '@/lib/ai/types'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
@@ -484,6 +485,34 @@ async function processCallFollowUps(db: ReturnType<typeof supabaseAdmin>) {
   return { created, eligible, duplicates, failed }
 }
 
+async function analyzeMedia(
+  db: ReturnType<typeof supabaseAdmin>,
+  job: MediaJob,
+  config: NonNullable<Awaited<ReturnType<typeof loadAiConfig>>>,
+  bytes: Buffer,
+  mimeType: string,
+): Promise<string> {
+  const task = job.kind === 'image' ? 'image_description' : 'voice_transcription'
+  const args = {
+    apiKey: config.apiKey,
+    model: resolveAiTaskConfig(config, task).model,
+    bytes,
+    mimeType,
+    timeoutMs: aiRequestTimeoutMs(),
+    onUsage: ({ model, usage }: { model: string; usage: AiUsage }) => {
+      void logAiUsage(db, {
+        accountId: job.account_id,
+        conversationId: job.conversation_id,
+        mode: task,
+        provider: 'openai',
+        model,
+        usage,
+      })
+    },
+  }
+  return job.kind === 'image' ? describeImageWithOpenAi(args) : transcribeAudioWithOpenAi(args)
+}
+
 async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
   const { data: jobs, error } = await db
     .from('ai_media_analysis_jobs')
@@ -533,9 +562,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       if (zernioChannel && ['whatsapp', 'facebook', 'instagram'].includes(zernioChannel)) {
         const downloaded = await downloadZernioInboundMedia(message.media_url!, zernioChannel)
         const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType)
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -548,9 +575,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       if (directCdnChannel) {
         const downloaded = await downloadPublicMedia(message.media_url!)
         const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType)
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -565,9 +590,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
         if (storageError || !blob) throw storageError ?? new Error('No se pudo recuperar la imagen guardada.')
         const bytes = Buffer.from(await blob.arrayBuffer())
         const mimeType = blob.type || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = job.kind === 'image'
-          ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
-          : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes, mimeType, timeoutMs: aiRequestTimeoutMs() })
+        const value = await analyzeMedia(db, job, config, bytes, mimeType)
         const messagePatch = job.kind === 'image'
           ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
           : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
@@ -583,9 +606,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       const media = await getMediaUrl({ mediaId: match![1], accessToken: token })
       const downloaded = await downloadMedia({ downloadUrl: media.url, accessToken: token })
       const mimeType = downloaded.contentType || media.mimeType
-      const value = job.kind === 'image'
-        ? await describeImageWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'image_description').model, bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
-        : await transcribeAudioWithOpenAi({ apiKey: config.apiKey, model: resolveAiTaskConfig(config, 'voice_transcription').model, bytes: downloaded.buffer, mimeType, timeoutMs: aiRequestTimeoutMs() })
+      const value = await analyzeMedia(db, job, config, downloaded.buffer, mimeType)
       const messagePatch = job.kind === 'image'
         ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
         : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }

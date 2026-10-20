@@ -1,4 +1,24 @@
-import { AiError } from './types'
+import { AiError, type AiUsage } from './types'
+
+export type MediaUsageReport = (report: { model: string; usage: AiUsage }) => void
+
+function tokenUsage(raw: unknown): AiUsage | null {
+  const value = raw as {
+    prompt_tokens?: number
+    completion_tokens?: number
+    input_tokens?: number
+    output_tokens?: number
+    total_tokens?: number
+  } | null
+  const promptTokens = value?.prompt_tokens ?? value?.input_tokens
+  const completionTokens = value?.completion_tokens ?? value?.output_tokens
+  if (typeof promptTokens !== 'number' || typeof completionTokens !== 'number') return null
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: value?.total_tokens ?? promptTokens + completionTokens,
+  }
+}
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_TRANSCRIPT_URL = 'https://api.openai.com/v1/audio/transcriptions'
@@ -73,6 +93,7 @@ export async function describeImageWithOpenAi(args: {
   bytes: Buffer
   mimeType: string
   timeoutMs: number
+  onUsage?: MediaUsageReport
 }): Promise<string> {
   assertSize(args.bytes)
   const dataUrl = `data:${args.mimeType || 'image/jpeg'};base64,${args.bytes.toString('base64')}`
@@ -96,7 +117,11 @@ export async function describeImageWithOpenAi(args: {
     throw new AiError(error instanceof Error ? error.message : 'No se pudo analizar la imagen.', { code: 'network_error' })
   }
   if (!response.ok) throw new AiError(`OpenAI rechazó el análisis de imagen (${response.status}).`, { code: 'provider_error', status: response.status })
-  return textFromChatCompletion(await response.json().catch(() => null))
+  const data = await response.json().catch(() => null) as { model?: string; usage?: unknown } | null
+  const text = textFromChatCompletion(data)
+  const usage = tokenUsage(data?.usage)
+  if (usage) args.onUsage?.({ model: data?.model || args.model || IMAGE_ANALYSIS_MODEL, usage })
+  return text
 }
 
 export async function transcribeAudioWithOpenAi(args: {
@@ -105,6 +130,7 @@ export async function transcribeAudioWithOpenAi(args: {
   bytes: Buffer
   mimeType: string
   timeoutMs: number
+  onUsage?: MediaUsageReport
 }): Promise<string> {
   assertSize(args.bytes)
   const extension = audioExtensionForMimeType(args.mimeType)
@@ -123,7 +149,10 @@ export async function transcribeAudioWithOpenAi(args: {
     const detail = payload?.error?.message?.trim().slice(0, 300)
     throw new AiError(`OpenAI rechazó la transcripción (${response.status})${detail ? `: ${detail}` : '.'}`, { code: 'provider_error', status: response.status })
   }
-  const data = await response.json().catch(() => null) as { text?: string } | null
+  const data = await response.json().catch(() => null) as { text?: string; usage?: { type?: string } } | null
   if (!data?.text?.trim()) throw new AiError('OpenAI no devolvió una transcripción.', { code: 'empty_response' })
+  // Models billed by duration (whisper-1) report seconds, not tokens; those are not recorded here.
+  const usage = data.usage?.type === 'tokens' ? tokenUsage(data.usage) : null
+  if (usage) args.onUsage?.({ model: args.model || AUDIO_TRANSCRIPTION_MODEL, usage })
   return data.text.trim().slice(0, 10000)
 }

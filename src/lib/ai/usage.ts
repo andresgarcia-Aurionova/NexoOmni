@@ -7,7 +7,15 @@ export interface LogAiUsageArgs {
   /** Null for a draft not tied to one thread, or when the row was
    *  deleted between generation and logging. */
   conversationId: string | null;
-  mode: 'auto_reply' | 'draft' | 'analysis' | 'report' | 'call_summary';
+  mode:
+    | 'auto_reply'
+    | 'draft'
+    | 'analysis'
+    | 'report'
+    | 'call_summary'
+    | 'voice_transcription'
+    | 'image_description'
+    | 'embeddings';
   provider: AiProvider;
   model: string;
   latencyMs?: number;
