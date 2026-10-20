@@ -47,6 +47,36 @@ describe('logAiUsage', () => {
     expect(from).not.toHaveBeenCalled();
   });
 
+  it('preserves token logging if migration 150 is not applied', async () => {
+    const insert = vi
+      .fn()
+      .mockResolvedValueOnce({
+        error: {
+          code: 'PGRST204',
+          message: "Could not find the 'latency_ms' column in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({ error: null });
+    const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await logAiUsage(db, {
+      accountId: 'acct-1',
+      conversationId: null,
+      mode: 'analysis',
+      provider: 'openai',
+      model: 'gpt-x',
+      latencyMs: 250,
+      usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
+    });
+
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insert.mock.calls[0][0]).toHaveProperty('latency_ms', 250);
+    expect(insert.mock.calls[1][0]).not.toHaveProperty('latency_ms');
+    expect(warning).toHaveBeenCalledOnce();
+    warning.mockRestore();
+  });
+
   it('never throws when the insert errors', async () => {
     const insert = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
     const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;

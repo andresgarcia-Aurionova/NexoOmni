@@ -14,6 +14,16 @@ export interface LogAiUsageArgs {
   usage: AiUsage | null;
 }
 
+function isMissingLatencyColumn(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    (error.code === '42703' || error.code === 'PGRST204') &&
+    /latency_ms/i.test(error.message ?? '')
+  );
+}
+
 /**
  * Best-effort append to `ai_usage_log` — one row per LLM call, for cost
  * visibility on the account's BYO key. NEVER throws: usage accounting
@@ -33,17 +43,29 @@ export async function logAiUsage(
 ): Promise<void> {
   if (!args.usage) return;
   try {
-    const { error } = await db.from('ai_usage_log').insert({
+    const row = {
       account_id: args.accountId,
       conversation_id: args.conversationId,
       mode: args.mode,
       provider: args.provider,
       model: args.model,
-      latency_ms: args.latencyMs ?? null,
       prompt_tokens: args.usage.promptTokens,
       completion_tokens: args.usage.completionTokens,
       total_tokens: args.usage.totalTokens,
-    });
+    };
+    const { error } = await db
+      .from('ai_usage_log')
+      .insert({ ...row, latency_ms: args.latencyMs ?? null });
+    if (error && isMissingLatencyColumn(error)) {
+      console.warn(
+        '[ai usage] latency_ms column is not available yet; apply migration 150 to start recording latency.'
+      );
+      const retry = await db.from('ai_usage_log').insert(row);
+      if (retry.error) {
+        console.error('[ai usage] legacy log insert failed:', retry.error);
+      }
+      return;
+    }
     if (error) {
       console.error('[ai usage] log insert failed:', error);
     }
