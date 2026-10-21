@@ -6,6 +6,7 @@ import {
   type AiCreditUsageActivity,
 } from '@/lib/ai/credit-usage-activities';
 import { loadBanxicoFix } from '@/lib/billing/banxico-fx';
+import { isStripeCheckoutConfigured } from '@/lib/stripe/server';
 import { requireEntitlement } from '@/lib/account/entitlements';
 import { toErrorResponse } from '@/lib/auth/account';
 
@@ -175,6 +176,7 @@ export async function GET() {
       {
         balance: String(wallet.available_credits),
         updated_at: wallet.updated_at,
+        checkout_available: isStripeCheckoutConfigured(),
         monthly_usage: monthlyUsageError
           ? null
           : {

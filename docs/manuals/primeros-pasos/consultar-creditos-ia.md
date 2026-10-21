@@ -1,6 +1,6 @@
 ---
 title: "Consultar créditos de IA"
-description: "Consulta el saldo, el consumo mensual y los movimientos de créditos de tu cuenta."
+description: "Consulta el saldo, el consumo mensual, las recargas y los movimientos de créditos de IA de tu cuenta."
 section: "primeros-pasos"
 role: ["supervisor", "admin", "owner"]
 plan: ["ai"]
@@ -10,8 +10,8 @@ updated: "2026-10-21"
 ## ¿Qué es?
 
 La sección **Créditos de IA** muestra cuántos créditos están disponibles
-para las funciones de IA de tu cuenta y los movimientos más recientes que
-afectan ese saldo.
+para las funciones de IA de tu cuenta, permite elegir un paquete de recarga
+cuando la compra en línea está habilitada y muestra los movimientos recientes.
 
 ## ¿Para quién es?
 
@@ -29,10 +29,26 @@ de una cuenta con funciones de IA activas.
 4. Revisa los últimos 50 movimientos: recargas, ajustes, uso, reembolsos o
    vencimientos.
 5. Usa **Actualizar** para volver a consultar la información.
+6. Cuando las recargas en línea estén habilitadas, elige uno de los paquetes
+   disponibles y continúa al Checkout seguro de Stripe. Antes de pagar,
+   confirma el total en MXN y el desglose del paquete y el IVA. El costo
+   estimado de procesamiento está incluido en el precio del paquete; no se
+   agrega como un cargo separado por tarjeta.
+7. Al terminar el pago, vuelve a **Créditos de IA**. El saldo se actualiza
+   después de que Stripe confirme el pago; si no aparece de inmediato, pulsa
+   **Actualizar** en unos segundos.
 
-La pantalla no muestra nombres de proveedores ni modelos de IA. Las recargas
-se registran manualmente por ahora; contacta al equipo de NexoOmni para
-solicitar una.
+Los paquetes son Emprendedor (50,000 créditos), Comercial Pro (150,000) y
+Corporativo (300,000). El precio se convierte a MXN con el FIX de Banxico
+disponible al iniciar el Checkout, por lo que puede cambiar e incluye el costo
+estimado de procesamiento del pago. Las tarjetas
+internacionales también se aceptan cuando el pago en línea está habilitado.
+La pantalla no muestra nombres de proveedores ni modelos de IA.
+
+Si la opción de compra aparece deshabilitada, el equipo de NexoOmni aún no ha
+activado las recargas en línea. Si Stripe confirmó un cobro y el saldo no se
+actualiza, no repitas el pago: actualiza la pantalla y contacta al equipo para
+revisar la operación.
 
 El equivalente en MXN es solo una referencia estimada del saldo disponible,
 no es un cobro, factura ni cotización. Se muestra únicamente cuando hay un FIX
@@ -65,7 +81,18 @@ para consultar los datos más recientes.
 **¿El equivalente en MXN es el importe que debo pagar?**
 
 No. Es una referencia aproximada del valor del saldo disponible, calculada con
-el FIX de Banxico indicado. Las recargas siguen gestionándose manualmente.
+el FIX de Banxico indicado. El importe de una recarga se muestra en Checkout
+antes de confirmar el pago.
+
+**¿Cuándo vencen los créditos comprados?**
+
+Cada recarga pagada vence 30 días después de acreditarse. El saldo que ya
+existía antes del cambio, los ajustes y las cortesías no vencen.
+
+**¿Stripe genera automáticamente una factura?**
+
+No. La generación automática de factura de Stripe está desactivada. Contacta
+al equipo de NexoOmni para conocer el proceso de facturación disponible.
 
 ## Ver también
 

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { CircleDollarSign, LoaderCircle, RefreshCw } from 'lucide-react';
+import {
+  CircleDollarSign,
+  CreditCard,
+  LoaderCircle,
+  RefreshCw,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +18,21 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import type { AiCreditUsageActivity } from '@/lib/ai/credit-usage-activities';
+import {
+  AI_CREDIT_PACKAGES,
+  type AiCreditPackageId,
+} from '@/lib/billing/stripe-credit-pricing';
+
+const PACKAGE_NAME_KEYS: Record<
+  AiCreditPackageId,
+  | 'packageNames.entrepreneur'
+  | 'packageNames.commercial_pro'
+  | 'packageNames.corporate'
+> = {
+  entrepreneur: 'packageNames.entrepreneur',
+  commercial_pro: 'packageNames.commercial_pro',
+  corporate: 'packageNames.corporate',
+};
 
 type CreditMovement = {
   id: string;
@@ -31,6 +51,7 @@ type MonthlyUsageActivity = {
 type CreditData = {
   balance: string;
   updated_at: string | null;
+  checkout_available: boolean;
   movements: CreditMovement[];
   monthly_usage: {
     month_start: string;
@@ -93,6 +114,11 @@ export function AiCreditBalance() {
   const [data, setData] = useState<CreditData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutMessage, setCheckoutMessage] = useState<
+    'success' | 'cancelled' | null
+  >(null);
+  const [purchasing, setPurchasing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +142,7 @@ export function AiCreditBalance() {
         !payload ||
         !('balance' in payload) ||
         !Array.isArray(payload.movements) ||
+        !('checkout_available' in payload) ||
         !('monthly_usage' in payload) ||
         !('monthly_usage_error' in payload) ||
         !('balance_mxn_estimate' in payload)
@@ -133,6 +160,68 @@ export function AiCreditBalance() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const checkout = new URLSearchParams(window.location.search).get('checkout');
+    if (checkout === 'success' || checkout === 'cancelled') {
+      setCheckoutMessage(checkout);
+      if (checkout === 'success') {
+        const timeout = window.setTimeout(() => void load(), 2_000);
+        return () => window.clearTimeout(timeout);
+      }
+    }
+  }, [load]);
+
+  const startCheckout = useCallback(
+    async (packageId: AiCreditPackageId) => {
+      setPurchasing(true);
+      setCheckoutError(null);
+      try {
+        const response = await fetch('/api/account/credits/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ package_id: packageId }),
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | { checkout_url?: unknown; error?: unknown }
+          | null;
+        if (!response.ok) {
+          const code =
+            payload && typeof payload.error === 'string'
+              ? payload.error
+              : '';
+          const messageKey =
+            code === 'STRIPE_CHECKOUT_UNAVAILABLE'
+              ? 'checkout.unavailableError'
+              : code === 'AI_CREDIT_PACKAGE_INVALID'
+                ? 'checkout.packageError'
+                : 'checkout.error';
+          throw new Error(t(messageKey));
+        }
+        if (
+          !payload ||
+          typeof payload.checkout_url !== 'string' ||
+          !/^https:\/\/checkout\.stripe\.com\//.test(payload.checkout_url)
+        ) {
+          throw new Error(t('checkout.error'));
+        }
+        window.location.assign(payload.checkout_url);
+      } catch (reason) {
+        setCheckoutError(
+          reason instanceof Error ? reason.message : t('checkout.error')
+        );
+        setPurchasing(false);
+      }
+    },
+    [t]
+  );
+
+  const formatUsd = (value: number) =>
+    new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(value);
 
   return (
     <div className="space-y-6">
@@ -213,6 +302,83 @@ export function AiCreditBalance() {
               </div>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('rechargeTitle')}</CardTitle>
+          <CardDescription>{t('rechargeDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {checkoutMessage ? (
+            <p
+              role="status"
+              className="rounded-md border px-3 py-2 text-sm"
+            >
+              {t(
+                checkoutMessage === 'success'
+                  ? 'checkout.success'
+                  : 'checkout.cancelled'
+              )}
+            </p>
+          ) : null}
+          {checkoutError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {checkoutError}
+            </p>
+          ) : null}
+          {!data?.checkout_available ? (
+            <p className="text-sm text-muted-foreground">
+              {t('checkout.unavailable')}
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3">
+              {AI_CREDIT_PACKAGES.map((creditPackage) => (
+                <div
+                  key={creditPackage.id}
+                  className="flex flex-col gap-3 rounded-lg border p-4"
+                >
+                  <div>
+                    <h3 className="font-medium">
+                      {t(PACKAGE_NAME_KEYS[creditPackage.id])}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t('packageCredits', {
+                        credits: formatCredits(
+                          String(creditPackage.credits),
+                          locale
+                        ),
+                      })}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {formatUsd(creditPackage.usdAmount)}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void startCheckout(creditPackage.id)}
+                    disabled={
+                      purchasing ||
+                      loading ||
+                      !data?.checkout_available
+                    }
+                  >
+                    {purchasing ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <CreditCard />
+                    )}
+                    {t('checkout.buy')}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {t('checkout.priceNotice')}
+          </p>
         </CardContent>
       </Card>
 

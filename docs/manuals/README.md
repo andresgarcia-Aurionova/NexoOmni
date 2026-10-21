@@ -81,7 +81,7 @@ al día.
 |---|---|---|
 | Conectar WhatsApp (nativo o guiado) | [primeros-pasos/conexion-whatsapp.md](./primeros-pasos/conexion-whatsapp.md) | ✅ |
 | Créditos de IA y recargas manuales (operador de plataforma) | [primeros-pasos/administrar-creditos-ia.md](./primeros-pasos/administrar-creditos-ia.md) | ✅ |
-| Saldo, movimientos y alertas de créditos de IA (cliente) | [primeros-pasos/consultar-creditos-ia.md](./primeros-pasos/consultar-creditos-ia.md) | ✅ |
+| Saldo, recargas, movimientos y alertas de créditos de IA (cliente) | [primeros-pasos/consultar-creditos-ia.md](./primeros-pasos/consultar-creditos-ia.md) | ✅ |
 | Llaves de IA por cliente (operador de plataforma) | [primeros-pasos/administrar-llaves-ia.md](./primeros-pasos/administrar-llaves-ia.md) | ✅ |
 | Conectar Facebook / Instagram | [primeros-pasos/conexion-facebook-instagram.md](./primeros-pasos/conexion-facebook-instagram.md) | ✅ |
 | Miembros del equipo y roles (owner/admin/supervisor/agent/viewer) | [primeros-pasos/invitar-miembros.md](./primeros-pasos/invitar-miembros.md) | ✅ |

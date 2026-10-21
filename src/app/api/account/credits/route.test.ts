@@ -131,6 +131,7 @@ describe('GET /api/account/credits', () => {
     expect(await response.json()).toEqual({
       balance: '95',
       updated_at: '2026-10-21T10:00:00.000Z',
+      checkout_available: false,
       monthly_usage: {
         month_start: expect.any(String),
         total_credits_used: '17',
