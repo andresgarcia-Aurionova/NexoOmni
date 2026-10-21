@@ -16,6 +16,7 @@ import {
   ChartNoAxesCombined,
   Bot,
   CalendarDays,
+  Coins,
   Crown,
   GitBranch,
   LayoutDashboard,
@@ -37,7 +38,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { AccountRole } from "@/lib/auth/roles";
+import { hasMinRole, type AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -107,6 +108,7 @@ interface NavItem {
   beta?: boolean;
   /** Executive reports aggregate the whole account, so they are for admins. */
   adminOnly?: boolean;
+  minRole?: AccountRole;
   module?: 'pipelines' | 'appointments' | 'agendapro';
 }
 
@@ -116,9 +118,9 @@ interface NavItem {
 // Keep in sync with the server-side guard in src/proxy.ts.
 const AGENT_ALLOWED_PATHS = ['/inbox', '/notifications', '/call-tasks', '/contacts', '/pipelines', '/appointments', '/agendapro'];
 
-// The supervisor role gets everything an agent does, PLUS these 4 menus
+// The supervisor role gets everything an agent does, PLUS these menus
 // with full functionality (Broadcasts, Reports, Call transcriptions,
-// Supervision) — see migrations 128/129 and the requireRole('supervisor')
+// Supervision, and AI credits) — see migrations 128/129 and the requireRole('supervisor')
 // guards on their API routes. Automations/Flows/AI Agents/Settings stay
 // admin+-only.
 const SUPERVISOR_EXTRA_PATHS = ['/broadcasts', '/reports', '/call-transcriptions', '/supervision'];
@@ -139,6 +141,7 @@ const navItems: NavItem[] = [
   { href: "/flows", labelKey: "flows", icon: Workflow },
   { href: "/supervision", labelKey: "supervision", icon: ShieldAlert },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/credits", labelKey: "credits", icon: Coins, minRole: 'supervisor' },
 ];
 
 const bottomNavItems = [
@@ -317,7 +320,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.filter((item) => (!item.adminOnly || accountRole === 'owner' || accountRole === 'admin' || accountRole === 'supervisor') && (!item.module || enabledModules.includes(item.module)) && (accountRole !== 'agent' || AGENT_ALLOWED_PATHS.includes(item.href)) && (accountRole !== 'supervisor' || AGENT_ALLOWED_PATHS.includes(item.href) || SUPERVISOR_EXTRA_PATHS.includes(item.href))).map((item) => {
+            {navItems.filter((item) => (!item.adminOnly || accountRole === 'owner' || accountRole === 'admin' || accountRole === 'supervisor') && (!item.minRole || (!!accountRole && hasMinRole(accountRole, item.minRole))) && (!item.module || enabledModules.includes(item.module)) && (accountRole !== 'agent' || AGENT_ALLOWED_PATHS.includes(item.href)) && (accountRole !== 'supervisor' || AGENT_ALLOWED_PATHS.includes(item.href) || SUPERVISOR_EXTRA_PATHS.includes(item.href) || item.minRole === 'supervisor')).map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

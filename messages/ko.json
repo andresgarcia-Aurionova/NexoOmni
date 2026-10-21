@@ -1,4 +1,42 @@
 {
+  "AiCredits": {
+    "title": "AI 크레딧",
+    "description": "계정의 사용 가능한 잔액과 최근 크레딧 내역을 확인합니다.",
+    "balanceTitle": "크레딧 잔액",
+    "balanceDescription": "요금제에 포함된 AI 기능에 사용할 수 있는 크레딧입니다.",
+    "creditsAvailable": "사용 가능한 크레딧",
+    "historyTitle": "최근 내역",
+    "historyDescription": "이 계정에 기록된 최근 크레딧 내역 50건입니다.",
+    "date": "날짜",
+    "movement": "내역",
+    "change": "변동",
+    "balanceAfter": "변동 후 잔액",
+    "refresh": "새로고침",
+    "loading": "잔액을 불러오는 중…",
+    "loadError": "크레딧 정보를 불러오지 못했습니다.",
+    "emptyHistory": "아직 크레딧 내역이 없습니다.",
+    "rechargeHelp": "충전은 수동으로 등록됩니다. 충전을 요청하려면 NexoOmni 팀에 문의하세요.",
+    "entries": {
+      "purchase": "충전",
+      "adjustment": "조정",
+      "usage": "AI 사용",
+      "refund": "환불",
+      "expiration": "크레딧 만료"
+    }
+  },
+  "AiCreditAlerts": {
+    "threshold10Title": "크레딧 잔액 부족 (10%)",
+    "threshold10Body": "사용 가능한 잔액은 {credits} 크레딧입니다. 잔액이 소진되기 전에 NexoOmni에 충전을 요청하세요.",
+    "threshold10EmailSubject": "NexoOmni 크레딧 잔액이 10% 남았습니다",
+    "threshold10EmailHeading": "최근 결제 충전액의 10%가 남았습니다",
+    "threshold10EmailBody": "{credits} 크레딧이 남았습니다. 잔액이 소진되기 전에 NexoOmni 팀에 문의하여 충전을 등록하세요.",
+    "threshold5Title": "크레딧 잔액 긴급 (5%)",
+    "threshold5Body": "잔액은 {credits} 크레딧입니다. 서비스 중단을 막으려면 지금 NexoOmni에 문의하세요.",
+    "threshold5EmailSubject": "긴급: NexoOmni 잔액이 5% 남았습니다",
+    "threshold5EmailHeading": "최근 결제 충전액의 5%가 남았습니다",
+    "threshold5EmailBody": "{credits} 크레딧이 남았습니다. 지금 NexoOmni 팀에 문의하세요. 잔액이 소진되면 새 AI 요청이 차단되고 Zernio 통화가 일시 중지됩니다.",
+    "viewBalance": "잔액 보기"
+  },
   "PlatformBillingRates": {
     "title": "환율 및 통화 요금",
     "description": "Banxico FIX 환율은 통화 요금 부과 시 자동으로(12시간마다) 조회됩니다. 여기서 강제 조회, 수동 입력, 분당 가격 및 마진 조정이 가능합니다.",
@@ -236,6 +274,7 @@
     "callTranscriptions": "통화 녹취",
     "supervision": "감독",
     "aiAgents": "AI 에이전트",
+    "credits": "AI 크레딧",
     "platformAdministration": "NexoOmni 관리",
     "settings": "설정",
     "beta": "베타",
@@ -268,6 +307,7 @@
     "supervision": "운영 감독",
     "reports": "리포트",
     "callTranscriptions": "통화 녹취",
+    "credits": "AI 크레딧",
     "settings": "설정",
     "openMenu": "메뉴 열기",
     "openAccountMenu": "계정 메뉴 열기",

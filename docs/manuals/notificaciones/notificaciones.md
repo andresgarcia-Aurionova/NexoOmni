@@ -1,6 +1,6 @@
 ---
 title: "Notificaciones"
-description: "Avisos en tiempo real: mensajes nuevos, conversaciones asignadas, alertas de Nexo Memory, y recordatorios de tareas."
+description: "Avisos en tiempo real: mensajes nuevos, conversaciones asignadas, alertas de Nexo Memory, saldo de créditos y recordatorios."
 section: "notificaciones"
 role: ["agent", "supervisor", "admin", "owner"]
 plan: ["basico", "crecimiento", "premium"]
@@ -32,12 +32,15 @@ Todos los roles reciben notificaciones relevantes a lo que pueden ver.
   vencido, prospecto sin seguimiento.
 - **Recordatorio de tarea** — 10 minutos antes de una tarea agendada
   (ver [Tareas y recordatorios](../nexo-memory/tareas-y-recordatorios.md)).
+- **Saldo de créditos de IA** — avisos al 10 % y al 5 % del último paquete
+  pagado, enviados dentro de NexoOmni y por correo a propietarios,
+  administradores y supervisores activos. El 5 % se muestra como urgente.
 
 ## Cómo se usa
 
 1. Haz clic en la campana para ver el historial completo.
 2. Haz clic en una notificación para ir directo a la conversación, la
-   llamada, Seguimientos o Reportes según corresponda.
+   llamada, Seguimientos, Reportes o el saldo de créditos según corresponda.
 3. **Marcar todas como leídas** limpia el contador.
 
 ## Preguntas frecuentes

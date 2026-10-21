@@ -1,4 +1,42 @@
 {
+  "AiCredits": {
+    "title": "Créditos de IA",
+    "description": "Consulta tu saldo disponible y los movimientos recientes de créditos de tu cuenta.",
+    "balanceTitle": "Saldo de créditos",
+    "balanceDescription": "Saldo disponible para usar las funciones de IA incluidas en tu plan.",
+    "creditsAvailable": "créditos disponibles",
+    "historyTitle": "Movimientos recientes",
+    "historyDescription": "Últimos 50 movimientos registrados en la cuenta.",
+    "date": "Fecha",
+    "movement": "Movimiento",
+    "change": "Cambio",
+    "balanceAfter": "Saldo resultante",
+    "refresh": "Actualizar",
+    "loading": "Cargando saldo…",
+    "loadError": "No se pudo cargar la información de créditos.",
+    "emptyHistory": "Todavía no hay movimientos de créditos.",
+    "rechargeHelp": "Las recargas se registran manualmente; contacta al equipo de NexoOmni para solicitar una.",
+    "entries": {
+      "purchase": "Recarga",
+      "adjustment": "Ajuste",
+      "usage": "Uso de IA",
+      "refund": "Reembolso",
+      "expiration": "Vencimiento de créditos"
+    }
+  },
+  "AiCreditAlerts": {
+    "threshold10Title": "Saldo de créditos bajo (10 %)",
+    "threshold10Body": "Tu saldo disponible es de {credits} créditos. Solicita una recarga a NexoOmni antes de que se agote.",
+    "threshold10EmailSubject": "Tu saldo de créditos de NexoOmni está al 10 %",
+    "threshold10EmailHeading": "Tu saldo llegó al 10 % del último paquete pagado",
+    "threshold10EmailBody": "Te quedan {credits} créditos. Contacta al equipo de NexoOmni para registrar una recarga antes de que se agote el saldo.",
+    "threshold5Title": "Saldo crítico de créditos (5 %)",
+    "threshold5Body": "Tu saldo es de {credits} créditos. Contacta ahora a NexoOmni para evitar interrupciones.",
+    "threshold5EmailSubject": "Aviso urgente: tu saldo de NexoOmni está al 5 %",
+    "threshold5EmailHeading": "Tu saldo llegó al 5 % del último paquete pagado",
+    "threshold5EmailBody": "Te quedan {credits} créditos. Contacta ahora al equipo de NexoOmni. Al agotarse el saldo, las nuevas solicitudes de IA se bloquearán y las llamadas de Zernio se pausarán.",
+    "viewBalance": "Ver saldo"
+  },
   "PlatformBillingRates": {
     "title": "Tipo de cambio y tarifas de llamadas",
     "description": "El tipo de cambio FIX de Banxico se consulta automáticamente (cada 12 h) al cobrar llamadas. Aquí puedes forzar la consulta, capturarlo manualmente y ajustar el precio por minuto y el margen.",
@@ -236,6 +274,7 @@
     "callTranscriptions": "Transcripciones de llamadas",
     "supervision": "Supervisión",
     "aiAgents": "Agentes IA",
+    "credits": "Créditos de IA",
     "platformAdministration": "Administración NexoOmni",
     "settings": "Configuración",
     "beta": "Beta",
@@ -268,6 +307,7 @@
     "supervision": "Supervisión operativa",
     "reports": "Reportes",
     "callTranscriptions": "Transcripciones de llamadas",
+    "credits": "Créditos de IA",
     "settings": "Configuración",
     "openMenu": "Abrir menú",
     "openAccountMenu": "Abrir menú de cuenta",

@@ -32,6 +32,7 @@ import { processCallTranscriptions } from '@/lib/telephony/transcription-sync'
 import { processWebPushOutbox } from '@/lib/notifications/web-push'
 import { processCreditCallPauses } from '@/lib/zernio/call-credit-pause'
 import { processAiCreditExpirations } from '@/lib/ai/credit-expiration'
+import { processAiCreditAlertEmails } from '@/lib/notifications/ai-credit-alerts'
 
 /** How far ahead of a task's due_at the reminder notification fires. */
 const TASK_REMINDER_LEAD_MINUTES = 10
@@ -122,6 +123,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[credit call pause] Worker synchronization failed:', error)
     creditCallPauses = { error: 'Could not synchronize Zernio call availability' }
+  }
+  let creditAlertEmails: Awaited<ReturnType<typeof processAiCreditAlertEmails>> | { error: string }
+  try {
+    creditAlertEmails = await processAiCreditAlertEmails(db)
+  } catch (error) {
+    console.error('[ai credit alerts] Email outbox processing failed:', error)
+    creditAlertEmails = { error: 'Could not process AI credit alert emails' }
   }
   const webPush = await processWebPushOutbox(db)
   let callTranscriptions: Awaited<ReturnType<typeof processCallTranscriptions>> | { error: string }
@@ -282,7 +290,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[appointments] Google Calendar inbound sync could not start:', error)
   }
-  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_call_pauses: creditCallPauses, calls: callTranscriptions, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in creditCallPauses || 'error' in creditExpirations ? 500 : 200 })
+  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, credit_call_pauses: creditCallPauses, calls: callTranscriptions, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
 }
 
 async function processAppointmentReminders(db: ReturnType<typeof supabaseAdmin>) {

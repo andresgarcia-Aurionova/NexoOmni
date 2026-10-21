@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import type { Notification } from '@/types';
@@ -11,6 +12,7 @@ import {
   Brain,
   CalendarClock,
   CheckCheck,
+  Coins,
   Loader2,
   MessageSquare,
   PhoneCall,
@@ -24,9 +26,12 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { emitNotificationsChanged } from '@/lib/notifications/events';
 import { WebPushSettings } from '@/components/pwa/web-push-settings';
+import {
+  formatCreditBalance,
+  getAiCreditAlertThreshold,
+} from '@/lib/notifications/credit-alert-types';
 
-// Icon per notification type. Only one type exists today
-// (conversation_assigned) but this keeps future types a one-line add.
+// Keep every notification type mapped so additions fail the TypeScript check.
 const TYPE_ICON: Record<Notification['type'], typeof Bell> = {
   conversation_assigned: UserPlus,
   conversation_transferred: Send,
@@ -36,10 +41,14 @@ const TYPE_ICON: Record<Notification['type'], typeof Bell> = {
   nexo_memory_alert: Brain,
   task_reminder: AlarmClock,
   agendapro_unconfirmed_appointment: CalendarClock,
+  ai_credit_balance_10: Coins,
+  ai_credit_balance_5: Coins,
 };
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const creditAlertCopy = useTranslations('AiCreditAlerts');
   const { accountId } = useAuth();
   const [notifications, setNotifications] = useState<Notification[] | null>(
     null
@@ -147,6 +156,8 @@ export default function NotificationsPage() {
         router.push('/reports');
       } else if (n.type === 'agendapro_unconfirmed_appointment') {
         router.push('/agendapro');
+      } else if (getAiCreditAlertThreshold(n.type) !== null) {
+        router.push('/credits');
       }
     },
     [markRead, router]
@@ -239,7 +250,26 @@ export default function NotificationsPage() {
           {notifications.map((n) => {
             const Icon = TYPE_ICON[n.type] ?? Bell;
             const isUnread = !n.read_at;
-            const isCritical = n.type === 'negative_sentiment';
+            const creditThreshold = getAiCreditAlertThreshold(n.type);
+            const isCritical =
+              n.type === 'negative_sentiment' || creditThreshold === 5;
+            const isWarning = creditThreshold === 10;
+            const title =
+              creditThreshold === null
+                ? n.title
+                : creditAlertCopy(
+                    creditThreshold === 5 ? 'threshold5Title' : 'threshold10Title'
+                  );
+            const body =
+              creditThreshold === null
+                ? n.body
+                : creditAlertCopy(
+                    creditThreshold === 5 ? 'threshold5Body' : 'threshold10Body',
+                    {
+                      credits:
+                        formatCreditBalance(n.body, locale) ?? n.body ?? '',
+                    }
+                  );
             return (
               <li key={n.id}>
                 <button
@@ -251,6 +281,8 @@ export default function NotificationsPage() {
                       ? 'border-destructive/60 bg-destructive/10 hover:border-destructive'
                       : isCritical
                         ? 'border-destructive/30 bg-destructive/5 hover:border-destructive/60'
+                      : isWarning && isUnread
+                      ? 'border-amber-500/50 bg-amber-500/10 hover:border-amber-500/70'
                       : isUnread
                       ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
                       : 'border-border bg-card hover:border-border/70'
@@ -259,14 +291,26 @@ export default function NotificationsPage() {
                   <div
                     className={cn(
                       'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg',
-                      isCritical ? 'bg-destructive/15' : isUnread ? 'bg-primary/15' : 'bg-muted'
+                      isCritical
+                        ? 'bg-destructive/15'
+                        : isWarning
+                          ? 'bg-amber-500/15'
+                          : isUnread
+                            ? 'bg-primary/15'
+                            : 'bg-muted'
                     )}
                     aria-hidden
                   >
                     <Icon
                       className={cn(
                         'h-5 w-5',
-                        isCritical ? 'text-destructive' : isUnread ? 'text-primary' : 'text-muted-foreground'
+                        isCritical
+                          ? 'text-destructive'
+                          : isWarning
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : isUnread
+                              ? 'text-primary'
+                              : 'text-muted-foreground'
                       )}
                     />
                   </div>
@@ -275,21 +319,34 @@ export default function NotificationsPage() {
                       <span
                         className={cn(
                           'truncate text-sm font-semibold',
-                          isCritical ? 'text-destructive' : isUnread ? 'text-foreground' : 'text-muted-foreground'
+                          isCritical
+                            ? 'text-destructive'
+                            : isWarning
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : isUnread
+                                ? 'text-foreground'
+                                : 'text-muted-foreground'
                         )}
                       >
-                        {n.title}
+                        {title}
                       </span>
                       {isUnread && (
                         <span
                           aria-label="Unread"
-                          className={cn('h-2 w-2 flex-shrink-0 rounded-full', isCritical ? 'bg-destructive' : 'bg-primary')}
+                          className={cn(
+                            'h-2 w-2 flex-shrink-0 rounded-full',
+                            isCritical
+                              ? 'bg-destructive'
+                              : isWarning
+                                ? 'bg-amber-500'
+                                : 'bg-primary'
+                          )}
                         />
                       )}
                     </div>
-                    {n.body && (
+                    {body && (
                       <p className="text-muted-foreground mt-0.5 truncate text-xs">
-                        {n.body}
+                        {body}
                       </p>
                     )}
                     <p className="text-muted-foreground/70 mt-1 text-[11px]">

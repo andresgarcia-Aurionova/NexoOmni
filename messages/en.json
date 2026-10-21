@@ -1,4 +1,42 @@
 {
+  "AiCredits": {
+    "title": "AI credits",
+    "description": "View your account's available balance and recent credit activity.",
+    "balanceTitle": "Credit balance",
+    "balanceDescription": "Credits available for AI features included in your plan.",
+    "creditsAvailable": "credits available",
+    "historyTitle": "Recent activity",
+    "historyDescription": "The latest 50 credit movements recorded for this account.",
+    "date": "Date",
+    "movement": "Movement",
+    "change": "Change",
+    "balanceAfter": "Balance after",
+    "refresh": "Refresh",
+    "loading": "Loading balance…",
+    "loadError": "Could not load credit information.",
+    "emptyHistory": "There are no credit movements yet.",
+    "rechargeHelp": "Top-ups are recorded manually; contact the NexoOmni team to request one.",
+    "entries": {
+      "purchase": "Top-up",
+      "adjustment": "Adjustment",
+      "usage": "AI usage",
+      "refund": "Refund",
+      "expiration": "Credit expiration"
+    }
+  },
+  "AiCreditAlerts": {
+    "threshold10Title": "Low credit balance (10%)",
+    "threshold10Body": "Your available balance is {credits} credits. Request a top-up from NexoOmni before it runs out.",
+    "threshold10EmailSubject": "Your NexoOmni credit balance is at 10%",
+    "threshold10EmailHeading": "Your balance reached 10% of the latest paid top-up",
+    "threshold10EmailBody": "You have {credits} credits left. Contact the NexoOmni team to record a top-up before the balance runs out.",
+    "threshold5Title": "Critical credit balance (5%)",
+    "threshold5Body": "Your balance is {credits} credits. Contact NexoOmni now to avoid interruptions.",
+    "threshold5EmailSubject": "Urgent: your NexoOmni balance is at 5%",
+    "threshold5EmailHeading": "Your balance reached 5% of the latest paid top-up",
+    "threshold5EmailBody": "You have {credits} credits left. Contact the NexoOmni team now. When the balance runs out, new AI requests will be blocked and Zernio calls will be paused.",
+    "viewBalance": "View balance"
+  },
   "PlatformBillingRates": {
     "title": "Exchange rate and call rates",
     "description": "The Banxico FIX rate is fetched automatically (every 12 h) when billing calls. Here you can force a refresh, enter it manually, and adjust the per-minute price and margin.",
@@ -236,6 +274,7 @@
     "callTranscriptions": "Call transcriptions",
     "supervision": "Supervision",
     "aiAgents": "AI Agents",
+    "credits": "AI credits",
     "platformAdministration": "NexoOmni administration",
     "settings": "Settings",
     "beta": "Beta",
@@ -268,6 +307,7 @@
     "supervision": "Operational supervision",
     "reports": "Reports",
     "callTranscriptions": "Call transcriptions",
+    "credits": "AI credits",
     "settings": "Settings",
     "openMenu": "Open menu",
     "openAccountMenu": "Open account menu",

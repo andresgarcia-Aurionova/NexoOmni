@@ -32,7 +32,7 @@ export async function proxy(request: NextRequest) {
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/notifications', '/call-tasks', '/flows', '/agents', '/supervision']
+  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/notifications', '/call-tasks', '/flows', '/agents', '/supervision', '/credits']
   const isProtected = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
   if (!user && isProtected) {
     const url = request.nextUrl.clone()

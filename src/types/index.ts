@@ -229,7 +229,9 @@ export type NotificationType =
   /** "10 minutes before" reminder for a scheduled follow-up task (contact_commitments.due_at). */
   | 'task_reminder'
   /** A client declined (or never answered) the 24h AgendaPro confirmation reminder — see src/lib/agendapro/confirmation.ts. */
-  | 'agendapro_unconfirmed_appointment';
+  | 'agendapro_unconfirmed_appointment'
+  | 'ai_credit_balance_10'
+  | 'ai_credit_balance_5';
 
 export interface Notification {
   id: string;

@@ -7,14 +7,20 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { emitNotificationsChanged } from '@/lib/notifications/events';
 import { showDesktopMessageAlert } from '@/lib/notifications/desktop-alert';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { Notification } from '@/types';
+import {
+  formatCreditBalance,
+  getAiCreditAlertThreshold,
+} from '@/lib/notifications/credit-alert-types';
 
 /** Global listener for notification rows addressed to the signed-in user. */
 export function IncomingMessageAlert() {
   const router = useRouter();
   const { user } = useAuth();
   const pushCopy = useTranslations('Pwa');
+  const locale = useLocale();
+  const creditAlertCopy = useTranslations('AiCreditAlerts');
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -117,7 +123,8 @@ export function IncomingMessageAlert() {
         notification.type !== 'task_reminder' &&
         notification.type !== 'conversation_assigned' &&
         notification.type !== 'conversation_transferred' &&
-        notification.type !== 'agendapro_unconfirmed_appointment'
+        notification.type !== 'agendapro_unconfirmed_appointment' &&
+        getAiCreditAlertThreshold(notification.type) === null
       ) {
         return;
       }
@@ -152,32 +159,63 @@ export function IncomingMessageAlert() {
       }
 
       playAlert(notification.type);
-      const notify = notification.type === 'negative_sentiment'
+      const creditThreshold = getAiCreditAlertThreshold(notification.type);
+      const notify = notification.type === 'negative_sentiment' ||
+        creditThreshold === 5
         ? toast.error
-        : notification.type === 'call_follow_up' || notification.type === 'nexo_memory_alert' || notification.type === 'task_reminder' || notification.type === 'agendapro_unconfirmed_appointment'
+        : creditThreshold === 10 || notification.type === 'call_follow_up' || notification.type === 'nexo_memory_alert' || notification.type === 'task_reminder' || notification.type === 'agendapro_unconfirmed_appointment'
           ? toast.warning
           : notification.type === 'conversation_assigned'
             ? toast.info
             : notification.type === 'conversation_transferred'
               ? toast.success
               : toast;
-      notify(notification.title, {
-        description: notification.body,
-        action: notification.conversation_id
-          ? {
+      const title =
+        creditThreshold === null
+          ? notification.title
+          : creditAlertCopy(
+              creditThreshold === 5
+                ? 'threshold5Title'
+                : 'threshold10Title'
+              );
+      const description =
+        creditThreshold === null
+            ? notification.body
+            : creditAlertCopy(
+                creditThreshold === 5
+                  ? 'threshold5Body'
+                  : 'threshold10Body',
+                {
+                  credits:
+                    formatCreditBalance(notification.body, locale) ??
+                    notification.body ??
+                    '',
+                }
+              );
+      const action = notification.conversation_id
+        ? {
               label: 'Abrir chat',
               onClick: () => router.push(`/inbox?c=${notification.conversation_id}`),
             }
-          : notification.call_id
-            ? { label: 'Ver llamada', onClick: () => router.push(`/call-transcriptions?call=${notification.call_id}`) }
+        : notification.call_id
+            ? {
+                label: 'Ver llamada',
+                onClick: () =>
+                  router.push(`/call-transcriptions?call=${notification.call_id}`),
+              }
             : notification.type === 'task_reminder'
               ? { label: 'Ver seguimientos', onClick: () => router.push('/call-tasks') }
               : notification.type === 'nexo_memory_alert'
                 ? { label: 'Ver reportes', onClick: () => router.push('/reports') }
                 : notification.type === 'agendapro_unconfirmed_appointment'
                   ? { label: 'Ver AgendaPro', onClick: () => router.push('/agendapro') }
-                  : undefined,
-      });
+                  : creditThreshold !== null
+                    ? {
+                        label: creditAlertCopy('viewBalance'),
+                        onClick: () => router.push('/credits'),
+                      }
+                    : undefined;
+      notify(title, { description, action });
 
     };
 
@@ -237,7 +275,7 @@ export function IncomingMessageAlert() {
       audioContextRef.current?.close().catch(() => undefined);
       audioContextRef.current = null;
     };
-  }, [router, user, pushCopy]);
+  }, [router, user, pushCopy, locale, creditAlertCopy]);
 
   return null;
 }
