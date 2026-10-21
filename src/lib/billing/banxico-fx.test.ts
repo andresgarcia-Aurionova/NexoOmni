@@ -56,10 +56,20 @@ describe('parseBanxicoFix', () => {
     expect(
       parseBanxicoFix({
         bmx: {
-          series: [{ datos: [{ fecha: '20/10/2026', dato: '18.2' }] }],
+          series: [{ datos: [{ fecha: '31/02/2026', dato: '18.2' }] }],
         },
       })
     ).toBeNull();
+  });
+
+  it('parses the real Banxico DD/MM/YYYY date format', () => {
+    expect(
+      parseBanxicoFix({
+        bmx: {
+          series: [{ datos: [{ fecha: '20/10/2026', dato: '18.4200' }] }],
+        },
+      })
+    ).toEqual({ date: '2026-10-20', mxnPerUsdMicro: BigInt(18_420_000) });
   });
 });
 

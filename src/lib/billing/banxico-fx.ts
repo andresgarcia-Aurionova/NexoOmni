@@ -63,12 +63,16 @@ export function parseBanxicoFix(payload: unknown): {
   const firstSeries = record(series[0]);
   const data = Array.isArray(firstSeries?.datos) ? firstSeries.datos : [];
   const latest = record(data[0]);
-  const date = latest?.fecha;
+  // Banxico entrega la fecha como DD/MM/YYYY; también aceptamos YYYY-MM-DD.
+  const rawDate = typeof latest?.fecha === 'string' ? latest.fecha.trim() : null;
+  const dmy = rawDate?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  const date = dmy ? `${dmy[3]}-${dmy[2]}-${dmy[1]}` : rawDate;
   const rate = parseRate(latest?.dato);
   if (
     typeof date !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
     !Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ||
+    new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date ||
     !rate
   ) {
     return null;
