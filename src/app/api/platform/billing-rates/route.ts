@@ -28,6 +28,15 @@ function adminClient() {
   });
 }
 
+class MigrationPendingError extends Error {}
+
+function migrationPendingResponse() {
+  return NextResponse.json(
+    { error: 'BILLING_MIGRATION_PENDING' },
+    { status: 503 }
+  );
+}
+
 async function readSettings(admin: ReturnType<typeof adminClient>) {
   const { data, error } = await admin
     .from('ai_billing_settings')
@@ -36,6 +45,8 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
     )
     .eq('id', true)
     .maybeSingle();
+  // 42703 = columna inexistente: la migración 159 aún no se aplica.
+  if (error?.code === '42703') throw new MigrationPendingError();
   if (error || !data) throw error ?? new Error('Billing settings not found');
   return {
     mxn_per_usd: data.mxn_per_usd_micro
@@ -62,6 +73,9 @@ export async function GET() {
     await requirePlatformOperator();
     return NextResponse.json(await readSettings(adminClient()));
   } catch (error) {
+    if (error instanceof MigrationPendingError) {
+      return migrationPendingResponse();
+    }
     return toErrorResponse(error);
   }
 }
@@ -81,6 +95,8 @@ export async function POST(request: Request) {
     > | null;
     const action = body?.action;
     const admin = adminClient();
+    // Falla temprano y con claridad si la migración 159 aún no está aplicada.
+    await readSettings(admin);
 
     if (action === 'set_banxico_token' || action === 'clear_banxico_token') {
       const token =
@@ -179,8 +195,10 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(await readSettings(admin));
   } catch (error) {
+    if (error instanceof MigrationPendingError) {
+      return migrationPendingResponse();
+    }
     return toErrorResponse(error);
   }
 }

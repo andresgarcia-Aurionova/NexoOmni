@@ -28,6 +28,7 @@ type Rates = {
 };
 
 const API_ERROR_KEYS = {
+  BILLING_MIGRATION_PENDING: 'migrationPending',
   BANXICO_TOKEN_INVALID: 'tokenInvalid',
   BANXICO_TOKEN_MISSING: 'tokenMissing',
   BANXICO_TOKEN_UNREADABLE: 'tokenUnreadable',
@@ -61,7 +62,15 @@ export function BillingRatesPanel() {
           cache: 'no-store',
           ...init,
         });
-        const json = await response.json();
+        // Un 404/5xx de un proxy o de una versión sin desplegar devuelve HTML.
+        const json = await response.json().catch(() => null);
+        if (!json) {
+          throw new Error(
+            t(response.status === 404 ? 'notDeployed' : 'badResponse', {
+              status: response.status,
+            })
+          );
+        }
         if (!response.ok) {
           const key =
             typeof json.error === 'string'
