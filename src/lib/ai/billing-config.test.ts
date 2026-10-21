@@ -21,12 +21,13 @@ type Result = { data: unknown; error: unknown };
 function fakeDb(opts: {
   settings?: Result;
   prices?: Result;
+  wallet?: Result;
   rpc?: ReturnType<typeof vi.fn>;
 }) {
   const rpc =
     opts.rpc ??
     vi.fn().mockResolvedValue({
-      data: [{ result: 'debited', available_credits: '-1' }],
+      data: [{ result: 'debited', available_credits: '10' }],
       error: null,
     });
   const builder = (result: Result) => {
@@ -45,6 +46,14 @@ function fakeDb(opts: {
     }
     if (table === 'ai_model_prices') {
       return builder(opts.prices ?? { data: [], error: null });
+    }
+    if (table === 'ai_credit_wallets') {
+      return builder(
+        opts.wallet ?? {
+          data: { available_credits: 100 },
+          error: null,
+        }
+      );
     }
     return {};
   });
@@ -121,7 +130,7 @@ describe('resolveUsageBilling', () => {
       prices: { data: [], error: null },
     });
     await expect(
-      assertAiBillingReady(db, 'openai', 'unpriced-model')
+      assertAiBillingReady(db, 'openai', 'unpriced-model', 'acct-1')
     ).rejects.toThrow('No price is configured');
   });
 
@@ -130,8 +139,25 @@ describe('resolveUsageBilling', () => {
       settings: { data: null, error: { message: 'missing settings' } },
     });
     await expect(
-      assertAiBillingReady(db, 'openai', 'gpt-6-luna')
+      assertAiBillingReady(db, 'openai', 'gpt-6-luna', 'acct-1')
     ).rejects.toThrow('AI billing settings could not be loaded.');
+  });
+
+  it('blocks provider usage when the available credit balance is zero', async () => {
+    const { db } = fakeDb({
+      settings: enforcedSettings,
+      prices: { data: [lunaPrice], error: null },
+      wallet: {
+        data: { available_credits: 0 },
+        error: null,
+      },
+    });
+    await expect(
+      assertAiBillingReady(db, 'openai', 'gpt-6-luna', 'acct-1')
+    ).rejects.toMatchObject({
+      code: 'credits_exhausted',
+      status: 402,
+    });
   });
 });
 

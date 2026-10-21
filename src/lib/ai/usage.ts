@@ -1,7 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { supabaseAdmin } from './admin-client';
-import { AiBillingError, resolveUsageBilling } from './billing-config';
+import {
+  AiBillingError,
+  AiCreditsExhaustedError,
+  resolveUsageBilling,
+} from './billing-config';
 import type { AiProvider, AiUsage } from './types';
 
 export interface LogAiUsageArgs {
@@ -72,6 +76,9 @@ export async function logAiUsage(
   }
 
   const result = Array.isArray(data) ? data[0] : null;
+  if (result?.result === 'insufficient_credits') {
+    throw new AiCreditsExhaustedError();
+  }
   if (
     !result ||
     !['debited', 'duplicate', 'recorded'].includes(result.result)

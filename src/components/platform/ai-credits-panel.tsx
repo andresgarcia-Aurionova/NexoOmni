@@ -271,7 +271,11 @@ export function AiCreditsPanel({
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? t('grantError'));
-      toast.success(json.message);
+      if (json.calls_reactivated === false) {
+        toast.warning(`${json.message} ${t('callsPending')}`);
+      } else {
+        toast.success(json.message);
+      }
       setCredits('');
       setReason('');
       setPendingRequest(null);

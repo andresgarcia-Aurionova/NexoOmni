@@ -25,6 +25,7 @@ function mockFetchJson(body: unknown) {
 }
 
 const baseArgs = {
+  accountId: 'acct-1',
   apiKey: 'sk-test',
   bytes: Buffer.from('x'),
   mimeType: 'audio/ogg',
@@ -92,7 +93,7 @@ describe('media usage reporting', () => {
       usage: { prompt_tokens: 7, total_tokens: 7 },
     });
     const onUsage = vi.fn();
-    await embedTexts('sk-test', ['hola'], onUsage);
+    await embedTexts('sk-test', ['hola'], onUsage, 'acct-1');
     expect(onUsage).toHaveBeenCalledWith({
       promptTokens: 7,
       completionTokens: 0,

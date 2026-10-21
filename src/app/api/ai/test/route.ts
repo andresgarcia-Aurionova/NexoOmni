@@ -67,6 +67,7 @@ export async function POST(request: Request) {
 
     try {
       await validateAiCredentials({
+        accountId,
         provider,
         model,
         apiKey: apiKeyPlain,

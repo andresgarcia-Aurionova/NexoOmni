@@ -82,6 +82,7 @@ const ARGS = {
 
 function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
   return {
+    accountId: 'acct-1',
     provider: 'openai',
     model: 'gpt-test',
     apiKey: 'sk-test',

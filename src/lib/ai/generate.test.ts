@@ -10,6 +10,7 @@ vi.mock('./billing-config', () => ({
 
 function config(overrides: Partial<AiConfig> = {}): AiConfig {
   return {
+    accountId: 'acct-1',
     provider: 'openai',
     model: 'gpt-test',
     apiKey: 'sk-test',

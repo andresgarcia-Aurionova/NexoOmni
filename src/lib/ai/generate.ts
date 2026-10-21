@@ -49,7 +49,8 @@ export async function generateText(
   await assertAiBillingReady(
     supabaseAdmin(),
     config.provider,
-    config.model
+    config.model,
+    config.accountId
   );
   const timeoutMs = args.timeoutMs ?? aiRequestTimeoutMs();
   const startedAt = Date.now();

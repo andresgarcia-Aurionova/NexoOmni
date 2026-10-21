@@ -141,6 +141,7 @@ export async function POST(request: Request) {
 
     try {
       await validateAiCredentials({
+        accountId,
         provider: providerValue,
         model: AI_PROVIDER_DEFAULT_MODEL[providerValue],
         apiKey,

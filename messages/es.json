@@ -33,7 +33,7 @@
   "PlatformCredits": {
     "title": "Créditos de IA por cliente",
     "description": "Administra saldos y revisa los débitos efectivos del mes. El costo del proveedor se calcula con el precio por tokens configurado; los créditos se descuentan del saldo.",
-    "noDebitYet": "El consumo de IA con tarifa configurada se descuenta automáticamente. Los modelos sin precio se bloquean antes de llamar al proveedor; el saldo puede quedar negativo hasta la recarga.",
+    "noDebitYet": "El consumo de IA con tarifa configurada se descuenta automáticamente. Los modelos sin precio se bloquean antes de llamar al proveedor. Al agotarse el saldo, la IA se bloquea y las llamadas de Zernio se pausan.",
     "account": "Cliente",
     "availableBalance": "Saldo disponible (créditos)",
     "refresh": "Actualizar",
@@ -77,6 +77,7 @@
     "systemEntry": "Movimiento del sistema",
     "loadError": "No se pudo cargar el estado de créditos.",
     "grantError": "No se pudo registrar el abono.",
+    "callsPending": "Los créditos quedaron abonados, pero la reactivación de llamadas está pendiente. El sistema volverá a intentarlo automáticamente.",
     "providers": {
       "openai": "OpenAI",
       "anthropic": "Anthropic"

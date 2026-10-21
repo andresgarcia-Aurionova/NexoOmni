@@ -14,6 +14,7 @@ export type AiProvider = 'openai' | 'anthropic'
  * (stored AES-256-GCM-encrypted at rest).
  */
 export interface AiConfig {
+  accountId: string
   provider: AiProvider
   /** General model used for agent drafts and automatic replies. */
   model: string

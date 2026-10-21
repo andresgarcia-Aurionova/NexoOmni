@@ -73,7 +73,8 @@ export async function ingestDocument(
       embeddings = await embedTexts(
         config.embeddingsApiKey,
         chunks,
-        embeddingUsageReporter(accountId)
+        embeddingUsageReporter(accountId),
+        accountId
       );
     } catch (err) {
       embedError = err;
@@ -135,7 +136,8 @@ export async function retrieveKnowledge(
       const [queryEmbedding] = await embedTexts(
         config.embeddingsApiKey,
         [query],
-        embeddingUsageReporter(accountId)
+        embeddingUsageReporter(accountId),
+        accountId
       );
       if (queryEmbedding) {
         const { data, error } = await db.rpc('match_ai_knowledge_semantic', {

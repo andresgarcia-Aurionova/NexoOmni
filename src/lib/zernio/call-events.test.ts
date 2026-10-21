@@ -7,8 +7,16 @@ const { mockLoadBanxicoFix } = vi.hoisted(() => ({
   mockLoadBanxicoFix: vi.fn(),
 }));
 
+const { mockPauseZernioCallsForAccount } = vi.hoisted(() => ({
+  mockPauseZernioCallsForAccount: vi.fn(),
+}));
+
 vi.mock('@/lib/billing/banxico-fx', () => ({
   loadBanxicoFix: mockLoadBanxicoFix,
+}));
+
+vi.mock('./call-credit-pause', () => ({
+  pauseZernioCallsForAccount: mockPauseZernioCallsForAccount,
 }));
 
 const callEvent = {
@@ -51,7 +59,7 @@ function fakeDb(connector: unknown = { id: 'connector-1', account_id: 'acct-1' }
     return chain;
   };
   const rpc = vi.fn().mockResolvedValue({
-    data: [{ result: 'debited', available_credits: '-175' }],
+    data: [{ result: 'debited', available_credits: '0' }],
     error: null,
   });
   const db = {
@@ -69,6 +77,8 @@ describe('recordCallEnded', () => {
       fetchedAt: '2026-10-20T12:00:00Z',
       source: 'Banxico SIE SF43718',
     });
+    mockPauseZernioCallsForAccount.mockClear();
+    mockPauseZernioCallsForAccount.mockResolvedValue(undefined);
   });
 
   it('atomically bills the Zernio connection and started call minutes', async () => {
@@ -114,5 +124,26 @@ describe('recordCallEnded', () => {
     await expect(recordCallEnded(db, callEvent, 'event-header')).rejects.toThrow(
       'database unavailable'
     );
+  });
+
+  it('records an insufficient call as unbilled without overdrawing the wallet', async () => {
+    const { db, rpc } = fakeDb();
+    rpc.mockResolvedValue({
+      data: [{ result: 'insufficient_credits', available_credits: '20' }],
+      error: null,
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await recordCallEnded(db, callEvent, 'event-header');
+
+    expect(mockPauseZernioCallsForAccount).toHaveBeenCalledWith(
+      db,
+      'acct-1',
+      BigInt(20)
+    );
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining('was recorded without a debit')
+    );
+    errorLog.mockRestore();
   });
 });

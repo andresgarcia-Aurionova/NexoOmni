@@ -5,6 +5,7 @@ import {
   parseCallEnded,
   type CallBillingSettings,
 } from './call-billing';
+import { pauseZernioCallsForAccount } from './call-credit-pause';
 
 async function loadSettings(
   db: SupabaseClient
@@ -89,6 +90,17 @@ export async function recordCallEnded(
   });
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : null;
+  if (result?.result === 'insufficient_credits') {
+    await pauseZernioCallsForAccount(
+      db,
+      connector.account_id,
+      BigInt(String(result.available_credits))
+    );
+    console.error(
+      `[zernio call billing] Call ${call.callId} for account ${connector.account_id} was recorded without a debit because the available balance could not cover its full charge.`
+    );
+    return;
+  }
   if (
     !result ||
     !['debited', 'duplicate', 'recorded'].includes(result.result)

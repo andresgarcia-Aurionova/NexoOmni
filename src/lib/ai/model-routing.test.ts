@@ -4,6 +4,7 @@ import type { AiConfig } from './types';
 
 function config(overrides: Partial<AiConfig> = {}): AiConfig {
   return {
+    accountId: 'acct-1',
     provider: 'openai',
     model: 'existing-model',
     apiKey: 'test-key',

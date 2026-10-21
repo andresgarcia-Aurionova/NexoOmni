@@ -143,6 +143,7 @@ export async function loadAiConfig(
   }
 
   return {
+    accountId,
     provider: row.provider,
     model: row.model,
     // Existing rows keep working after the additive migration even before an

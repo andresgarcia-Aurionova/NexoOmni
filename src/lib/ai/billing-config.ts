@@ -41,6 +41,16 @@ export class AiBillingError extends AiError {
   }
 }
 
+export class AiCreditsExhaustedError extends AiError {
+  constructor() {
+    super('La cuenta no tiene créditos disponibles. Registra una recarga para reanudar la IA.', {
+      code: 'credits_exhausted',
+      status: 402,
+    });
+    this.name = 'AiCreditsExhaustedError';
+  }
+}
+
 export function resetBillingConfigCache(): void {
   settingsCache = null;
   pricesCache.clear();
@@ -138,7 +148,8 @@ export function pickModelPrice(
 export async function assertAiBillingReady(
   db: SupabaseClient,
   provider: AiProvider,
-  model: string
+  model: string,
+  accountId: string
 ): Promise<void> {
   await loadSettings(db);
   const prices = await loadPrices(db, provider);
@@ -146,6 +157,19 @@ export async function assertAiBillingReady(
     throw new AiBillingError(
       `No price is configured for ${provider}/${model}; the provider request was blocked.`
     );
+  }
+
+  const { data, error } = await db
+    .from('ai_credit_wallets')
+    .select('available_credits')
+    .eq('account_id', accountId)
+    .maybeSingle();
+  if (error) {
+    throw new AiBillingError('AI credit balance could not be loaded.');
+  }
+  const availableCredits = BigInt(String(data?.available_credits ?? 0));
+  if (availableCredits <= BigInt(0)) {
+    throw new AiCreditsExhaustedError();
   }
 }
 

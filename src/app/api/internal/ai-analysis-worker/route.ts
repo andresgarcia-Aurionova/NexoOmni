@@ -30,6 +30,7 @@ import { alertCommitmentOverdue, alertStaleProspect, alertTaskDueSoon, sendDaily
 import { processAgendaProConfirmationReminders, escalateUnconfirmedAgendaProBookings } from '@/lib/agendapro/confirmation'
 import { processCallTranscriptions } from '@/lib/telephony/transcription-sync'
 import { processWebPushOutbox } from '@/lib/notifications/web-push'
+import { processCreditCallPauses } from '@/lib/zernio/call-credit-pause'
 
 /** How far ahead of a task's due_at the reminder notification fires. */
 const TASK_REMINDER_LEAD_MINUTES = 10
@@ -107,6 +108,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const db = supabaseAdmin()
+  let creditCallPauses: Awaited<ReturnType<typeof processCreditCallPauses>> | { error: string }
+  try {
+    creditCallPauses = await processCreditCallPauses(db)
+  } catch (error) {
+    console.error('[credit call pause] Worker synchronization failed:', error)
+    creditCallPauses = { error: 'Could not synchronize Zernio call availability' }
+  }
   const webPush = await processWebPushOutbox(db)
   let callTranscriptions: Awaited<ReturnType<typeof processCallTranscriptions>> | { error: string }
   try {
@@ -266,7 +274,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[appointments] Google Calendar inbound sync could not start:', error)
   }
-  return NextResponse.json({ completed, skipped, failed, web_push: webPush, calls: callTranscriptions, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions ? 500 : 200 })
+  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_call_pauses: creditCallPauses, calls: callTranscriptions, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in creditCallPauses ? 500 : 200 })
 }
 
 async function processAppointmentReminders(db: ReturnType<typeof supabaseAdmin>) {
@@ -494,6 +502,7 @@ async function analyzeMedia(
 ): Promise<string> {
   const task = job.kind === 'image' ? 'image_description' : 'voice_transcription'
   const args = {
+    accountId: job.account_id,
     apiKey: config.apiKey,
     model: resolveAiTaskConfig(config, task).model,
     bytes,

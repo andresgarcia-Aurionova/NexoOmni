@@ -18,7 +18,7 @@ vi.mock('./billing-config', () => ({
 
 function fakeDb(
   rpcResult: { data: unknown; error: unknown } = {
-    data: [{ result: 'debited' }],
+    data: [{ result: 'debited', available_credits: '10' }],
     error: null,
   }
 ) {

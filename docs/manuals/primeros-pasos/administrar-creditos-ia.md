@@ -4,7 +4,7 @@ description: 'Consulta el uso de IA y llamadas, y registra recargas manuales por
 section: 'primeros-pasos'
 role: ['super_admin']
 plan: ['basico']
-updated: '2026-10-20'
+updated: '2026-10-21'
 ---
 
 ## ¿Qué es?
@@ -53,9 +53,18 @@ llamadas** (arriba de los créditos):
 - Las solicitudes de IA con precio configurado descuentan créditos cuando el
   proveedor devuelve el uso y la base confirma el cobro. Los créditos se
   redondean hacia arriba a unidades enteras; una solicitud pequeña puede
-  consumir un crédito completo.
-- El saldo puede quedar negativo hasta que se registre una recarga. Llegar a
-  cero no detiene automáticamente el uso de IA.
+  consumir un crédito completo. Los débitos no reducen el saldo por debajo de
+  cero.
+- Al llegar a cero, las nuevas solicitudes de IA se bloquean. Los números de
+  WhatsApp que estaban habilitados para llamadas en Zernio se pausan y se
+  reactivan al registrar saldo positivo. La llamada ya iniciada puede terminar;
+  el sistema registra su consumo al recibir el evento de fin de llamada.
+- Si una llamada ya terminada cuesta más que el saldo restante, el débito no
+  deja la billetera en negativo: queda identificada sin cobrar y las llamadas
+  de Zernio se pausan hasta registrar otra recarga.
+- La regla comercial acordada es que cada recarga dure 30 días desde su
+  acreditación. El vencimiento automático por recarga aún no está implementado;
+  no se debe presentar como una función activa hasta completar esa parte.
 - Si el proveedor/modelo no tiene precio vigente, NexoOmni bloquea la
   solicitud antes de enviarla. La prueba de una llave desde el panel también
   es una solicitud real y descuenta créditos.
@@ -96,9 +105,12 @@ El débito se calcula con los tokens reportados y el precio vigente configurado
 para el modelo. La conciliación automática con la factura del proveedor aún no
 está disponible; compara los datos con el panel de OpenAI o Anthropic.
 
-**¿El sistema bloquea la IA cuando el saldo llega a cero?**
+**¿El sistema bloquea la IA y las llamadas cuando el saldo llega a cero?**
 
-No. El saldo puede quedar negativo hasta que se registre una recarga.
+Sí. La IA deja de aceptar solicitudes nuevas y NexoOmni pausa los números de
+Zernio que estaban habilitados. Al acreditar saldo positivo, reactiva solo los
+números que NexoOmni había pausado. Si Zernio no responde, el panel indica que
+la reactivación está pendiente y el worker vuelve a intentarlo.
 
 **¿Puede un cliente ver qué proveedor o modelo se utilizó?**
 

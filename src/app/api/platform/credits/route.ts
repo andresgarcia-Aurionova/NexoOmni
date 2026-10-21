@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 import { toErrorResponse } from '@/lib/auth/account';
 import { requirePlatformOperator } from '@/lib/platform/operator';
+import { syncZernioCallsWithCreditBalance } from '@/lib/zernio/call-credit-pause';
 import {
   checkRateLimit,
   RATE_LIMITS,
@@ -232,10 +233,28 @@ export async function POST(request: Request) {
       throw new Error('La base de datos no confirmó el abono de créditos.');
     }
 
+    let callsReactivated = BigInt(String(result.available_credits)) > BigInt(0);
+    if (callsReactivated) {
+      try {
+        await syncZernioCallsWithCreditBalance(
+          admin,
+          accountId,
+          BigInt(String(result.available_credits))
+        );
+      } catch (error) {
+        console.error(
+          `[credit call pause] Credits were granted, but Zernio calls remain pending for account ${accountId}:`,
+          error
+        );
+        callsReactivated = false;
+      }
+    }
+
     return NextResponse.json(
       {
         result: result.result,
         available_credits: stringValue(result.available_credits),
+        calls_reactivated: callsReactivated,
         message:
           result.result === 'duplicate'
             ? 'Esta operación ya se había aplicado; no se abonaron créditos por segunda vez.'

@@ -33,7 +33,7 @@
   "PlatformCredits": {
     "title": "AI credits by customer",
     "description": "Manage balances and review actual debits for this month. Provider cost is calculated using configured token prices; credits are deducted from the balance.",
-    "noDebitYet": "AI usage with a configured price is debited automatically. Models without a price are blocked before calling the provider; the balance may go negative until the next top-up.",
+    "noDebitYet": "AI usage with a configured price is debited automatically. Models without a price are blocked before calling the provider. When the balance is exhausted, AI is blocked and Zernio calls are paused.",
     "account": "Customer",
     "availableBalance": "Available balance (credits)",
     "refresh": "Refresh",
@@ -77,6 +77,7 @@
     "systemEntry": "System transaction",
     "loadError": "Could not load credit status.",
     "grantError": "Could not record the credit grant.",
+    "callsPending": "Credits were added, but calls have not been reactivated yet. The system will retry automatically.",
     "providers": {
       "openai": "OpenAI",
       "anthropic": "Anthropic"

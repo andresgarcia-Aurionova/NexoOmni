@@ -44,13 +44,15 @@ export function toVectorLiteral(embedding: number[]): string {
 export async function embedTexts(
   apiKey: string,
   inputs: string[],
-  onUsage: (usage: AiUsage) => void | Promise<void>
+  onUsage: (usage: AiUsage) => void | Promise<void>,
+  accountId: string
 ): Promise<number[][]> {
   if (inputs.length === 0) return [];
   await assertAiBillingReady(
     supabaseAdmin(),
     'openai',
-    EMBEDDING_MODEL
+    EMBEDDING_MODEL,
+    accountId
   );
   const timeoutMs = aiRequestTimeoutMs();
   const out: number[][] = [];

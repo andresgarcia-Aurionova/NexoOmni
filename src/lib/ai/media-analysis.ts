@@ -92,6 +92,7 @@ export async function downloadPublicMedia(urlValue: string): Promise<{ bytes: Bu
 }
 
 export async function describeImageWithOpenAi(args: {
+  accountId: string
   apiKey: string
   model: string
   bytes: Buffer
@@ -101,7 +102,7 @@ export async function describeImageWithOpenAi(args: {
 }): Promise<string> {
   assertSize(args.bytes)
   const model = args.model || IMAGE_ANALYSIS_MODEL
-  await assertAiBillingReady(supabaseAdmin(), 'openai', model)
+  await assertAiBillingReady(supabaseAdmin(), 'openai', model, args.accountId)
   const dataUrl = `data:${args.mimeType || 'image/jpeg'};base64,${args.bytes.toString('base64')}`
   let response: Response
   try {
@@ -136,6 +137,7 @@ export async function describeImageWithOpenAi(args: {
 }
 
 export async function transcribeAudioWithOpenAi(args: {
+  accountId: string
   apiKey: string
   model: string
   bytes: Buffer
@@ -145,7 +147,7 @@ export async function transcribeAudioWithOpenAi(args: {
 }): Promise<string> {
   assertSize(args.bytes)
   const model = args.model || AUDIO_TRANSCRIPTION_MODEL
-  await assertAiBillingReady(supabaseAdmin(), 'openai', model)
+  await assertAiBillingReady(supabaseAdmin(), 'openai', model, args.accountId)
   const extension = audioExtensionForMimeType(args.mimeType)
   const form = new FormData()
   form.set('model', model)
