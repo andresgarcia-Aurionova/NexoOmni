@@ -89,7 +89,7 @@ export async function POST(request: Request) {
           : null;
       if (action === 'set_banxico_token' && !/^[A-Za-z0-9]{32,128}$/.test(token ?? '')) {
         return NextResponse.json(
-          { error: 'El token de Banxico no tiene un formato válido.' },
+          { error: 'BANXICO_TOKEN_INVALID' },
           { status: 400 }
         );
       }
@@ -104,23 +104,43 @@ export async function POST(request: Request) {
     } else if (action === 'refresh_fx') {
       try {
         await loadBanxicoFix(admin, Date.now(), { force: true });
-      } catch {
-        return NextResponse.json(
-          {
-            error:
-              'No se pudo consultar Banxico. Revisa BANXICO_API_TOKEN o captura el tipo de cambio manualmente.',
-          },
-          { status: 502 }
-        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === 'BANXICO_API_TOKEN is not configured.'
+        ) {
+          return NextResponse.json(
+            { error: 'BANXICO_TOKEN_MISSING' },
+            { status: 400 }
+          );
+        }
+        if (
+          error instanceof Error &&
+          error.message.startsWith(
+            'The stored Banxico API token could not be decrypted;'
+          )
+        ) {
+          return NextResponse.json(
+            { error: 'BANXICO_TOKEN_UNREADABLE' },
+            { status: 422 }
+          );
+        }
+        if (
+          error instanceof Error &&
+          error.message === 'Banxico did not return a usable FIX rate.'
+        ) {
+          return NextResponse.json(
+            { error: 'BANXICO_REFRESH_FAILED' },
+            { status: 502 }
+          );
+        }
+        throw error;
       }
     } else if (action === 'set_manual_fx') {
       const rate = parseMxnRate(body?.mxn_per_usd);
       if (!rate) {
         return NextResponse.json(
-          {
-            error:
-              'Captura un tipo de cambio válido (entre 5 y 100 MXN por USD).',
-          },
+          { error: 'MANUAL_FX_INVALID' },
           { status: 400 }
         );
       }
@@ -139,7 +159,7 @@ export async function POST(request: Request) {
         margin > 9999
       ) {
         return NextResponse.json(
-          { error: 'Revisa el precio por minuto y el margen.' },
+          { error: 'BILLING_RATES_INVALID' },
           { status: 400 }
         );
       }
@@ -153,7 +173,10 @@ export async function POST(request: Request) {
         .eq('id', true);
       if (error) throw error;
     } else {
-      return NextResponse.json({ error: 'Acción no válida.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'BILLING_ACTION_INVALID' },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json(await readSettings(admin));

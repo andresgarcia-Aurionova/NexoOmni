@@ -27,6 +27,16 @@ type Rates = {
   banxico_token_source: 'panel' | 'env' | null;
 };
 
+const API_ERROR_KEYS = {
+  BANXICO_TOKEN_INVALID: 'tokenInvalid',
+  BANXICO_TOKEN_MISSING: 'tokenMissing',
+  BANXICO_TOKEN_UNREADABLE: 'tokenUnreadable',
+  BANXICO_REFRESH_FAILED: 'refreshError',
+  MANUAL_FX_INVALID: 'manualFxInvalid',
+  BILLING_RATES_INVALID: 'ratesInvalid',
+  BILLING_ACTION_INVALID: 'error',
+} as const;
+
 export function BillingRatesPanel() {
   const t = useTranslations('PlatformBillingRates');
   const locale = useLocale();
@@ -52,7 +62,13 @@ export function BillingRatesPanel() {
           ...init,
         });
         const json = await response.json();
-        if (!response.ok) throw new Error(json.error ?? t('error'));
+        if (!response.ok) {
+          const key =
+            typeof json.error === 'string'
+              ? API_ERROR_KEYS[json.error as keyof typeof API_ERROR_KEYS]
+              : undefined;
+          throw new Error(t(key ?? 'error'));
+        }
         apply(json);
         return true;
       } catch (error) {

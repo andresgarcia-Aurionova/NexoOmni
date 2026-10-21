@@ -22,12 +22,17 @@ interface RateRow {
   banxico_token_encrypted?: string | null;
 }
 
-function decryptToken(value: string): string | undefined {
+function decryptToken(value: string): string {
   try {
     return decrypt(value);
-  } catch {
-    console.error('[billing] The stored Banxico token could not be decrypted.');
-    return process.env.BANXICO_API_TOKEN;
+  } catch (error) {
+    console.error(
+      '[billing] The stored Banxico token could not be decrypted:',
+      error
+    );
+    throw new Error(
+      'The stored Banxico API token could not be decrypted; replace it in platform billing settings.'
+    );
   }
 }
 

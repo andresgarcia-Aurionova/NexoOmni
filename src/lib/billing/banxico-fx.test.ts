@@ -138,7 +138,7 @@ describe('loadBanxicoFix', () => {
     ).rejects.toThrow('BANXICO_API_TOKEN is required');
   });
 
-  it('uses the token stored in the panel instead of the environment one', async () => {
+  it('fails explicitly when the stored token cannot be decrypted', async () => {
     vi.stubEnv('BANXICO_API_TOKEN', 'env-token');
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -152,9 +152,8 @@ describe('loadBanxicoFix', () => {
     });
     await expect(
       loadBanxicoFix(db, Date.parse('2026-10-20T18:00:00Z'))
-    ).rejects.toThrow();
-    // Undecryptable stored token falls back to the environment token.
-    expect(fetchMock.mock.calls[0][1].headers['Bmx-Token']).toBe('env-token');
+    ).rejects.toThrow('could not be decrypted');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('honors a manual rate for 24 hours without calling Banxico', async () => {

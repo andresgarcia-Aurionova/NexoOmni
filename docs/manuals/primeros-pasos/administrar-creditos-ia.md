@@ -67,8 +67,8 @@ llamadas** (arriba de los créditos):
   transcripción generada por una llave de OpenAI configurada en la PBX no se
   calcula ni se cobra aquí. El análisis posterior que NexoOmni ejecute con IA
   sí se cobra como uso de IA.
-- La conversión de minutos a créditos depende del FIX de Banxico. La
-  aplicación requiere `BANXICO_API_TOKEN` configurado como variable de entorno
+- La conversión de minutos a créditos depende del FIX de Banxico. El token se
+  puede guardar cifrado desde el panel o configurarse como `BANXICO_API_TOKEN`
   en el servidor; no lo compartas en el chat ni lo guardes en el repositorio.
 - Las recargas se registran manualmente. El cobro automático con Stripe aún
   no está conectado.
