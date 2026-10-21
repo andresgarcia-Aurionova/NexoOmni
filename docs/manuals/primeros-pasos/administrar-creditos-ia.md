@@ -1,6 +1,6 @@
 ---
 title: 'Administrar créditos de IA'
-description: 'Consulta el uso estimado de IA y registra recargas manuales por cliente.'
+description: 'Consulta el uso de IA y llamadas, y registra recargas manuales por cliente.'
 section: 'primeros-pasos'
 role: ['super_admin']
 plan: ['basico']
@@ -11,7 +11,8 @@ updated: '2026-10-20'
 
 El panel de Administración NexoOmni permite consultar los créditos de cada
 cliente, revisar el uso de IA registrado durante el mes y dejar constancia
-de una recarga o ajuste manual.
+de una recarga o ajuste manual. También permite revisar las llamadas informadas por
+Zernio y los minutos hablados registrados por Yeastar.
 
 ## ¿Para quién es?
 
@@ -22,7 +23,8 @@ consultar ni modificar este panel.
 
 1. Abre **Administración NexoOmni** y baja hasta **Créditos de IA por cliente**.
 2. Selecciona el cliente para consultar su saldo, consumo registrado del mes
-   y movimientos recientes.
+   y movimientos recientes. Más abajo, **Consumo de llamadas este mes** muestra
+   por separado los registros de Zernio y Yeastar.
 3. Para acreditar saldo, indica la cantidad de créditos, selecciona
    **Recarga cobrada** o **Ajuste o cortesía**, y agrega un motivo o referencia.
 4. Pulsa **Registrar abono**. El saldo y el movimiento se guardan juntos y
@@ -40,6 +42,16 @@ consultar ni modificar este panel.
   mediciones en modo sombra.
 - Las recargas se registran manualmente. El cobro automático con Stripe aún
   no está conectado.
+- Zernio agrupa las llamadas por número y las vincula a un cliente solo cuando
+  su perfil permite identificarlo sin ambigüedad. Las llamadas que no se pueden
+  asignar aparecen aparte y no se suman a un cliente. El resumen mensual usa
+  el calendario UTC.
+- El cargo de Zernio y el cargo informativo de Meta se muestran en columnas
+  separadas; el segundo no es un cargo que Zernio facture. Estos importes son
+  informativos y no se descuentan de los créditos.
+- Yeastar muestra llamadas, minutos hablados y llamadas con transcripción.
+  El costo de transcripción todavía no está conciliado, por lo que no se
+  calcula ni se cobra.
 
 ## Preguntas frecuentes
 

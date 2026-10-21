@@ -58,6 +58,31 @@ type CreditData = {
   usage: UsageRow[];
   ledger: LedgerEntry[];
 };
+type VoiceMetric = {
+  calls: number;
+  answered: number;
+  minutes: number;
+  billable_usd: number;
+  meta_usd: number;
+};
+type YeastarUsageRow = {
+  account_id: string;
+  calls: string;
+  talk_duration_seconds: string;
+  transcribed_calls: string;
+};
+type VoiceUsageData = {
+  period: { since: string; until: string };
+  yeastar: YeastarUsageRow[];
+  zernio:
+    | {
+        status: 'ready';
+        totals: VoiceMetric;
+        accounts: Array<VoiceMetric & { account_id: string }>;
+        unassigned: VoiceMetric;
+      }
+    | { status: 'not_configured' | 'error' };
+};
 
 function formatInteger(value: string | null | undefined, locale: string) {
   if (!value) return '—';
@@ -76,6 +101,22 @@ function formatUsdNano(value: string | null, locale: string) {
         currency: 'USD',
         maximumFractionDigits: 4,
       }).format(parsed)
+    : '—';
+}
+
+function formatNumber(value: number, locale: string, maximumFractionDigits = 1) {
+  return Number.isFinite(value)
+    ? new Intl.NumberFormat(locale, { maximumFractionDigits }).format(value)
+    : '—';
+}
+
+function formatUsd(value: number, locale: string) {
+  return Number.isFinite(value)
+    ? new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 4,
+      }).format(value)
     : '—';
 }
 
@@ -103,6 +144,27 @@ export function AiCreditsPanel({
     signature: string;
     id: string;
   } | null>(null);
+  const [voiceData, setVoiceData] = useState<VoiceUsageData | null>(null);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState(false);
+
+  const loadVoiceUsage = useCallback(async () => {
+    setVoiceLoading(true);
+    setVoiceError(false);
+    try {
+      const response = await fetch('/api/platform/credits/voice-usage', {
+        cache: 'no-store',
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? t('voiceLoadError'));
+      setVoiceData(json);
+    } catch {
+      setVoiceData(null);
+      setVoiceError(true);
+    } finally {
+      setVoiceLoading(false);
+    }
+  }, [t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +190,10 @@ export function AiCreditsPanel({
     if (accountOptions.length > 0) void load();
   }, [accountOptions.length, load]);
 
+  useEffect(() => {
+    if (accountOptions.length > 0) void loadVoiceUsage();
+  }, [accountOptions.length, loadVoiceUsage]);
+
   const selectedAccount = data.accounts.find(
     (account) => account.id === accountId
   );
@@ -139,6 +205,17 @@ export function AiCreditsPanel({
     () => data.ledger.filter((entry) => entry.account_id === accountId),
     [data.ledger, accountId]
   );
+  const yeastarUsage = voiceData?.yeastar.find(
+    (row) => row.account_id === accountId
+  );
+  const zernioUsage =
+    voiceData?.zernio.status === 'ready'
+      ? voiceData.zernio.accounts.find((row) => row.account_id === accountId)
+      : undefined;
+  const unassignedZernioUsage =
+    voiceData?.zernio.status === 'ready'
+      ? voiceData.zernio.unassigned
+      : undefined;
   const providerLabels = {
     openai: t('providers.openai'),
     anthropic: t('providers.anthropic'),
@@ -243,8 +320,11 @@ export function AiCreditsPanel({
           <Button
             type="button"
             variant="outline"
-            onClick={() => void load()}
-            disabled={loading}
+            onClick={() => {
+              void load();
+              void loadVoiceUsage();
+            }}
+            disabled={loading || voiceLoading}
           >
             {loading ? (
               <LoaderCircle className="animate-spin" />
@@ -358,6 +438,159 @@ export function AiCreditsPanel({
               </table>
             </div>
           )}
+        </div>
+
+        <div className="space-y-3 border-t pt-5">
+          <div>
+            <h3 className="font-medium">{t('voiceTitle')}</h3>
+            <p className="text-muted-foreground text-xs">
+              {t('voiceDescription')}
+            </p>
+            {voiceData ? (
+              <p className="text-muted-foreground text-xs">
+                {t('voicePeriod', {
+                  month: new Intl.DateTimeFormat(locale, {
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'UTC',
+                  }).format(new Date(voiceData.period.since)),
+                })}
+              </p>
+            ) : null}
+          </div>
+          {voiceLoading ? (
+            <div className="flex justify-center py-5">
+              <LoaderCircle className="text-muted-foreground animate-spin" />
+            </div>
+          ) : voiceError ? (
+            <p className="rounded-md border border-destructive/30 px-3 py-3 text-sm text-destructive">
+              {t('voiceLoadError')}
+            </p>
+          ) : voiceData ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2 rounded-md border p-3">
+                  <h4 className="text-sm font-medium">{t('yeastarTitle')}</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('calls')}
+                      </p>
+                      <p className="font-medium">
+                        {formatInteger(yeastarUsage?.calls ?? '0', locale)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('talkMinutes')}
+                      </p>
+                      <p className="font-medium">
+                        {formatNumber(
+                          Number(yeastarUsage?.talk_duration_seconds ?? 0) / 60,
+                          locale
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('transcribedCalls')}
+                      </p>
+                      <p className="font-medium">
+                        {formatInteger(
+                          yeastarUsage?.transcribed_calls ?? '0',
+                          locale
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">
+                        {t('yeastarCost')}
+                      </p>
+                      <p className="font-medium">{t('notCalculated')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-md border p-3">
+                  <h4 className="text-sm font-medium">{t('zernioTitle')}</h4>
+                  {voiceData.zernio.status === 'not_configured' ? (
+                    <p className="text-muted-foreground text-sm">
+                      {t('zernioNotConfigured')}
+                    </p>
+                  ) : voiceData.zernio.status === 'error' ? (
+                    <p className="text-sm text-destructive">
+                      {t('zernioLoadError')}
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">
+                          {t('calls')}
+                        </p>
+                        <p className="font-medium">
+                          {formatNumber(zernioUsage?.calls ?? 0, locale, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">
+                          {t('answeredCalls')}
+                        </p>
+                        <p className="font-medium">
+                          {formatNumber(zernioUsage?.answered ?? 0, locale, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">
+                          {t('talkMinutes')}
+                        </p>
+                        <p className="font-medium">
+                          {formatNumber(zernioUsage?.minutes ?? 0, locale)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">
+                          {t('zernioCost')}
+                        </p>
+                        <p className="font-medium">
+                          {formatUsd(zernioUsage?.billable_usd ?? 0, locale)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">
+                          {t('metaCost')}
+                        </p>
+                        <p className="font-medium">
+                          {formatUsd(zernioUsage?.meta_usd ?? 0, locale)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {voiceData.zernio.status === 'ready' &&
+              ((unassignedZernioUsage?.calls ?? 0) > 0 ||
+                (unassignedZernioUsage?.billable_usd ?? 0) > 0 ||
+                (unassignedZernioUsage?.meta_usd ?? 0) > 0) ? (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
+                  {t('zernioUnassigned', {
+                    calls: formatNumber(
+                      unassignedZernioUsage?.calls ?? 0,
+                      locale,
+                      0
+                    ),
+                    cost: formatUsd(
+                      unassignedZernioUsage?.billable_usd ?? 0,
+                      locale
+                    ),
+                    metaCost: formatUsd(
+                      unassignedZernioUsage?.meta_usd ?? 0,
+                      locale
+                    ),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
