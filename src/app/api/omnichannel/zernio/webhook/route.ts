@@ -10,6 +10,7 @@ import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { extractZernioMedia, extractZernioReaction, firstZernioContactName, isZernioPlaceholderName, normalizeMetaText, safeZernioContactName } from '@/lib/omnichannel/webhook-normalizer'
 import { getZernioParticipantProfile, verifyZernioSignature, type ZernioChannel } from '@/lib/zernio/server'
 import { persistZernioOutbound, zernioOutboundIsHuman } from '@/lib/zernio/outbound-message'
+import { recordCallEnded } from '@/lib/zernio/call-events'
 import { extractZernioPostContext } from '@/lib/zernio/post-context'
 import { parseZernioPublicComment } from '@/lib/zernio/comment-context'
 import { processWebPushOutbox } from '@/lib/notifications/web-push'
@@ -580,6 +581,14 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       }
       if (eventType === 'message.edited') {
         await handleMessageEditedEvent(db, record(event.message), event.editedAt)
+        continue
+      }
+      if (eventType === 'call.ended') {
+        try {
+          await recordCallEnded(db, event, text(event.id, eventIdHeader) || null)
+        } catch (callError) {
+          console.error('[zernio] call.ended handling failed, skipping:', callError)
+        }
         continue
       }
       if (eventType !== 'message.received' && eventType !== 'comment.received' && eventType !== 'reaction.received' && eventType !== 'message.sent') continue
