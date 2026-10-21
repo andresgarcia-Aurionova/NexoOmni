@@ -13,6 +13,7 @@ import { SupportSessionDialog } from '@/components/platform/support-session-dial
 import { AiCreditsPanel } from '@/components/platform/ai-credits-panel'
 import { BillingRatesPanel } from '@/components/platform/billing-rates-panel'
 import { AiProviderCredentialsPanel } from '@/components/platform/ai-provider-credentials-panel'
+import { StripeSettingsPanel } from '@/components/platform/stripe-settings-panel'
 
 type PlanCode = 'ai' | 'yeastar_voice' | 'whatsapp_voice'
 type PlatformAccount = {
@@ -377,6 +378,7 @@ export default function PlatformPage() {
 
       <AiProviderCredentialsPanel accounts={accounts.map(({ id, name }) => ({ id, name }))} />
       <BillingRatesPanel />
+      <StripeSettingsPanel />
       <AiCreditsPanel accounts={accounts.map(({ id, name }) => ({ id, name }))} />
 
       <Card>

@@ -206,6 +206,47 @@
     "saveError": "Could not verify or save the key.",
     "saveSuccess": "The {provider} key was verified and saved."
   },
+  "PlatformStripeSettings": {
+    "title": "Stripe settings",
+    "description": "Manage the Checkout credentials and mode shared by all customers.",
+    "centralStorage": "Credentials are stored encrypted in one central setting. They are never returned to the browser or copied into individual customer records.",
+    "test": "Test mode",
+    "live": "Live mode",
+    "activeMode": "Mode for new purchases",
+    "configured": "API key and webhook are configured",
+    "incomplete": "One or both credentials are missing",
+    "apiKey": "Secret API key",
+    "webhookSecret": "Webhook signing secret",
+    "apiKeyPlaceholder": "Paste the secret key",
+    "webhookPlaceholder": "Paste the whsec_ secret",
+    "modeHelp": "Use the Stripe secret API key and webhook endpoint secret for {mode}.",
+    "stored": "Saved and encrypted; paste a new value to replace it",
+    "enableCheckout": "Allow Checkout purchases",
+    "liveWarning": "Live mode processes real card payments. Keep Checkout disabled until testing is complete and pricing and taxes are approved.",
+    "confirmLive": "You are saving or enabling Checkout in live mode. This can charge real cards. Continue?",
+    "confirmClear": "Remove the {mode} credentials? If it is the active mode, Checkout will also be disabled.",
+    "clear": "Remove credentials",
+    "cleared": "{mode} credentials removed.",
+    "save": "Save settings",
+    "saved": "Stripe settings saved.",
+    "blankKeepsSaved": "Blank fields keep their currently saved credentials.",
+    "updatedAt": "Last updated: {date}",
+    "loadError": "Could not load Stripe settings.",
+    "saveError": "Could not save Stripe settings.",
+    "retry": "Retry",
+    "migrationPending": "Apply migration 167 to the database first.",
+    "invalidSettings": "Check the configuration values.",
+    "invalidMode": "Select a valid mode.",
+    "invalidCredential": "The credential has an invalid format.",
+    "testApiKeyInvalid": "The API key must be a test secret key (sk_test_ or rk_test_).",
+    "liveApiKeyInvalid": "The API key must be a live secret key (sk_live_ or rk_live_).",
+    "webhookSecretInvalid": "The signing secret must start with whsec_.",
+    "liveConfirmationRequired": "Confirm again before enabling real payments.",
+    "activeCredentialsRequired": "Configure the API key and webhook secret for the selected mode.",
+    "activeCredentialsInvalid": "The saved credentials for the selected mode are invalid.",
+    "credentialsUnreadable": "The credentials could not be decrypted. Enter them again.",
+    "appUrlInvalid": "Set NEXT_PUBLIC_SITE_URL or APP_URL to a valid HTTPS URL."
+  },
   "NexPhoneContext": {
     "open": "Context",
     "title": "Context for this call",
@@ -1822,13 +1863,13 @@
       "deleteLocallyAria": "Delete template locally",
       "deleteMetaLocallyTitle": "Delete from Meta and locally",
       "deleteLocallyTitle": "Delete locally",
-      
+
       "dialogEditTitle": "Edit Message Template",
       "dialogNewTitle": "New Message Template",
       "dialogEditDesc": "Save your changes to re-submit to Meta. Status will flip back to PENDING during review.",
       "dialogNewDesc": "Build a template and submit it to Meta for approval. Once approved, you can use it in broadcasts and the inbox.",
       "authWarning": "AUTHENTICATION templates have a fixed body + OTP button shape that needs a different builder. Create them in Meta WhatsApp Manager for now and use <bold>Sync from Meta</bold> to bring them in.",
-      
+
       "templateName": "Template Name",
       "namePlaceholder": "e.g. order_confirmation",
       "nameFixed": "Name is fixed once a template exists on Meta — create a new template to change it.",
@@ -1837,7 +1878,7 @@
       "language": "Language",
       "langFixed": "Language is fixed once a template exists on Meta.",
       "langHint": "Must match the exact code on Meta — <code>en_US</code> and <code>en</code> are distinct.",
-      
+
       "header": "Header",
       "headerNone": "None",
       "headerText": "Text",
@@ -1847,7 +1888,7 @@
       "headerTextPlaceholder": "Header text (max 60 chars, optional {{1}})",
       "headerSampleAria": "Sample value for header variable",
       "headerSamplePlaceholder": "Sample value for {{1}} (required for Meta review)",
-      
+
       "uploadImage": "Upload image",
       "uploadHint": "JPEG or PNG, ≤5 MB",
       "mediaUrlPlaceholder": "https://… (or paste a public {format} link)",
@@ -1855,17 +1896,17 @@
       "mediaHint": "Must be a publicly accessible HTTPS link. Meta fetches it once during review, so it needs to stay live for ~24 hrs.",
       "videoHint": " Recommended: MP4 / 3GPP, ≤16 MB, ≤60 seconds.",
       "documentHint": " Recommended: PDF, ≤100 MB.",
-      
+
       "bodyText": "Body Text",
       "bodyPlaceholder": "Hello {{1}}, your order {{2}} is confirmed.",
       "bodyHint": "Use {{1}}, {{2}} for variables (must be contiguous starting at {{1}}).",
       "sampleValues": "Sample values (Meta uses these to review your template)",
       "sampleAria": "Sample value for body variable {var}",
       "samplePlaceholder": "Sample for {var}",
-      
+
       "footer": "Footer (optional)",
       "footerPlaceholder": "Optional footer text (max 60 chars)",
-      
+
       "buttons": "Buttons (optional)",
       "addButton": "Add Button",
       "buttonsLimit": "Up to {max} buttons. QUICK_REPLY buttons must come before URL / phone / copy-code buttons.",
@@ -1878,19 +1919,19 @@
       "urlSamplePlaceholder": "Example value for {{1}} (required when URL has a variable)",
       "phonePlaceholder": "+15551234567",
       "codePlaceholder": "Example code (e.g. SUMMER20)",
-      
+
       "cancel": "Cancel",
       "saving": "Saving…",
       "submitting": "Submitting…",
       "saveResubmit": "Save & Resubmit",
       "submitApproval": "Submit for Approval",
-      
+
       "deleteDialogTitle": "Delete template?",
       "deleteMetaDesc": "\"{name}\" will be deleted from Meta and from NexoOmni. Active broadcasts using this template will start failing on their next send. This can't be undone.",
       "deleteLocalDesc": "\"{name}\" will be deleted from NexoOmni. It was never submitted to Meta, so no remote cleanup is needed.",
       "deleting": "Deleting…",
       "delete": "Delete",
-      
+
       "toastLoadFailed": "Failed to load templates",
       "toastSubmitFailed": "Failed to submit",
       "toastSubmitEditSuccess": "Edit submitted — Meta typically reviews within 24 hours.",
@@ -2038,7 +2079,7 @@
       "profileSaved": "Profile saved",
       "emailChangeFailed": "Email change failed: {message}",
       "profileSavedEmailCheck": "Profile saved — check your email to confirm the address change",
-      
+
       "passwordTitle": "Password",
       "passwordDesc": "Use at least {min} characters. You will stay signed in on this device after changing it.",
       "currentPassword": "Current password",
@@ -2052,7 +2093,7 @@
       "currentPasswordIncorrect": "Current password is incorrect",
       "passwordUpdateFailed": "Password update failed: {message}",
       "passwordUpdated": "Password updated",
-      
+
       "sessionsTitle": "Active sessions",
       "sessionsDesc": "Sign out of every device where you're logged in — including this one. Useful if you lost a laptop or shared your password.",
       "signOutAll": "Sign out of all devices",

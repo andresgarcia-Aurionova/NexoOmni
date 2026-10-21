@@ -5,8 +5,7 @@ const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
   requireEntitlement: vi.fn(),
   loadBanxicoFix: vi.fn(),
-  isStripeCheckoutConfigured: vi.fn(),
-  getStripeAppUrl: vi.fn(),
+  getStripeCheckoutConfiguration: vi.fn(),
   createStripeServerClient: vi.fn(),
   getLocale: vi.fn(),
   getTranslations: vi.fn(),
@@ -27,8 +26,7 @@ vi.mock('@/lib/auth/account', () => ({
 }));
 vi.mock('@/lib/stripe/server', () => ({
   createStripeServerClient: mocks.createStripeServerClient,
-  getStripeAppUrl: mocks.getStripeAppUrl,
-  isStripeCheckoutConfigured: mocks.isStripeCheckoutConfigured,
+  getStripeCheckoutConfiguration: mocks.getStripeCheckoutConfiguration,
 }));
 vi.mock('next-intl/server', () => ({
   getLocale: mocks.getLocale,
@@ -61,8 +59,12 @@ beforeEach(() => {
     fetchedAt: '2026-10-21T12:00:00.000Z',
     source: 'Banxico SIE SF43718',
   });
-  mocks.isStripeCheckoutConfigured.mockReturnValue(true);
-  mocks.getStripeAppUrl.mockReturnValue('https://nexoomni.example');
+  mocks.getStripeCheckoutConfiguration.mockResolvedValue({
+    mode: 'test',
+    secretKey: 'sk_test_example',
+    webhookSecret: 'whsec_test_example',
+    appUrl: 'https://nexoomni.example',
+  });
   mocks.getLocale.mockResolvedValue('es');
   mocks.getTranslations.mockResolvedValue(
     (key: string, params?: Record<string, string>) =>
@@ -128,8 +130,10 @@ describe('POST /api/account/credits/checkout', () => {
         { price_data: { currency: 'mxn', unit_amount: expect.any(Number) } },
         { price_data: { currency: 'mxn', unit_amount: expect.any(Number) } },
       ],
-      success_url: 'https://nexoomni.example/dashboard/credits?checkout=success',
-      cancel_url: 'https://nexoomni.example/dashboard/credits?checkout=cancelled',
+      success_url:
+        'https://nexoomni.example/dashboard/credits?checkout=success',
+      cancel_url:
+        'https://nexoomni.example/dashboard/credits?checkout=cancelled',
     });
     expect(
       params.line_items.map(
@@ -148,12 +152,15 @@ describe('POST /api/account/credits/checkout', () => {
     expect(insertedRows[0]).toMatchObject({
       account_id: 'account-1',
       package_id: 'entrepreneur',
+      stripe_mode: 'test',
       credits: 50_000,
       package_base_mxn_centavos: '92100',
       processing_cost_included_mxn_centavos: '5747',
       fx_rate_micro: '18420000',
     });
-    expect(updates).toContainEqual({ stripe_checkout_session_id: 'cs_test_123' });
+    expect(updates).toContainEqual({
+      stripe_checkout_session_id: 'cs_test_123',
+    });
   });
 
   it('rejects unknown packages without creating a session', async () => {
@@ -163,7 +170,7 @@ describe('POST /api/account/credits/checkout', () => {
   });
 
   it('does not create a session until checkout is explicitly enabled', async () => {
-    mocks.isStripeCheckoutConfigured.mockReturnValue(false);
+    mocks.getStripeCheckoutConfiguration.mockResolvedValue(null);
 
     const response = await POST(request('entrepreneur'));
 

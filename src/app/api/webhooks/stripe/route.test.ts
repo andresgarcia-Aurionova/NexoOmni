@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Stripe from 'stripe';
 
 const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
-  createStripeServerClient: vi.fn(),
+  getStripeWebhookSecrets: vi.fn(),
   syncZernioCallsWithCreditBalance: vi.fn(),
   toErrorResponse: vi.fn(),
 }));
@@ -14,7 +15,7 @@ vi.mock('@/lib/auth/account', () => ({
   toErrorResponse: mocks.toErrorResponse,
 }));
 vi.mock('@/lib/stripe/server', () => ({
-  createStripeServerClient: mocks.createStripeServerClient,
+  getStripeWebhookSecrets: mocks.getStripeWebhookSecrets,
 }));
 vi.mock('@/lib/zernio/call-credit-pause', () => ({
   syncZernioCallsWithCreditBalance: mocks.syncZernioCallsWithCreditBalance,
@@ -36,6 +37,7 @@ function paidSession() {
     mode: 'payment',
     status: 'complete',
     payment_status: 'paid',
+    livemode: false,
     currency: 'mxn',
     client_reference_id: checkoutId,
     metadata: {
@@ -52,6 +54,7 @@ function configureDatabase(status: 'pending' | 'credited' = 'pending') {
     id: checkoutId,
     account_id: accountId,
     package_id: 'entrepreneur',
+    stripe_mode: 'test',
     credits: 50_000,
     amount_total_mxn_centavos: paidSession().amount_total,
     stripe_checkout_session_id: status === 'credited' ? 'cs_test_123' : null,
@@ -90,18 +93,40 @@ function configureDatabase(status: 'pending' | 'credited' = 'pending') {
   return { admin, updates, row };
 }
 
-function signedRequest() {
+function signedRequest(
+  session = paidSession(),
+  livemode = false,
+  secret = livemode ? 'whsec_live_example' : 'whsec_test_example'
+) {
+  const payload = JSON.stringify({
+    id: `evt_${livemode ? 'live' : 'test'}_123`,
+    object: 'event',
+    api_version: '2026-10-21',
+    created: 1,
+    data: { object: session },
+    livemode,
+    pending_webhooks: 1,
+    request: { id: null, idempotency_key: null },
+    type: 'checkout.session.completed',
+  });
   return new Request('https://nexoomni.example/api/webhooks/stripe', {
     method: 'POST',
-    headers: { 'stripe-signature': 't=1,v1=signature' },
-    body: '{}',
+    headers: {
+      'stripe-signature': Stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret,
+      }),
+    },
+    body: payload,
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_example');
-  vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_example');
+  mocks.getStripeWebhookSecrets.mockResolvedValue({
+    test: 'whsec_test_example',
+    live: 'whsec_live_example',
+  });
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://supabase.example');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-test');
   mocks.toErrorResponse.mockImplementation(() =>
@@ -119,16 +144,8 @@ describe('POST /api/webhooks/stripe', () => {
   it('verifies and idempotently credits a paid session', async () => {
     const { admin, updates } = configureDatabase();
     const session = paidSession();
-    mocks.createStripeServerClient.mockReturnValue({
-      webhooks: {
-        constructEvent: vi.fn().mockReturnValue({
-          type: 'checkout.session.completed',
-          data: { object: session },
-        }),
-      },
-    });
 
-    const response = await POST(signedRequest());
+    const response = await POST(signedRequest(session));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ received: true });
@@ -162,14 +179,6 @@ describe('POST /api/webhooks/stripe', () => {
 
   it('does not credit a duplicate already-completed session', async () => {
     const { admin } = configureDatabase('credited');
-    mocks.createStripeServerClient.mockReturnValue({
-      webhooks: {
-        constructEvent: vi.fn().mockReturnValue({
-          type: 'checkout.session.completed',
-          data: { object: paidSession() },
-        }),
-      },
-    });
 
     const response = await POST(signedRequest());
 
@@ -181,33 +190,35 @@ describe('POST /api/webhooks/stripe', () => {
   it('does not credit a session whose total differs from the stored checkout', async () => {
     const { admin } = configureDatabase();
     const session = { ...paidSession(), amount_total: 1 };
-    mocks.createStripeServerClient.mockReturnValue({
-      webhooks: {
-        constructEvent: vi.fn().mockReturnValue({
-          type: 'checkout.session.completed',
-          data: { object: session },
-        }),
-      },
-    });
 
-    const response = await POST(signedRequest());
+    const response = await POST(signedRequest(session));
 
     expect(response.status).toBe(500);
     expect(admin.rpc).not.toHaveBeenCalled();
     expect(mocks.syncZernioCallsWithCreditBalance).not.toHaveBeenCalled();
   });
 
+  it('rejects a live event for a checkout created in test mode', async () => {
+    const { admin } = configureDatabase();
+    const session = { ...paidSession(), livemode: true };
+
+    const response = await POST(signedRequest(session, true));
+
+    expect(response.status).toBe(500);
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
   it('rejects a webhook with an invalid signature', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mocks.createStripeServerClient.mockReturnValue({
-      webhooks: {
-        constructEvent: vi.fn(() => {
-          throw new Error('invalid signature');
-        }),
-      },
-    });
-
-    const response = await POST(signedRequest());
+    const invalidRequest = new Request(
+      'https://nexoomni.example/api/webhooks/stripe',
+      {
+        method: 'POST',
+        headers: { 'stripe-signature': 't=1,v1=signature' },
+        body: JSON.stringify({ livemode: false }),
+      }
+    );
+    const response = await POST(invalidRequest);
 
     expect(response.status).toBe(400);
     expect(mocks.createAdminClient).not.toHaveBeenCalled();

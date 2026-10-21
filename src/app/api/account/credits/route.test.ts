@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requireEntitlement: vi.fn(),
   loadBanxicoFix: vi.fn(),
+  isStripeCheckoutConfigured: vi.fn(),
 }));
 
 vi.mock('@/lib/account/entitlements', () => ({
@@ -11,12 +12,14 @@ vi.mock('@/lib/account/entitlements', () => ({
 }));
 
 vi.mock('@/lib/auth/account', () => ({
-  toErrorResponse: () =>
-    Response.json({ error: 'Forbidden' }, { status: 403 }),
+  toErrorResponse: () => Response.json({ error: 'Forbidden' }, { status: 403 }),
 }));
 
 vi.mock('@/lib/billing/banxico-fx', () => ({
   loadBanxicoFix: mocks.loadBanxicoFix,
+}));
+vi.mock('@/lib/stripe/server', () => ({
+  isStripeCheckoutConfigured: mocks.isStripeCheckoutConfigured,
 }));
 
 import { GET } from './route';
@@ -32,8 +35,9 @@ const ledgerEntry = {
 };
 
 function scopedDatabase() {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
-    async (input) => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockImplementation(async (input) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith('/ai_credit_wallets')) {
         return Response.json([
@@ -47,9 +51,7 @@ function scopedDatabase() {
         return Response.json([ledgerEntry]);
       }
       if (
-        url.pathname.endsWith(
-          '/rpc/account_ai_credit_monthly_usage_summary'
-        )
+        url.pathname.endsWith('/rpc/account_ai_credit_monthly_usage_summary')
       ) {
         return Response.json([
           {
@@ -70,8 +72,7 @@ function scopedDatabase() {
         ]);
       }
       throw new Error(`Unexpected database request: ${url.pathname}`);
-    }
-  );
+    });
   const supabase = createClient('https://supabase.example', 'test-key', {
     global: { fetch },
     auth: { persistSession: false, autoRefreshToken: false },
@@ -84,15 +85,15 @@ function scopedDatabase() {
 }
 
 function adminDatabase() {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
-    async (input) => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockImplementation(async (input) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith('/ai_billing_settings')) {
         return Response.json([{ nano_usd_per_credit: '1000000' }]);
       }
       throw new Error(`Unexpected admin database request: ${url.pathname}`);
-    }
-  );
+    });
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
@@ -105,6 +106,7 @@ beforeEach(() => {
     fetchedAt: '2026-10-21T12:00:00.000Z',
     source: 'Banxico SIE SF43718',
   });
+  mocks.isStripeCheckoutConfigured.mockReset().mockResolvedValue(false);
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://supabase.example');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key');
 });
@@ -172,14 +174,15 @@ describe('GET /api/account/credits', () => {
     const urls = fetch.mock.calls.map(([input]) => new URL(String(input)));
     expect(urls).toHaveLength(3);
     for (const url of urls.filter(
-      (value) => !value.pathname.endsWith('/rpc/account_ai_credit_monthly_usage_summary')
+      (value) =>
+        !value.pathname.endsWith('/rpc/account_ai_credit_monthly_usage_summary')
     )) {
       expect(url.searchParams.get('account_id')).toBe('eq.account-1');
     }
     expect(
-      urls.find((url) => url.pathname.endsWith('/ai_credit_ledger'))?.searchParams.get(
-        'select'
-      )
+      urls
+        .find((url) => url.pathname.endsWith('/ai_credit_ledger'))
+        ?.searchParams.get('select')
     ).toBe('id,entry_type,delta_credits,balance_after,created_at');
     const rpcCall = fetch.mock.calls.find(([input]) =>
       new URL(String(input)).pathname.endsWith(
@@ -189,6 +192,18 @@ describe('GET /api/account/credits', () => {
     expect(JSON.parse(String(rpcCall?.[1]?.body))).toMatchObject({
       p_account_id: 'account-1',
     });
+  });
+
+  it('reports online checkout availability from central settings', async () => {
+    scopedDatabase();
+    adminDatabase();
+    mocks.isStripeCheckoutConfigured.mockResolvedValue(true);
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.checkout_available).toBe(true);
   });
 
   it('keeps the balance available and reports an unavailable MXN estimate', async () => {
@@ -213,8 +228,9 @@ describe('GET /api/account/credits', () => {
   });
 
   it('reports a monthly-summary error without hiding the balance or history', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
-      async (input) => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async (input) => {
         const url = new URL(String(input));
         if (url.pathname.endsWith('/ai_credit_wallets')) {
           return Response.json([
@@ -228,9 +244,7 @@ describe('GET /api/account/credits', () => {
           return Response.json([ledgerEntry]);
         }
         if (
-          url.pathname.endsWith(
-            '/rpc/account_ai_credit_monthly_usage_summary'
-          )
+          url.pathname.endsWith('/rpc/account_ai_credit_monthly_usage_summary')
         ) {
           return Response.json(
             { message: 'function not found' },
@@ -238,8 +252,7 @@ describe('GET /api/account/credits', () => {
           );
         }
         throw new Error(`Unexpected database request: ${url.pathname}`);
-      }
-    );
+      });
     mocks.requireEntitlement.mockResolvedValue({
       accountId: 'account-1',
       supabase: createClient('https://supabase.example', 'test-key', {

@@ -19,9 +19,9 @@ import {
 } from '@/lib/rate-limit';
 import {
   createStripeServerClient,
-  getStripeAppUrl,
-  isStripeCheckoutConfigured,
+  getStripeCheckoutConfiguration,
 } from '@/lib/stripe/server';
+import { StripeSettingsMigrationPendingError } from '@/lib/stripe/platform-settings';
 
 const PACKAGE_NAME_KEYS: Record<
   AiCreditPackageId,
@@ -52,7 +52,9 @@ function adminClient() {
 function stripeAmount(value: string): number {
   const amount = BigInt(value);
   if (amount <= BigInt(0) || amount > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error('The Stripe checkout amount is outside the supported range.');
+    throw new Error(
+      'The Stripe checkout amount is outside the supported range.'
+    );
   }
   return Number(amount);
 }
@@ -69,9 +71,10 @@ export async function POST(request: Request) {
     );
     if (!limit.success) return rateLimitResponse(limit);
 
-    if (!isStripeCheckoutConfigured()) {
+    const stripeConfiguration = await getStripeCheckoutConfiguration();
+    if (!stripeConfiguration) {
       console.error(
-        '[stripe checkout] Checkout is disabled until its credentials and canonical URL are configured.'
+        '[stripe checkout] Checkout is disabled or its active mode is missing credentials or a canonical URL.'
       );
       return NextResponse.json(
         { error: 'STRIPE_CHECKOUT_UNAVAILABLE' },
@@ -79,9 +82,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json().catch(() => null)) as
-      | Record<string, unknown>
-      | null;
+    const body = (await request.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
     const packageId =
       typeof body?.package_id === 'string' ? body.package_id : '';
     const creditPackage = getAiCreditPackage(packageId);
@@ -92,8 +96,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const appUrl = getStripeAppUrl();
-    const stripe = createStripeServerClient();
+    const appUrl = stripeConfiguration.appUrl;
+    const stripe = createStripeServerClient(stripeConfiguration.secretKey);
     const locale = await getLocale();
     const t = await getTranslations('AiCredits');
     const admin = adminClient();
@@ -110,6 +114,7 @@ export async function POST(request: Request) {
         account_id: accountId,
         purchaser_user_id: userId,
         package_id: creditPackage.id,
+        stripe_mode: stripeConfiguration.mode,
         credits: creditPackage.credits,
         package_base_mxn_centavos: price.packageBaseCentavos,
         processing_cost_included_mxn_centavos:
@@ -149,9 +154,7 @@ export async function POST(request: Request) {
                     ),
                   }),
                 },
-                unit_amount: stripeAmount(
-                  price.taxablePackageBaseCentavos
-                ),
+                unit_amount: stripeAmount(price.taxablePackageBaseCentavos),
               },
               quantity: 1,
             },
@@ -203,6 +206,12 @@ export async function POST(request: Request) {
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
+    if (error instanceof StripeSettingsMigrationPendingError) {
+      return NextResponse.json(
+        { error: 'STRIPE_SETTINGS_MIGRATION_PENDING' },
+        { status: 503 }
+      );
+    }
     return toErrorResponse(error);
   }
 }

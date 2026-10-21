@@ -1,10 +1,14 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import type Stripe from 'stripe';
+import Stripe from 'stripe';
 
 import { toErrorResponse } from '@/lib/auth/account';
 import { getAiCreditPackage } from '@/lib/billing/stripe-credit-pricing';
-import { createStripeServerClient } from '@/lib/stripe/server';
+import { getStripeWebhookSecrets } from '@/lib/stripe/server';
+import {
+  StripeSettingsMigrationPendingError,
+  type StripeMode,
+} from '@/lib/stripe/platform-settings';
 import { syncZernioCallsWithCreditBalance } from '@/lib/zernio/call-credit-pause';
 
 const CHECKOUT_ID_RE =
@@ -16,6 +20,7 @@ type StripeCreditCheckout = {
   id: string;
   account_id: string;
   package_id: string;
+  stripe_mode: StripeMode | null;
   credits: number | string;
   amount_total_mxn_centavos: number | string;
   stripe_checkout_session_id: string | null;
@@ -40,12 +45,13 @@ function adminClient() {
 function stripePaymentIntentId(
   value: string | Stripe.PaymentIntent | null
 ): string | null {
-  return typeof value === 'string' ? value : value?.id ?? null;
+  return typeof value === 'string' ? value : (value?.id ?? null);
 }
 
 async function fulfillPaidCheckout(
   session: Stripe.Checkout.Session,
-  admin: ReturnType<typeof adminClient>
+  admin: ReturnType<typeof adminClient>,
+  mode: StripeMode
 ): Promise<void> {
   const checkoutId = session.metadata?.credit_checkout_id;
   if (!checkoutId || !CHECKOUT_ID_RE.test(checkoutId)) return;
@@ -53,13 +59,15 @@ async function fulfillPaidCheckout(
   const { data, error } = await admin
     .from('stripe_ai_credit_checkouts')
     .select(
-      'id,account_id,package_id,credits,amount_total_mxn_centavos,stripe_checkout_session_id,stripe_payment_intent_id,credit_ledger_entry_id,status'
+      'id,account_id,package_id,stripe_mode,credits,amount_total_mxn_centavos,stripe_checkout_session_id,stripe_payment_intent_id,credit_ledger_entry_id,status'
     )
     .eq('id', checkoutId)
     .maybeSingle();
   if (error) throw error;
   if (!data) {
-    throw new Error(`Stripe checkout record ${checkoutId} is not available yet.`);
+    throw new Error(
+      `Stripe checkout record ${checkoutId} is not available yet.`
+    );
   }
 
   const checkout = data as StripeCreditCheckout;
@@ -72,6 +80,8 @@ async function fulfillPaidCheckout(
     session.mode !== 'payment' ||
     session.status !== 'complete' ||
     session.payment_status !== 'paid' ||
+    session.livemode !== (mode === 'live') ||
+    (checkout.stripe_mode !== null && checkout.stripe_mode !== mode) ||
     session.currency !== 'mxn' ||
     session.client_reference_id !== checkout.id ||
     session.metadata?.package_id !== checkout.package_id ||
@@ -148,34 +158,78 @@ async function fulfillPaidCheckout(
 }
 
 export async function POST(request: Request) {
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const signature = request.headers.get('stripe-signature');
-  if (!webhookSecret || !stripeSecretKey || !signature) {
+  if (!signature) {
+    console.error('[stripe webhook] The Stripe signature header is missing.');
+    return NextResponse.json(
+      { error: 'Invalid Stripe webhook signature.' },
+      { status: 400 }
+    );
+  }
+
+  const payload = await request.text();
+  let hintedMode: StripeMode;
+  try {
+    const unverifiedPayload: unknown = JSON.parse(payload);
+    if (
+      !unverifiedPayload ||
+      typeof unverifiedPayload !== 'object' ||
+      !('livemode' in unverifiedPayload) ||
+      typeof unverifiedPayload.livemode !== 'boolean'
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid Stripe webhook event.' },
+        { status: 400 }
+      );
+    }
+    hintedMode = unverifiedPayload.livemode ? 'live' : 'test';
+  } catch (error) {
+    console.error('[stripe webhook] Event payload is not valid JSON:', error);
+    return NextResponse.json(
+      { error: 'Invalid Stripe webhook event.' },
+      { status: 400 }
+    );
+  }
+
+  let webhookSecrets: Record<StripeMode, string | null>;
+  try {
+    webhookSecrets = await getStripeWebhookSecrets();
+  } catch (error) {
+    if (error instanceof StripeSettingsMigrationPendingError) {
+      return NextResponse.json(
+        { error: 'Stripe webhook settings are not available.' },
+        { status: 503 }
+      );
+    }
+    return toErrorResponse(error);
+  }
+  const webhookSecret = webhookSecrets[hintedMode];
+  if (!webhookSecret) {
     console.error(
-      '[stripe webhook] Stripe keys or the signature header are missing.'
+      `[stripe webhook] The ${hintedMode} signing secret is not configured or cannot be decrypted.`
     );
     return NextResponse.json(
-      { error: 'Stripe webhook is not configured.' },
+      { error: 'Stripe webhook is not configured for this mode.' },
       { status: 503 }
     );
   }
 
-  let stripe: Stripe;
-  try {
-    stripe = createStripeServerClient();
-  } catch (error) {
-    return toErrorResponse(error);
-  }
-
   let event: Stripe.Event;
   try {
-    const payload = await request.text();
-    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+    event = Stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (error) {
     console.error('[stripe webhook] Signature verification failed:', error);
     return NextResponse.json(
       { error: 'Invalid Stripe webhook signature.' },
+      { status: 400 }
+    );
+  }
+  if (event.livemode !== (hintedMode === 'live')) {
+    console.error(
+      '[stripe webhook] Verified event mode does not match its payload.'
+    );
+    return NextResponse.json(
+      { error: 'Invalid Stripe webhook mode.' },
       { status: 400 }
     );
   }
@@ -187,7 +241,7 @@ export async function POST(request: Request) {
     ) {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.payment_status === 'paid') {
-        await fulfillPaidCheckout(session, adminClient());
+        await fulfillPaidCheckout(session, adminClient(), hintedMode);
       }
     }
     return NextResponse.json({ received: true });

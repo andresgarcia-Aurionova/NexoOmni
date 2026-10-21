@@ -1,6 +1,6 @@
 ---
 title: 'Administrar créditos de IA'
-description: 'Consulta el uso de IA y llamadas, y registra recargas manuales por cliente.'
+description: 'Consulta el uso de IA y llamadas, registra recargas y configura Stripe.'
 section: 'primeros-pasos'
 role: ['super_admin']
 plan: ['basico']
@@ -29,6 +29,38 @@ consultar ni modificar este panel.
    **Recarga cobrada** o **Ajuste o cortesía**, y agrega un motivo o referencia.
 4. Pulsa **Registrar abono**. El saldo y el movimiento se guardan juntos y
    una repetición de la misma solicitud no vuelve a acreditar los créditos.
+
+### Configurar recargas en línea con Stripe
+
+La configuración es central: los clientes comparten las mismas credenciales
+Stripe y estas no se copian a los registros de cada cuenta.
+
+1. Confirma que la migración 167 esté aplicada y que la aplicación tenga
+   configurada la misma `ENCRYPTION_KEY` que se usa para cifrar los demás
+   secretos. Configura también `NEXT_PUBLIC_SITE_URL` o `APP_URL` con la URL
+   HTTPS pública de NexoOmni.
+2. En **Administración NexoOmni**, abre **Configuración de Stripe** y deja
+   seleccionado **Pruebas**. Introduce la clave secreta de prueba y el secreto
+   de firma del webhook de Stripe. Los campos vacíos conservan los valores
+   previamente guardados; para reemplazar una credencial, pega la nueva.
+3. Guarda la configuración y habilita Checkout en modo de prueba para validar
+   una compra controlada con los datos de prueba de Stripe. Comprueba el
+   Checkout, la firma del webhook y la acreditación idempotente del paquete.
+   Después de la prueba, puedes apagar Checkout hasta el lanzamiento.
+4. El modo activo inicia en pruebas y Checkout permanece apagado. El modo
+   **Activo** procesa pagos reales; antes de usarlo, confirma precios e
+   impuestos y completa una revisión operativa. La pantalla solicita una
+   confirmación adicional para habilitar Checkout en ese modo.
+5. Para retirar credenciales, usa **Quitar credenciales** en el modo
+   correspondiente. Si ese modo está activo, Checkout también se apaga.
+
+Las claves API y los secretos webhook se obtienen en el panel de Stripe y no
+se deben enviar por correo, chat ni incluir en archivos del repositorio. Las
+claves nunca se muestran de nuevo después de guardarse.
+Registra en Stripe el endpoint público
+`https://<dominio-de-nexo>/api/webhooks/stripe` para los eventos
+`checkout.session.completed` y `checkout.session.async_payment_succeeded`;
+usa los endpoints y secretos separados de prueba y de pagos reales.
 
 ### Tipo de cambio y tarifas de llamadas
 

@@ -176,7 +176,7 @@ export async function GET() {
       {
         balance: String(wallet.available_credits),
         updated_at: wallet.updated_at,
-        checkout_available: isStripeCheckoutConfigured(),
+        checkout_available: await isStripeCheckoutConfigured(),
         monthly_usage: monthlyUsageError
           ? null
           : {

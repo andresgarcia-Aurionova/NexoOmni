@@ -1,18 +1,88 @@
 import Stripe from 'stripe';
 
-export function createStripeServerClient(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) throw new Error('STRIPE_SECRET_KEY is not configured.');
+import {
+  decryptStripeSecret,
+  readPlatformStripeSettings,
+  StripeSecretUnreadableError,
+  StripeSettingsMigrationPendingError,
+  type StripeMode,
+} from './platform-settings';
+
+export type StripeCheckoutConfiguration = {
+  mode: StripeMode;
+  secretKey: string;
+  webhookSecret: string;
+  appUrl: string;
+};
+
+export function createStripeServerClient(secretKey: string): Stripe {
+  if (!secretKey) throw new Error('The Stripe secret key is not configured.');
   return new Stripe(secretKey);
 }
 
-export function isStripeCheckoutConfigured(): boolean {
-  return (
-    process.env.STRIPE_CHECKOUT_ENABLED === 'true' &&
-    Boolean(process.env.STRIPE_SECRET_KEY) &&
-    Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
-    Boolean(parseStripeAppUrl())
+export async function getStripeCheckoutConfiguration(): Promise<StripeCheckoutConfiguration | null> {
+  const settings = await readPlatformStripeSettings();
+  if (!settings.checkout_enabled) return null;
+
+  const mode = settings.active_mode;
+  const secretKey = decryptStripeSecret(
+    mode === 'test'
+      ? settings.test_secret_key_encrypted
+      : settings.live_secret_key_encrypted,
+    `${mode} API key`
   );
+  const webhookSecret = decryptStripeSecret(
+    mode === 'test'
+      ? settings.test_webhook_secret_encrypted
+      : settings.live_webhook_secret_encrypted,
+    `${mode} webhook secret`
+  );
+  const appUrl = parseStripeAppUrl();
+  if (!secretKey || !webhookSecret || !appUrl) return null;
+  return { mode, secretKey, webhookSecret, appUrl: appUrl.origin };
+}
+
+export async function getStripeWebhookSecrets(): Promise<
+  Record<StripeMode, string | null>
+> {
+  const settings = await readPlatformStripeSettings();
+  const loadSecret = (
+    encryptedValue: string | null,
+    field: string
+  ): string | null => {
+    try {
+      return decryptStripeSecret(encryptedValue, field);
+    } catch (error) {
+      if (error instanceof StripeSecretUnreadableError) return null;
+      throw error;
+    }
+  };
+
+  return {
+    test: loadSecret(
+      settings.test_webhook_secret_encrypted,
+      'test webhook secret'
+    ),
+    live: loadSecret(
+      settings.live_webhook_secret_encrypted,
+      'live webhook secret'
+    ),
+  };
+}
+
+export async function isStripeCheckoutConfigured(): Promise<boolean> {
+  try {
+    return Boolean(await getStripeCheckoutConfiguration());
+  } catch (error) {
+    if (
+      error instanceof StripeSettingsMigrationPendingError ||
+      error instanceof StripeSecretUnreadableError
+    ) {
+      console.error('[stripe settings] Checkout is not ready:', error);
+      return false;
+    }
+    throw error;
+  }
 }
 
 function parseStripeAppUrl(): URL | null {
