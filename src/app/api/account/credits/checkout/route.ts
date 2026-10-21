@@ -167,8 +167,8 @@ export async function POST(request: Request) {
               quantity: 1,
             },
           ],
-          success_url: `${appUrl}/dashboard/credits?checkout=success`,
-          cancel_url: `${appUrl}/dashboard/credits?checkout=cancelled`,
+          success_url: `${appUrl}/credits?checkout=success`,
+          cancel_url: `${appUrl}/credits?checkout=cancelled`,
         },
         { idempotencyKey: `ai-credit-checkout:${checkoutId}` }
       );

@@ -131,9 +131,9 @@ describe('POST /api/account/credits/checkout', () => {
         { price_data: { currency: 'mxn', unit_amount: expect.any(Number) } },
       ],
       success_url:
-        'https://nexoomni.example/dashboard/credits?checkout=success',
+        'https://nexoomni.example/credits?checkout=success',
       cancel_url:
-        'https://nexoomni.example/dashboard/credits?checkout=cancelled',
+        'https://nexoomni.example/credits?checkout=cancelled',
     });
     expect(
       params.line_items.map(
