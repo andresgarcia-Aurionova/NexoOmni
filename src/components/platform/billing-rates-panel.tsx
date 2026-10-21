@@ -24,6 +24,7 @@ type Rates = {
   call_minute_price_mxn_centavos: number;
   target_margin_basis_points: number;
   banxico_token_configured: boolean;
+  banxico_token_source: 'panel' | 'env' | null;
 };
 
 export function BillingRatesPanel() {
@@ -34,6 +35,7 @@ export function BillingRatesPanel() {
   const [manualFx, setManualFx] = useState('');
   const [minutePrice, setMinutePrice] = useState('');
   const [margin, setMargin] = useState('');
+  const [token, setToken] = useState('');
 
   const apply = useCallback((json: Rates) => {
     setRates(json);
@@ -112,6 +114,52 @@ export function BillingRatesPanel() {
             <p className="text-xs text-amber-600">{t('tokenMissing')}</p>
           )}
         </div>
+
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-md border p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void post({ action: 'set_banxico_token', token }).then(
+              (ok) => ok && setToken('')
+            );
+          }}
+        >
+          <div className="min-w-72 flex-1 space-y-2">
+            <Label htmlFor="banxico-token">{t('token')}</Label>
+            <Input
+              id="banxico-token"
+              type="password"
+              autoComplete="off"
+              placeholder={
+                rates?.banxico_token_source === 'panel'
+                  ? t('tokenSavedPanel')
+                  : rates?.banxico_token_source === 'env'
+                    ? t('tokenSavedEnv')
+                    : t('tokenPlaceholder')
+              }
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              required
+            />
+          </div>
+          <Button type="submit" disabled={busy}>
+            <Save />
+            {t('saveToken')}
+          </Button>
+          {rates?.banxico_token_source === 'panel' && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void post({ action: 'clear_banxico_token' })}
+            >
+              {t('clearToken')}
+            </Button>
+          )}
+          <p className="text-muted-foreground w-full text-xs">
+            {t('tokenHelp')}
+          </p>
+        </form>
 
         <form
           className="flex flex-wrap items-end gap-3"

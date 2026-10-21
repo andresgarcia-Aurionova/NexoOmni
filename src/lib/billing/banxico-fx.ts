@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { decrypt } from '@/lib/whatsapp/encryption';
+
 const BANXICO_FIX_URL =
   'https://www.banxico.org.mx/SieAPIRest/service/v1/series/SF43718/datos/oportuno';
 const FETCH_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -17,6 +19,16 @@ interface RateRow {
   mxn_fx_date: string | null;
   mxn_fx_fetched_at: string | null;
   mxn_fx_source: string | null;
+  banxico_token_encrypted?: string | null;
+}
+
+function decryptToken(value: string): string | undefined {
+  try {
+    return decrypt(value);
+  } catch {
+    console.error('[billing] The stored Banxico token could not be decrypted.');
+    return process.env.BANXICO_API_TOKEN;
+  }
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -103,7 +115,7 @@ export async function loadBanxicoFix(
   const { data, error } = await db
     .from('ai_billing_settings')
     .select(
-      'mxn_per_usd_micro,mxn_fx_date,mxn_fx_fetched_at,mxn_fx_source'
+      'mxn_per_usd_micro,mxn_fx_date,mxn_fx_fetched_at,mxn_fx_source,banxico_token_encrypted'
     )
     .eq('id', true)
     .maybeSingle();
@@ -143,7 +155,9 @@ export async function loadBanxicoFix(
     };
   }
 
-  const token = process.env.BANXICO_API_TOKEN;
+  const token = row.banxico_token_encrypted
+    ? decryptToken(row.banxico_token_encrypted)
+    : process.env.BANXICO_API_TOKEN;
   let freshRate: ReturnType<typeof parseBanxicoFix> = null;
   if (token) {
     try {

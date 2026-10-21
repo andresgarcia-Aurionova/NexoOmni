@@ -37,8 +37,12 @@ llamadas** (arriba de los créditos):
 
 - Se muestra el tipo de cambio vigente, su fecha y su fuente. Banxico (FIX) se
   consulta automáticamente cada 12 horas al cobrar llamadas.
-- **Actualizar desde Banxico** fuerza la consulta (requiere
-  `BANXICO_API_TOKEN` en el servidor).
+- **Token de Banxico:** pégalo en el campo **Token de la API de Banxico (SIE)**
+  y pulsa **Guardar token**. Se guarda cifrado y no se vuelve a mostrar. Si no
+  tienes uno, solicítalo gratis en banxico.org.mx/SieAPIRest. Si prefieres,
+  también funciona la variable `BANXICO_API_TOKEN` del servidor (el token del
+  panel tiene prioridad).
+- **Actualizar desde Banxico** fuerza la consulta (requiere el token).
 - **Fijar tipo de cambio** captura un valor manual; se respeta 24 horas y luego
   se vuelve a consultar Banxico.
 - Puedes cambiar el **precio por minuto** (MXN) y el **margen objetivo**; el

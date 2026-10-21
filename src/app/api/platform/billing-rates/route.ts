@@ -8,6 +8,7 @@ import {
   saveManualFix,
 } from '@/lib/billing/banxico-fx';
 import { requirePlatformOperator } from '@/lib/platform/operator';
+import { encrypt } from '@/lib/whatsapp/encryption';
 import {
   checkRateLimit,
   RATE_LIMITS,
@@ -31,7 +32,7 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
   const { data, error } = await admin
     .from('ai_billing_settings')
     .select(
-      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points'
+      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points, banxico_token_encrypted'
     )
     .eq('id', true)
     .maybeSingle();
@@ -45,7 +46,14 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
     fx_source: data.mxn_fx_source as string | null,
     call_minute_price_mxn_centavos: Number(data.call_minute_price_mxn_centavos),
     target_margin_basis_points: Number(data.target_margin_basis_points),
-    banxico_token_configured: Boolean(process.env.BANXICO_API_TOKEN),
+    banxico_token_configured:
+      Boolean(data.banxico_token_encrypted) ||
+      Boolean(process.env.BANXICO_API_TOKEN),
+    banxico_token_source: data.banxico_token_encrypted
+      ? 'panel'
+      : process.env.BANXICO_API_TOKEN
+        ? 'env'
+        : null,
   };
 }
 
@@ -74,7 +82,26 @@ export async function POST(request: Request) {
     const action = body?.action;
     const admin = adminClient();
 
-    if (action === 'refresh_fx') {
+    if (action === 'set_banxico_token' || action === 'clear_banxico_token') {
+      const token =
+        action === 'set_banxico_token' && typeof body?.token === 'string'
+          ? body.token.trim()
+          : null;
+      if (action === 'set_banxico_token' && !/^[A-Za-z0-9]{32,128}$/.test(token ?? '')) {
+        return NextResponse.json(
+          { error: 'El token de Banxico no tiene un formato válido.' },
+          { status: 400 }
+        );
+      }
+      const { error } = await admin
+        .from('ai_billing_settings')
+        .update({
+          banxico_token_encrypted: token ? encrypt(token) : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', true);
+      if (error) throw error;
+    } else if (action === 'refresh_fx') {
       try {
         await loadBanxicoFix(admin, Date.now(), { force: true });
       } catch {

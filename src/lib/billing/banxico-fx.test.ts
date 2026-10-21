@@ -138,6 +138,25 @@ describe('loadBanxicoFix', () => {
     ).rejects.toThrow('BANXICO_API_TOKEN is required');
   });
 
+  it('uses the token stored in the panel instead of the environment one', async () => {
+    vi.stubEnv('BANXICO_API_TOKEN', 'env-token');
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { db } = fakeDb({
+      mxn_per_usd_micro: null,
+      mxn_fx_date: null,
+      mxn_fx_fetched_at: null,
+      mxn_fx_source: null,
+      banxico_token_encrypted: 'not-valid-ciphertext',
+    });
+    await expect(
+      loadBanxicoFix(db, Date.parse('2026-10-20T18:00:00Z'))
+    ).rejects.toThrow();
+    // Undecryptable stored token falls back to the environment token.
+    expect(fetchMock.mock.calls[0][1].headers['Bmx-Token']).toBe('env-token');
+  });
+
   it('honors a manual rate for 24 hours without calling Banxico', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
