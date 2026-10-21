@@ -195,6 +195,7 @@ export async function POST(request: Request) {
       );
     }
 
+    return NextResponse.json(await readSettings(admin));
   } catch (error) {
     if (error instanceof MigrationPendingError) {
       return migrationPendingResponse();
