@@ -233,6 +233,18 @@ export async function POST(request: Request) {
       throw new Error('La base de datos no confirmó el abono de créditos.');
     }
 
+    let expiresAt: string | null = null;
+    if (entryType === 'purchase' && result.ledger_entry_id) {
+      const { data: batch, error: batchError } = await admin
+        .from('ai_credit_batches')
+        .select('expires_at')
+        .eq('ledger_entry_id', result.ledger_entry_id)
+        .maybeSingle();
+      if (batchError) throw batchError;
+      expiresAt =
+        typeof batch?.expires_at === 'string' ? batch.expires_at : null;
+    }
+
     let callsReactivated = BigInt(String(result.available_credits)) > BigInt(0);
     if (callsReactivated) {
       try {
@@ -255,6 +267,7 @@ export async function POST(request: Request) {
         result: result.result,
         available_credits: stringValue(result.available_credits),
         calls_reactivated: callsReactivated,
+        expires_at: expiresAt,
         message:
           result.result === 'duplicate'
             ? 'Esta operación ya se había aplicado; no se abonaron créditos por segunda vez.'

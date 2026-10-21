@@ -145,6 +145,25 @@ export function pickModelPrice(
   });
 }
 
+export function availableCreditBalance(
+  batches: readonly {
+    remaining_credits: number | string;
+    expires_at: string | null;
+  }[],
+  now = Date.now()
+): bigint {
+  return batches.reduce((balance, batch) => {
+    if (batch.expires_at !== null) {
+      const expiresAt = Date.parse(batch.expires_at);
+      if (!Number.isFinite(expiresAt)) {
+        throw new AiBillingError('AI credit expiration data is invalid.');
+      }
+      if (expiresAt <= now) return balance;
+    }
+    return balance + BigInt(String(batch.remaining_credits));
+  }, BigInt(0));
+}
+
 export async function assertAiBillingReady(
   db: SupabaseClient,
   provider: AiProvider,
@@ -160,14 +179,14 @@ export async function assertAiBillingReady(
   }
 
   const { data, error } = await db
-    .from('ai_credit_wallets')
-    .select('available_credits')
+    .from('ai_credit_batches')
+    .select('remaining_credits,expires_at')
     .eq('account_id', accountId)
-    .maybeSingle();
+    .gt('remaining_credits', 0);
   if (error) {
     throw new AiBillingError('AI credit balance could not be loaded.');
   }
-  const availableCredits = BigInt(String(data?.available_credits ?? 0));
+  const availableCredits = availableCreditBalance(data ?? []);
   if (availableCredits <= BigInt(0)) {
     throw new AiCreditsExhaustedError();
   }

@@ -30,7 +30,10 @@ de IA guardó un handoff antes de transferir, todos los tramos muestran
 el agente. La plataforma no deduce esa atribución únicamente porque Yeastar
 haya generado una transcripción automática.
 
-El listado se carga en páginas de 25 llamadas desde NexoOmni; cambiar de
+El listado se ordena por fecha de inicio, de la llamada más reciente a la
+más antigua. Si falta esa fecha, usa la hora de fin como referencia y muestra
+esas llamadas después de las que tienen fecha de inicio. Los empates conservan
+un orden estable. Se carga en páginas de 25 llamadas desde NexoOmni; cambiar de
 página, buscar o abrir una transcripción no vuelve a consultar el PBX.
 Esto evita cargar miles de filas en el navegador y no agrega tráfico a
 Yeastar durante la supervisión diaria.

@@ -271,10 +271,20 @@ export function AiCreditsPanel({
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? t('grantError'));
+      const expirationMessage =
+        entryType === 'purchase' && typeof json.expires_at === 'string'
+          ? ` ${t('purchaseExpirationRecorded', {
+              date: new Intl.DateTimeFormat(locale, {
+                dateStyle: 'medium',
+              }).format(new Date(json.expires_at)),
+            })}`
+          : '';
       if (json.calls_reactivated === false) {
-        toast.warning(`${json.message} ${t('callsPending')}`);
+        toast.warning(
+          `${json.message}${expirationMessage} ${t('callsPending')}`
+        );
       } else {
-        toast.success(json.message);
+        toast.success(`${json.message}${expirationMessage}`);
       }
       setCredits('');
       setReason('');
@@ -392,6 +402,9 @@ export function AiCreditsPanel({
           </Button>
           <p className="text-muted-foreground text-xs md:col-span-4">
             {t('stripePending')}
+          </p>
+          <p className="text-muted-foreground text-xs md:col-span-4">
+            {t('expirationPolicy')}
           </p>
         </form>
 

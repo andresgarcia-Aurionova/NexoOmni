@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  availableCreditBalance,
   assertAiBillingReady,
   pickModelPrice,
   resetBillingConfigCache,
@@ -22,6 +23,7 @@ function fakeDb(opts: {
   settings?: Result;
   prices?: Result;
   wallet?: Result;
+  batches?: Result;
   rpc?: ReturnType<typeof vi.fn>;
 }) {
   const rpc =
@@ -34,8 +36,13 @@ function fakeDb(opts: {
     const chain: Record<string, unknown> = {};
     chain.select = () => chain;
     chain.eq = () => chain;
-    chain.lte = () => Promise.resolve(result);
+    chain.gt = () => chain;
+    chain.lte = () => chain;
     chain.maybeSingle = () => Promise.resolve(result);
+    chain.then = (
+      resolve: (value: Result) => unknown,
+      reject: (reason: unknown) => unknown
+    ) => Promise.resolve(result).then(resolve, reject);
     return chain;
   };
   const from = vi.fn((table: string) => {
@@ -47,10 +54,10 @@ function fakeDb(opts: {
     if (table === 'ai_model_prices') {
       return builder(opts.prices ?? { data: [], error: null });
     }
-    if (table === 'ai_credit_wallets') {
+    if (table === 'ai_credit_batches') {
       return builder(
-        opts.wallet ?? {
-          data: { available_credits: 100 },
+        opts.batches ?? {
+          data: [{ remaining_credits: '100', expires_at: null }],
           error: null,
         }
       );
@@ -147,8 +154,8 @@ describe('resolveUsageBilling', () => {
     const { db } = fakeDb({
       settings: enforcedSettings,
       prices: { data: [lunaPrice], error: null },
-      wallet: {
-        data: { available_credits: 0 },
+      batches: {
+        data: [],
         error: null,
       },
     });
@@ -157,6 +164,43 @@ describe('resolveUsageBilling', () => {
     ).rejects.toMatchObject({
       code: 'credits_exhausted',
       status: 402,
+    });
+  });
+
+  it('blocks requests when only expired credit batches remain', async () => {
+    const { db } = fakeDb({
+      settings: enforcedSettings,
+      prices: { data: [lunaPrice], error: null },
+      batches: {
+        data: [
+          {
+            remaining_credits: '25',
+            expires_at: '2026-10-20T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      },
+    });
+    await expect(
+      assertAiBillingReady(db, 'openai', 'gpt-6-luna', 'acct-1')
+    ).rejects.toMatchObject({
+      code: 'credits_exhausted',
+      status: 402,
+    });
+  });
+
+  describe('availableCreditBalance', () => {
+    it('counts non-expiring and unexpired batches only', () => {
+      expect(
+        availableCreditBalance(
+          [
+            { remaining_credits: '10', expires_at: null },
+            { remaining_credits: '20', expires_at: '2026-10-21T12:00:00Z' },
+            { remaining_credits: '40', expires_at: '2026-10-21T10:00:00Z' },
+          ],
+          Date.parse('2026-10-21T11:00:00Z')
+        )
+      ).toBe(BigInt(30));
     });
   });
 });

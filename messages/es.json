@@ -45,6 +45,8 @@
     "reasonPlaceholder": "Ej. SPEI recibido, folio o motivo del ajuste",
     "grant": "Registrar abono",
     "stripePending": "La recarga se registra manualmente. El cobro automático con Stripe se conectará en una fase posterior.",
+    "expirationPolicy": "Las recargas pagadas vencen 30 días después de acreditarse. Los ajustes y cortesías no vencen. Primero se consumen los créditos que vencen antes.",
+    "purchaseExpirationRecorded": "Vence el {date}.",
     "usageTitle": "Uso de IA este mes",
     "usageDescription": "Los créditos debitados se concilian con el libro de movimientos. Los consumos históricos sin débito se identifican por separado; los modelos sin precio no se ejecutan.",
     "noUsage": "No hay usos de IA registrados este mes.",

@@ -45,6 +45,8 @@
     "reasonPlaceholder": "예: SPEI 입금, 영수증 번호 또는 조정 사유",
     "grant": "크레딧 등록",
     "stripePending": "충전은 수동으로 기록됩니다. Stripe 자동 결제는 이후 단계에서 연결됩니다.",
+    "expirationPolicy": "결제된 충전 크레딧은 지급 후 30일이 지나면 만료됩니다. 조정 및 서비스 크레딧은 만료되지 않습니다. 만료일이 가장 가까운 크레딧부터 사용됩니다.",
+    "purchaseExpirationRecorded": "{date}에 만료됩니다.",
     "usageTitle": "이번 달 AI 사용량",
     "usageDescription": "차감된 크레딧은 원장과 대조됩니다. 과거에 차감되지 않은 사용량은 별도로 표시되며 가격이 없는 모델은 실행되지 않습니다.",
     "noUsage": "이번 달에 기록된 AI 사용량이 없습니다.",

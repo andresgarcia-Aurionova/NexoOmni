@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { sortTranscriptionsNewestFirst } from '@/lib/telephony/transcription-order'
 
 type TimelineEvent = { name: string; timeSeconds: number; at: string | null; content: unknown }
 type TimelineLeg = { leg: number; events: TimelineEvent[] }
@@ -24,6 +25,7 @@ type CallRecord = {
   agent_name: string | null
   direction: string | null
   started_at: string | null
+  created_at: string
   ended_at: string | null
   duration_seconds: number | null
   routing_duration_seconds: number | null
@@ -168,7 +170,7 @@ function CallTranscriptionsContent() {
       const response = await fetch(`/api/telephony/yeastar/transcriptions${params.size ? `?${params.toString()}` : ''}`, { cache: 'no-store' })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar las transcripciones.')
-      setCalls(payload.calls ?? [])
+      setCalls(sortTranscriptionsNewestFirst(payload.calls ?? []))
       if (payload.pagination) setPagination(payload.pagination)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'No se pudieron cargar las transcripciones.') }
     finally { if (!quiet) setLoading(false) }
@@ -285,7 +287,7 @@ function CallTranscriptionsContent() {
                     </CardDescription>
                     {call.ai_first_touch ? <p className="mt-1 text-xs font-medium text-primary">{t('aiFirstTouch')}</p> : null}
                   </div>
-                  <span className="text-xs text-muted-foreground">{date(call.ended_at || call.started_at)} · {duration(call.duration_seconds)} · {call.direction || 'unknown'}</span>
+                  <span className="text-xs text-muted-foreground">{date(call.started_at || call.ended_at)} · {duration(call.duration_seconds)} · {call.direction || 'unknown'}</span>
                 </div>
                 <SentimentBadge sentiment={call.sentiment} score={call.sentiment_score} />
               </CardHeader>

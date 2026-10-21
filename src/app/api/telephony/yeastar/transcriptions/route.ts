@@ -4,6 +4,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { normalizeCallSummary } from '@/lib/telephony/call-summary'
+import { sortTranscriptionsNewestFirst } from '@/lib/telephony/transcription-order'
 
 function admin() {
   return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
@@ -33,7 +34,9 @@ export async function GET(request: Request) {
       .select('id, call_id, session_call_id, cdr_id, contact_id, customer_phone, customer_name, customer_email, agent_user_id, agent_extension, agent_name, direction, started_at, answered_at, ended_at, duration_seconds, routing_duration_seconds, handling_duration_seconds, ring_duration_seconds, hold_duration_seconds, talk_duration_seconds, disconnected_by, timeline, transcript, summary, key_points, action_items, language, transcription_status, analysis_status, sentiment, sentiment_score, memory_applied_at, error_message, created_at, updated_at', { count: 'exact' })
       .eq('account_id', accountId)
       .order('started_at', { ascending: false, nullsFirst: false })
+      .order('ended_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (selectedCallId) requestQuery = requestQuery.eq('id', selectedCallId)
     else {
       if (onlyTranscribed) requestQuery = requestQuery.eq('transcription_status', 'completed').not('transcript', 'is', null)
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
     const handoffsByCall = new Map((handoffs.data ?? []).map((handoff) => [handoff.call_id, handoff]))
     const total = selectedCallId ? rows.length : count ?? 0
     return NextResponse.json({
-      calls: rows.map((row) => {
+      calls: sortTranscriptionsNewestFirst(rows).map((row) => {
         const sessionCallId = row.session_call_id ?? row.call_id
         const handoff = handoffsByCall.get(sessionCallId) ?? null
         return {

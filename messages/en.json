@@ -45,6 +45,8 @@
     "reasonPlaceholder": "For example, SPEI received, receipt number, or adjustment reason",
     "grant": "Record credit",
     "stripePending": "Top-ups are recorded manually. Automatic Stripe payments will be connected in a later phase.",
+    "expirationPolicy": "Paid top-ups expire 30 days after they are credited. Adjustments and courtesy credits do not expire. Credits with the nearest expiration are used first.",
+    "purchaseExpirationRecorded": "Expires on {date}.",
     "usageTitle": "AI usage this month",
     "usageDescription": "Debited credits are reconciled with the ledger. Historical usage without a debit is shown separately; models without a price are not run.",
     "noUsage": "No AI usage has been recorded this month.",

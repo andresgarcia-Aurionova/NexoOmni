@@ -63,8 +63,10 @@ llamadas** (arriba de los créditos):
   deja la billetera en negativo: queda identificada sin cobrar y las llamadas
   de Zernio se pausan hasta registrar otra recarga.
 - La regla comercial acordada es que cada recarga dure 30 días desde su
-  acreditación. El vencimiento automático por recarga aún no está implementado;
-  no se debe presentar como una función activa hasta completar esa parte.
+  acreditación. Una vez desplegada esta actualización, el saldo existente se
+  conservará sin vencimiento; las nuevas recargas pagadas vencerán 30 días
+  después de acreditarse. Ajustes y cortesías no vencen. Primero se consumen
+  los créditos con fecha de vencimiento más próxima.
 - Si el proveedor/modelo no tiene precio vigente, NexoOmni bloquea la
   solicitud antes de enviarla. La prueba de una llave desde el panel también
   es una solicitud real y descuenta créditos.
