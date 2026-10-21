@@ -136,6 +136,45 @@ describe('loadBanxicoFix', () => {
     expect(rate.date).toBe('2026-10-19');
   });
 
+  it('uses a recent cached rate without making a request in cached-only mode', async () => {
+    const { db } = fakeDb({
+      mxn_per_usd_micro: '18123400',
+      mxn_fx_date: '2026-10-19',
+      mxn_fx_fetched_at: '2026-10-19T10:00:00.000Z',
+      mxn_fx_source: 'Banxico SIE SF43718',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rate = await loadBanxicoFix(
+      db,
+      Date.parse('2026-10-21T18:00:00Z'),
+      { cachedOnly: true }
+    );
+
+    expect(rate.mxnPerUsdMicro).toBe(BigInt(18_123_400));
+    expect(rate.date).toBe('2026-10-19');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an expired cached rate in cached-only mode even if recently fetched', async () => {
+    const { db } = fakeDb({
+      mxn_per_usd_micro: '18123400',
+      mxn_fx_date: '2026-10-14',
+      mxn_fx_fetched_at: '2026-10-21T17:00:00.000Z',
+      mxn_fx_source: 'Banxico SIE SF43718',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      loadBanxicoFix(db, Date.parse('2026-10-21T18:00:00Z'), {
+        cachedOnly: true,
+      })
+    ).rejects.toThrow('No recent cached Banxico FIX is available.');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('fails explicitly when no usable rate exists and the server token is missing', async () => {
     const { db } = fakeDb({
       mxn_per_usd_micro: null,

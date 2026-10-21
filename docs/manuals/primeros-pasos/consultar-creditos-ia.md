@@ -1,6 +1,6 @@
 ---
 title: "Consultar créditos de IA"
-description: "Consulta el saldo disponible de IA y los movimientos recientes de tu cuenta."
+description: "Consulta el saldo, el consumo mensual y los movimientos de créditos de tu cuenta."
 section: "primeros-pasos"
 role: ["supervisor", "admin", "owner"]
 plan: ["ai"]
@@ -21,14 +21,22 @@ de una cuenta con funciones de IA activas.
 ## Cómo se usa
 
 1. En el menú lateral, abre **Créditos de IA**.
-2. Consulta el saldo disponible.
-3. Revisa los últimos 50 movimientos: recargas, ajustes, uso, reembolsos o
+2. Consulta el saldo disponible y su equivalente aproximado en MXN, calculado
+   con la fecha del FIX de Banxico que aparece en pantalla.
+3. Revisa el consumo de créditos del mes calendario UTC, agrupado por
+   actividad y cantidad de usos. Solo se incluyen débitos confirmados en el
+   libro de créditos.
+4. Revisa los últimos 50 movimientos: recargas, ajustes, uso, reembolsos o
    vencimientos.
-4. Usa **Actualizar** para volver a consultar la información.
+5. Usa **Actualizar** para volver a consultar la información.
 
 La pantalla no muestra nombres de proveedores ni modelos de IA. Las recargas
 se registran manualmente por ahora; contacta al equipo de NexoOmni para
 solicitar una.
+
+El equivalente en MXN es solo una referencia estimada del saldo disponible,
+no es un cobro, factura ni cotización. Se muestra únicamente cuando hay un FIX
+reciente disponible.
 
 ## Alertas de saldo
 
@@ -53,6 +61,11 @@ un ajuste, un reembolso o créditos vencidos.
 
 La lista muestra como máximo los últimos 50 movimientos. Pulsa **Actualizar**
 para consultar los datos más recientes.
+
+**¿El equivalente en MXN es el importe que debo pagar?**
+
+No. Es una referencia aproximada del valor del saldo disponible, calculada con
+el FIX de Banxico indicado. Las recargas siguen gestionándose manualmente.
 
 ## Ver también
 

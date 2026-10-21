@@ -119,20 +119,32 @@ export async function saveManualFix(
 export async function loadBanxicoFix(
   db: SupabaseClient,
   now = Date.now(),
-  options: { force?: boolean } = {}
+  options: { force?: boolean; cachedOnly?: boolean } = {}
 ): Promise<BanxicoRate> {
-  const { data, error } = await db
-    .from('ai_billing_settings')
-    .select(
-      'mxn_per_usd_micro,mxn_fx_date,mxn_fx_fetched_at,mxn_fx_source,banxico_token_encrypted'
-    )
-    .eq('id', true)
-    .maybeSingle();
-  if (error || !data) {
-    throw new Error('Banxico exchange-rate settings could not be loaded.');
+  let row: RateRow;
+  if (options.cachedOnly) {
+    const { data, error } = await db
+      .from('ai_billing_settings')
+      .select('mxn_per_usd_micro,mxn_fx_date,mxn_fx_fetched_at,mxn_fx_source')
+      .eq('id', true)
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error('Banxico exchange-rate settings could not be loaded.');
+    }
+    row = data;
+  } else {
+    const { data, error } = await db
+      .from('ai_billing_settings')
+      .select(
+        'mxn_per_usd_micro,mxn_fx_date,mxn_fx_fetched_at,mxn_fx_source,banxico_token_encrypted'
+      )
+      .eq('id', true)
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error('Banxico exchange-rate settings could not be loaded.');
+    }
+    row = data;
   }
-
-  const row = data as RateRow;
   const cachedRate =
     row.mxn_per_usd_micro === null
       ? null
@@ -148,6 +160,23 @@ export async function loadBanxicoFix(
     row.mxn_fx_source === MANUAL_FX_SOURCE
       ? MANUAL_FETCH_INTERVAL_MS
       : FETCH_INTERVAL_MS;
+  if (options.cachedOnly) {
+    if (
+      cachedRate &&
+      cachedDate &&
+      rateAge >= 0 &&
+      rateAge <= MAX_RATE_AGE_MS
+    ) {
+      return {
+        mxnPerUsdMicro: cachedRate,
+        date: cachedDate,
+        fetchedAt: fetchedAt ?? new Date(now).toISOString(),
+        source: row.mxn_fx_source ?? 'Banxico SIE SF43718',
+      };
+    }
+    throw new Error('No recent cached Banxico FIX is available.');
+  }
+
   if (
     !options.force &&
     cachedRate &&
