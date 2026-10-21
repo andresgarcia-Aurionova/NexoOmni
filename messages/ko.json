@@ -1,4 +1,20 @@
 {
+  "PlatformBillingRates": {
+    "title": "환율 및 통화 요금",
+    "description": "Banxico FIX 환율은 통화 요금 부과 시 자동으로(12시간마다) 조회됩니다. 여기서 강제 조회, 수동 입력, 분당 가격 및 마진 조정이 가능합니다.",
+    "currentFx": "현재 환율",
+    "sourceManual": "수동 입력",
+    "refreshBanxico": "Banxico에서 갱신",
+    "tokenMissing": "서버에 BANXICO_API_TOKEN이 설정되지 않았습니다.",
+    "manualFx": "수동 환율 (USD당 MXN)",
+    "saveManual": "환율 설정",
+    "manualHint": "수동 환율은 24시간 동안 유지되며 이후 Banxico를 다시 조회합니다.",
+    "minutePrice": "통화 분당 가격 (MXN)",
+    "margin": "목표 마진 (%)",
+    "saveRates": "요금 저장",
+    "saved": "변경 사항이 저장되었습니다.",
+    "error": "작업을 완료하지 못했습니다."
+  },
   "PlatformCredits": {
     "title": "고객별 AI 크레딧",
     "description": "잔액을 관리하고 이번 달 실제 차감 내역을 확인합니다. 공급자 비용은 설정된 토큰 가격으로 계산되며 크레딧 잔액에서 차감됩니다.",

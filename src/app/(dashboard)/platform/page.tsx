@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SupportSessionDialog } from '@/components/platform/support-session-dialog'
 import { AiCreditsPanel } from '@/components/platform/ai-credits-panel'
+import { BillingRatesPanel } from '@/components/platform/billing-rates-panel'
 import { AiProviderCredentialsPanel } from '@/components/platform/ai-provider-credentials-panel'
 
 type PlanCode = 'ai' | 'yeastar_voice' | 'whatsapp_voice'
@@ -375,6 +376,7 @@ export default function PlatformPage() {
       </Card>
 
       <AiProviderCredentialsPanel accounts={accounts.map(({ id, name }) => ({ id, name }))} />
+      <BillingRatesPanel />
       <AiCreditsPanel accounts={accounts.map(({ id, name }) => ({ id, name }))} />
 
       <Card>

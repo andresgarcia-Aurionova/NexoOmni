@@ -1,4 +1,20 @@
 {
+  "PlatformBillingRates": {
+    "title": "Exchange rate and call rates",
+    "description": "The Banxico FIX rate is fetched automatically (every 12 h) when billing calls. Here you can force a refresh, enter it manually, and adjust the per-minute price and margin.",
+    "currentFx": "Current exchange rate",
+    "sourceManual": "manual entry",
+    "refreshBanxico": "Refresh from Banxico",
+    "tokenMissing": "BANXICO_API_TOKEN is not configured on the server.",
+    "manualFx": "Manual exchange rate (MXN per USD)",
+    "saveManual": "Set exchange rate",
+    "manualHint": "A manual rate is honored for 24 hours; after that Banxico is queried again.",
+    "minutePrice": "Call price per minute (MXN)",
+    "margin": "Target margin (%)",
+    "saveRates": "Save rates",
+    "saved": "Changes saved.",
+    "error": "The operation could not be completed."
+  },
   "PlatformCredits": {
     "title": "AI credits by customer",
     "description": "Manage balances and review actual debits for this month. Provider cost is calculated using configured token prices; credits are deducted from the balance.",

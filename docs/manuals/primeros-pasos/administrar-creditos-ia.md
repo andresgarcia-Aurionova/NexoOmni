@@ -30,6 +30,20 @@ consultar ni modificar este panel.
 4. Pulsa **Registrar abono**. El saldo y el movimiento se guardan juntos y
    una repetición de la misma solicitud no vuelve a acreditar los créditos.
 
+### Tipo de cambio y tarifas de llamadas
+
+En **Administración NexoOmni**, sección **Tipo de cambio y tarifas de
+llamadas** (arriba de los créditos):
+
+- Se muestra el tipo de cambio vigente, su fecha y su fuente. Banxico (FIX) se
+  consulta automáticamente cada 12 horas al cobrar llamadas.
+- **Actualizar desde Banxico** fuerza la consulta (requiere
+  `BANXICO_API_TOKEN` en el servidor).
+- **Fijar tipo de cambio** captura un valor manual; se respeta 24 horas y luego
+  se vuelve a consultar Banxico.
+- Puedes cambiar el **precio por minuto** (MXN) y el **margen objetivo**; el
+  cambio aplica a las llamadas que se cobren desde ese momento.
+
 ## Importante
 
 - Las solicitudes de IA con precio configurado descuentan créditos cuando el

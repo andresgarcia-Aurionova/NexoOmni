@@ -59,9 +59,46 @@ export function parseBanxicoFix(payload: unknown): {
   return { date, mxnPerUsdMicro: rate };
 }
 
+export const MANUAL_FX_SOURCE = 'manual';
+const MANUAL_FETCH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export function parseMxnRate(value: unknown): bigint | null {
+  const rate = parseRate(typeof value === 'number' ? String(value) : value);
+  // Rango de sensatez para evitar capturas erróneas (MXN por USD).
+  return rate && rate >= BigInt(5_000_000) && rate <= BigInt(100_000_000)
+    ? rate
+    : null;
+}
+
+export async function saveManualFix(
+  db: SupabaseClient,
+  mxnPerUsdMicro: bigint,
+  now = Date.now()
+): Promise<BanxicoRate> {
+  const iso = new Date(now).toISOString();
+  const { error } = await db
+    .from('ai_billing_settings')
+    .update({
+      mxn_per_usd_micro: mxnPerUsdMicro.toString(),
+      mxn_fx_date: iso.slice(0, 10),
+      mxn_fx_fetched_at: iso,
+      mxn_fx_source: MANUAL_FX_SOURCE,
+      updated_at: iso,
+    })
+    .eq('id', true);
+  if (error) throw new Error('The manual exchange rate could not be saved.');
+  return {
+    mxnPerUsdMicro,
+    date: iso.slice(0, 10),
+    fetchedAt: iso,
+    source: MANUAL_FX_SOURCE,
+  };
+}
+
 export async function loadBanxicoFix(
   db: SupabaseClient,
-  now = Date.now()
+  now = Date.now(),
+  options: { force?: boolean } = {}
 ): Promise<BanxicoRate> {
   const { data, error } = await db
     .from('ai_billing_settings')
@@ -86,12 +123,17 @@ export async function loadBanxicoFix(
     ? now - Date.parse(`${cachedDate}T00:00:00Z`)
     : Infinity;
 
+  const cacheWindow =
+    row.mxn_fx_source === MANUAL_FX_SOURCE
+      ? MANUAL_FETCH_INTERVAL_MS
+      : FETCH_INTERVAL_MS;
   if (
+    !options.force &&
     cachedRate &&
     cachedDate &&
     fetchedAt &&
     fetchedAge >= 0 &&
-    fetchedAge < FETCH_INTERVAL_MS
+    fetchedAge < cacheWindow
   ) {
     return {
       mxnPerUsdMicro: cachedRate,
@@ -135,6 +177,14 @@ export async function loadBanxicoFix(
       throw new Error('Banxico FIX could not be saved for billing.');
     }
     return { ...freshRate, fetchedAt: fetchedNow, source };
+  }
+
+  if (options.force) {
+    throw new Error(
+      token
+        ? 'Banxico did not return a usable FIX rate.'
+        : 'BANXICO_API_TOKEN is not configured.'
+    );
   }
 
   if (

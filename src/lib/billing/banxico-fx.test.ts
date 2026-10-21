@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { loadBanxicoFix, parseBanxicoFix } from './banxico-fx';
+import { loadBanxicoFix, parseBanxicoFix, parseMxnRate } from './banxico-fx';
 
 function fakeDb(data: unknown) {
   const updates: unknown[] = [];
@@ -136,5 +136,40 @@ describe('loadBanxicoFix', () => {
     await expect(
       loadBanxicoFix(db, Date.parse('2026-10-20T18:00:00Z'))
     ).rejects.toThrow('BANXICO_API_TOKEN is required');
+  });
+
+  it('honors a manual rate for 24 hours without calling Banxico', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { db } = fakeDb({
+      mxn_per_usd_micro: '19000000',
+      mxn_fx_date: '2026-10-20',
+      mxn_fx_fetched_at: '2026-10-20T00:00:00.000Z',
+      mxn_fx_source: 'manual',
+    });
+    const rate = await loadBanxicoFix(db, Date.parse('2026-10-20T20:00:00Z'));
+    expect(rate.mxnPerUsdMicro).toBe(BigInt(19_000_000));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('forces a Banxico query and fails when it is unavailable', async () => {
+    const { db } = fakeDb({
+      mxn_per_usd_micro: '18123400',
+      mxn_fx_date: '2026-10-20',
+      mxn_fx_fetched_at: '2026-10-20T17:00:00.000Z',
+      mxn_fx_source: 'Banxico SIE SF43718',
+    });
+    await expect(
+      loadBanxicoFix(db, Date.parse('2026-10-20T18:00:00Z'), { force: true })
+    ).rejects.toThrow('BANXICO_API_TOKEN is not configured');
+  });
+});
+
+describe('parseMxnRate', () => {
+  it('accepts sane rates and rejects out-of-range values', () => {
+    expect(parseMxnRate('18.25')).toBe(BigInt(18_250_000));
+    expect(parseMxnRate(18.25)).toBe(BigInt(18_250_000));
+    expect(parseMxnRate('0.5')).toBeNull();
+    expect(parseMxnRate('abc')).toBeNull();
   });
 });
