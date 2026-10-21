@@ -30,7 +30,8 @@ type AiUsageMode =
   | 'call_summary'
   | 'voice_transcription'
   | 'image_description'
-  | 'embeddings';
+  | 'embeddings'
+  | 'credential_test';
 type UsageRow = {
   account_id: string;
   mode: AiUsageMode;
@@ -50,6 +51,8 @@ type LedgerEntry = {
   delta_credits: string;
   balance_after: string;
   reason: string | null;
+  usage_mode: AiUsageMode | null;
+  source: string | null;
   actor_user_id: string | null;
   created_at: string;
 };
@@ -229,6 +232,7 @@ export function AiCreditsPanel({
     voice_transcription: t('modes.voice_transcription'),
     image_description: t('modes.image_description'),
     embeddings: t('modes.embeddings'),
+    credential_test: t('modes.credential_test'),
   };
   const entryLabels: Record<LedgerEntry['entry_type'], string> = {
     purchase: t('entries.purchase'),
@@ -613,7 +617,14 @@ export function AiCreditsPanel({
                       {formatInteger(entry.delta_credits, locale)}
                     </p>
                     <p className="text-muted-foreground text-xs">
-                      {entry.reason ?? t('systemEntry')}
+                      {entry.reason ??
+                        (entry.source === 'zernio_whatsapp_call'
+                          ? t('whatsappCallEntry')
+                          : entry.usage_mode
+                            ? t('aiUsageEntry', {
+                                mode: modeLabels[entry.usage_mode],
+                              })
+                            : t('systemEntry'))}
                     </p>
                   </div>
                   <span className="text-muted-foreground text-xs">

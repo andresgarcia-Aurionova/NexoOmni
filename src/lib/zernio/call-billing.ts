@@ -25,6 +25,7 @@ export interface CallCharge {
   billableMinutes: number;
   connectionPriceNanoUsd: bigint;
   connectionCredits: bigint;
+  minutePriceNanoUsd: bigint | null;
   minuteCredits: bigint | null;
 }
 
@@ -127,12 +128,13 @@ export function calculateCallCharge(
   const billableMinutes = answered ? Math.ceil(call.durationSeconds / 60) : 0;
 
   let minuteCredits: bigint | null = null;
+  let minutePriceNanoUsd: bigint | null = null;
   if (settings.mxnPerUsdMicro !== null) {
     if (settings.mxnPerUsdMicro <= BigInt(0)) {
       throw new RangeError('mxnPerUsdMicro must be positive');
     }
     // centavos / 100 = MXN; MXN / (micro / 1e6) = USD; USD * 1e9 = nano USD.
-    const minutePriceNanoUsd = ceilDiv(
+    minutePriceNanoUsd = ceilDiv(
       BigInt(billableMinutes) *
         settings.minutePriceMxnCentavos *
         BigInt(10_000_000_000_000),
@@ -145,6 +147,7 @@ export function calculateCallCharge(
     billableMinutes,
     connectionPriceNanoUsd,
     connectionCredits,
+    minutePriceNanoUsd,
     minuteCredits,
   };
 }

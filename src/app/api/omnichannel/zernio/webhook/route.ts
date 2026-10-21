@@ -555,9 +555,35 @@ export async function POST(request: Request) {
   }
 
   const eventIdHeader = request.headers.get('x-zernio-event-id')
-  after(async () => {
-    await processZernioWebhook(payload, eventIdHeader)
-  })
+  const webhookEvents = entries(payload)
+  const callEvents = webhookEvents.filter(
+    (event) => text(event.event, payload.event) === 'call.ended'
+  )
+  if (callEvents.length > 0) {
+    try {
+      const db = admin()
+      for (const event of callEvents) {
+        await recordCallEnded(db, event, text(event.id, eventIdHeader) || null)
+      }
+    } catch (error) {
+      console.error('[zernio] could not bill call.ended event:', error)
+      return NextResponse.json(
+        { error: 'No se pudo registrar el consumo de la llamada.' },
+        { status: 503 }
+      )
+    }
+  }
+
+  const otherEvents = webhookEvents.filter(
+    (event) => text(event.event, payload.event) !== 'call.ended'
+  )
+  if (otherEvents.length > 0) {
+    const backgroundPayload =
+      callEvents.length > 0 ? { events: otherEvents } : payload
+    after(async () => {
+      await processZernioWebhook(backgroundPayload, eventIdHeader)
+    })
+  }
   return NextResponse.json({ ok: true })
 }
 
@@ -583,14 +609,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         await handleMessageEditedEvent(db, record(event.message), event.editedAt)
         continue
       }
-      if (eventType === 'call.ended') {
-        try {
-          await recordCallEnded(db, event, text(event.id, eventIdHeader) || null)
-        } catch (callError) {
-          console.error('[zernio] call.ended handling failed, skipping:', callError)
-        }
-        continue
-      }
+      if (eventType === 'call.ended') throw new Error('call.ended must be billed synchronously')
       if (eventType !== 'message.received' && eventType !== 'comment.received' && eventType !== 'reaction.received' && eventType !== 'message.sent') continue
 
       const message = record(event.message)

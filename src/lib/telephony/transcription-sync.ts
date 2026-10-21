@@ -97,7 +97,12 @@ export async function processCallTranscriptions(db: SupabaseClient) {
           .update({ contact_id: contactId, customer_phone: phone }).eq('id', row.id).eq('account_id', row.account_id)
         if (linkError) throw linkError
       }
-      const analysis = await analyzeCall(db, row.account_id, transcript, row.started_at ?? row.created_at)
+      const analysis = await analyzeCall(
+        db,
+        row.account_id,
+        transcript,
+        row.started_at ?? row.created_at
+      )
       if (!analysis) {
         await update({ analysis_status: 'unavailable', analysis_error: 'Configura la IA de la cuenta para generar el resumen y actualizar Nexo Memory.' })
         counts.unavailable++

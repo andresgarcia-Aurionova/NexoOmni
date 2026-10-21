@@ -61,6 +61,7 @@ describe('calculateCallCharge', () => {
     expect(charge.connectionCredits).toBe(BigInt(100));
     // 125 s => 3 started minutes x 0.50 MXN = 1.50 MXN / 20 = 0.075 USD.
     expect(charge.billableMinutes).toBe(3);
+    expect(charge.minutePriceNanoUsd).toBe(BigInt(75_000_000));
     expect(charge.minuteCredits).toBe(BigInt(75));
   });
 

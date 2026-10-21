@@ -4,7 +4,7 @@ description: 'Verifica y guarda las credenciales de IA desde Administración Nex
 section: 'primeros-pasos'
 role: ['super_admin']
 plan: ['basico']
-updated: '2026-10-21'
+updated: '2026-10-20'
 ---
 
 ## ¿Qué es?
@@ -31,7 +31,9 @@ verifican el acceso; ocultar el panel en pantalla no es el único control.
 
 ## Importante
 
-- La prueba genera una solicitud real y el proveedor puede cobrarla.
+- La prueba genera una solicitud real: el proveedor puede cobrarla y NexoOmni
+  también registra el consumo en los créditos del cliente cuando la base
+  confirma el débito. Revisa el panel de créditos después de probar.
 - Las llaves no se devuelven completas al navegador ni se escriben en los
   registros de la aplicación.
 - Guardar una llave no cambia automáticamente el proveedor activo. Agregar

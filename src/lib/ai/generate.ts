@@ -10,6 +10,8 @@ import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults';
 import { resolveAiTaskConfig, type AiTask } from './model-routing';
 import { generateOpenAi } from './providers/openai';
 import { generateAnthropic } from './providers/anthropic';
+import { supabaseAdmin } from './admin-client';
+import { AiBillingError, assertAiBillingReady } from './billing-config';
 
 export interface GenerateArgs {
   config: AiConfig;
@@ -44,6 +46,11 @@ export async function generateText(
 ): Promise<GenerateTextResult> {
   const { systemPrompt, messages } = args;
   const config = resolveAiTaskConfig(args.config, args.task ?? 'reply');
+  await assertAiBillingReady(
+    supabaseAdmin(),
+    config.provider,
+    config.model
+  );
   const timeoutMs = args.timeoutMs ?? aiRequestTimeoutMs();
   const startedAt = Date.now();
   const providerArgs = {
@@ -68,6 +75,11 @@ export async function generateText(
         code: 'unsupported_provider',
         status: 400,
       });
+  }
+  if (!result.usage) {
+    throw new AiBillingError(
+      `The ${config.provider}/${config.model} response did not include billable usage; its output was blocked.`
+    );
   }
   return {
     ...result,

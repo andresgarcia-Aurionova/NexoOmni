@@ -1,6 +1,10 @@
 import { AiError, type AiUsage } from './types'
+import { AiBillingError, assertAiBillingReady } from './billing-config'
+import { supabaseAdmin } from './admin-client'
 
-export type MediaUsageReport = (report: { model: string; usage: AiUsage }) => void
+export type MediaUsageReport = (
+  report: { model: string; usage: AiUsage }
+) => void | Promise<void>
 
 function tokenUsage(raw: unknown): AiUsage | null {
   const value = raw as {
@@ -93,9 +97,11 @@ export async function describeImageWithOpenAi(args: {
   bytes: Buffer
   mimeType: string
   timeoutMs: number
-  onUsage?: MediaUsageReport
+  onUsage: MediaUsageReport
 }): Promise<string> {
   assertSize(args.bytes)
+  const model = args.model || IMAGE_ANALYSIS_MODEL
+  await assertAiBillingReady(supabaseAdmin(), 'openai', model)
   const dataUrl = `data:${args.mimeType || 'image/jpeg'};base64,${args.bytes.toString('base64')}`
   let response: Response
   try {
@@ -103,7 +109,7 @@ export async function describeImageWithOpenAi(args: {
       method: 'POST',
       headers: { Authorization: `Bearer ${args.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: args.model || IMAGE_ANALYSIS_MODEL,
+        model,
         // Short and fast on purpose: this blocks conversation analysis
         // until it finishes (see ai-analysis-worker), so a long, verbose
         // description directly slows down every other AI feature waiting
@@ -120,7 +126,12 @@ export async function describeImageWithOpenAi(args: {
   const data = await response.json().catch(() => null) as { model?: string; usage?: unknown } | null
   const text = textFromChatCompletion(data)
   const usage = tokenUsage(data?.usage)
-  if (usage) args.onUsage?.({ model: data?.model || args.model || IMAGE_ANALYSIS_MODEL, usage })
+  if (!usage) {
+    throw new AiBillingError(
+      'OpenAI image analysis did not report billable usage; its output was blocked.'
+    )
+  }
+  await args.onUsage({ model: data?.model || model, usage })
   return text
 }
 
@@ -130,12 +141,14 @@ export async function transcribeAudioWithOpenAi(args: {
   bytes: Buffer
   mimeType: string
   timeoutMs: number
-  onUsage?: MediaUsageReport
+  onUsage: MediaUsageReport
 }): Promise<string> {
   assertSize(args.bytes)
+  const model = args.model || AUDIO_TRANSCRIPTION_MODEL
+  await assertAiBillingReady(supabaseAdmin(), 'openai', model)
   const extension = audioExtensionForMimeType(args.mimeType)
   const form = new FormData()
-  form.set('model', args.model || AUDIO_TRANSCRIPTION_MODEL)
+  form.set('model', model)
   form.set('language', 'es')
   form.set('file', new Blob([new Uint8Array(args.bytes)], { type: args.mimeType || 'audio/ogg' }), `voice-note.${extension}`)
   let response: Response
@@ -153,6 +166,11 @@ export async function transcribeAudioWithOpenAi(args: {
   if (!data?.text?.trim()) throw new AiError('OpenAI no devolvió una transcripción.', { code: 'empty_response' })
   // Models billed by duration (whisper-1) report seconds, not tokens; those are not recorded here.
   const usage = data.usage?.type === 'tokens' ? tokenUsage(data.usage) : null
-  if (usage) args.onUsage?.({ model: args.model || AUDIO_TRANSCRIPTION_MODEL, usage })
+  if (!usage) {
+    throw new AiBillingError(
+      'OpenAI transcription did not report token usage that can be priced; its output was blocked.'
+    )
+  }
+  await args.onUsage({ model, usage })
   return data.text.trim().slice(0, 10000)
 }

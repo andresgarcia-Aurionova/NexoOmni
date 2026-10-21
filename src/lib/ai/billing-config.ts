@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateAiUsageCharge, type AiModelPrice } from './billing';
 import type { AiProvider, AiUsage } from './types';
+import { AiError } from './types';
 
-export type AiBillingMode = 'off' | 'shadow' | 'enforced';
+export type AiBillingMode = 'enforced';
 
 export interface AiBillingSettings {
   mode: AiBillingMode;
@@ -16,7 +17,7 @@ interface PriceEntry extends AiModelPrice {
 }
 
 export interface UsageBilling {
-  mode: 'shadow';
+  mode: 'enforced';
   costNanoUsd: bigint;
   priceNanoUsd: bigint;
   creditsCharged: bigint;
@@ -32,19 +33,25 @@ const pricesCache = new Map<
   AiProvider,
   { expiresAt: number; value: PriceEntry[] }
 >();
-const warnedUnpriced = new Set<string>();
+
+export class AiBillingError extends AiError {
+  constructor(message: string) {
+    super(message, { code: 'ai_billing_unavailable', status: 503 });
+    this.name = 'AiBillingError';
+  }
+}
 
 export function resetBillingConfigCache(): void {
   settingsCache = null;
   pricesCache.clear();
-  warnedUnpriced.clear();
 }
 
 async function loadSettings(
   db: SupabaseClient
-): Promise<AiBillingSettings | null> {
+): Promise<AiBillingSettings> {
   const now = Date.now();
   if (settingsCache && settingsCache.expiresAt > now) {
+    if (!settingsCache.value) throw new AiBillingError('AI usage billing is not enabled.');
     return settingsCache.value;
   }
 
@@ -55,13 +62,19 @@ async function loadSettings(
     .eq('id', true)
     .maybeSingle();
 
-  if (!error && data) {
-    value = {
-      mode: data.billing_mode as AiBillingMode,
-      targetMarginBasisPoints: BigInt(String(data.target_margin_basis_points)),
-      nanoUsdPerCredit: BigInt(String(data.nano_usd_per_credit)),
-    };
+  if (error || !data) {
+    settingsCache = { expiresAt: now + CACHE_TTL_MS, value: null };
+    throw new AiBillingError('AI billing settings could not be loaded.');
   }
+  if (data.billing_mode !== 'enforced') {
+    settingsCache = { expiresAt: now + CACHE_TTL_MS, value: null };
+    throw new AiBillingError('AI usage billing is not enabled.');
+  }
+  value = {
+    mode: 'enforced',
+    targetMarginBasisPoints: BigInt(String(data.target_margin_basis_points)),
+    nanoUsdPerCredit: BigInt(String(data.nano_usd_per_credit)),
+  };
   settingsCache = { expiresAt: now + CACHE_TTL_MS, value };
   return value;
 }
@@ -83,18 +96,19 @@ async function loadPrices(
     .eq('provider', provider)
     .lte('effective_at', new Date(now).toISOString());
 
-  if (!error && data) {
-    value = data.map((row) => ({
-      model: row.model as string,
-      effectiveAt: Date.parse(row.effective_at as string),
-      inputNanoUsdPerMillionTokens: BigInt(
-        String(row.input_nano_usd_per_million_tokens)
-      ),
-      outputNanoUsdPerMillionTokens: BigInt(
-        String(row.output_nano_usd_per_million_tokens)
-      ),
-    }));
+  if (error) {
+    throw new AiBillingError('AI model prices could not be loaded.');
   }
+  value = (data ?? []).map((row) => ({
+    model: row.model as string,
+    effectiveAt: Date.parse(row.effective_at as string),
+    inputNanoUsdPerMillionTokens: BigInt(
+      String(row.input_nano_usd_per_million_tokens)
+    ),
+    outputNanoUsdPerMillionTokens: BigInt(
+      String(row.output_nano_usd_per_million_tokens)
+    ),
+  }));
   pricesCache.set(provider, { expiresAt: now + CACHE_TTL_MS, value });
   return value;
 }
@@ -121,56 +135,44 @@ export function pickModelPrice(
   });
 }
 
-/**
- * Shadow billing: computes what a call would cost and charge without touching
- * any wallet. Returns null (and never throws) when billing is off, the model
- * has no configured price, or the configuration cannot be read, so usage
- * logging always continues. Debiting in `enforced` mode is not implemented
- * yet, so that mode is also treated as "record nothing" rather than claiming
- * a charge that never happened.
- */
+export async function assertAiBillingReady(
+  db: SupabaseClient,
+  provider: AiProvider,
+  model: string
+): Promise<void> {
+  await loadSettings(db);
+  const prices = await loadPrices(db, provider);
+  if (!pickModelPrice(prices, model)) {
+    throw new AiBillingError(
+      `No price is configured for ${provider}/${model}; the provider request was blocked.`
+    );
+  }
+}
+
 export async function resolveUsageBilling(
   db: SupabaseClient,
   args: { provider: AiProvider; model: string; usage: AiUsage }
-): Promise<UsageBilling | null> {
-  try {
-    const settings = await loadSettings(db);
-    if (!settings || settings.mode === 'off') return null;
-    if (settings.mode === 'enforced') {
-      console.warn(
-        '[ai billing] enforced mode is not implemented yet; recording nothing.'
-      );
-      return null;
-    }
-
-    const prices = await loadPrices(db, args.provider);
-    const price = pickModelPrice(prices, args.model);
-    if (!price) {
-      const key = `${args.provider}/${args.model}`;
-      if (!warnedUnpriced.has(key)) {
-        warnedUnpriced.add(key);
-        console.warn(
-          `[ai billing] no price configured for ${key}; add it to ai_model_prices.`
-        );
-      }
-      return null;
-    }
-
-    const charge = calculateAiUsageCharge({
-      promptTokens: args.usage.promptTokens,
-      completionTokens: args.usage.completionTokens,
-      price,
-      targetMarginBasisPoints: settings.targetMarginBasisPoints,
-      nanoUsdPerCredit: settings.nanoUsdPerCredit,
-    });
-    return {
-      mode: 'shadow',
-      costNanoUsd: charge.costNanoUsd,
-      priceNanoUsd: charge.priceNanoUsd,
-      creditsCharged: charge.credits,
-    };
-  } catch (err) {
-    console.error('[ai billing] could not compute shadow charge:', err);
-    return null;
+): Promise<UsageBilling> {
+  const settings = await loadSettings(db);
+  const prices = await loadPrices(db, args.provider);
+  const price = pickModelPrice(prices, args.model);
+  if (!price) {
+    throw new AiBillingError(
+      `No price is configured for ${args.provider}/${args.model}.`
+    );
   }
+
+  const charge = calculateAiUsageCharge({
+    promptTokens: args.usage.promptTokens,
+    completionTokens: args.usage.completionTokens,
+    price,
+    targetMarginBasisPoints: settings.targetMarginBasisPoints,
+    nanoUsdPerCredit: settings.nanoUsdPerCredit,
+  });
+  return {
+    mode: 'enforced',
+    costNanoUsd: charge.costNanoUsd,
+    priceNanoUsd: charge.priceNanoUsd,
+    creditsCharged: charge.credits,
+  };
 }

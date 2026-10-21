@@ -190,7 +190,7 @@ export async function POST(request: Request) {
       .from('executive_report_insights')
       .upsert({ account_id: accountId, range_from: range.from, range_to: range.to, insight, generated_by: userId, generated_at: generatedAt }, { onConflict: 'account_id,range_from,range_to' })
     if (saveError) throw saveError
-    void logAiUsage(admin, { accountId, conversationId: null, mode: 'report', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
+    await logAiUsage(admin, { accountId, conversationId: null, mode: 'report', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
     return NextResponse.json({ insight, generated_at: generatedAt })
   } catch (error) {
     if (error instanceof AiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })

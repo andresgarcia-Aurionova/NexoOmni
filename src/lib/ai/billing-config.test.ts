@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  assertAiBillingReady,
   pickModelPrice,
   resetBillingConfigCache,
   resolveUsageBilling,
@@ -20,9 +21,14 @@ type Result = { data: unknown; error: unknown };
 function fakeDb(opts: {
   settings?: Result;
   prices?: Result;
-  insert?: ReturnType<typeof vi.fn>;
+  rpc?: ReturnType<typeof vi.fn>;
 }) {
-  const insert = opts.insert ?? vi.fn().mockResolvedValue({ error: null });
+  const rpc =
+    opts.rpc ??
+    vi.fn().mockResolvedValue({
+      data: [{ result: 'debited', available_credits: '-1' }],
+      error: null,
+    });
   const builder = (result: Result) => {
     const chain: Record<string, unknown> = {};
     chain.select = () => chain;
@@ -40,16 +46,16 @@ function fakeDb(opts: {
     if (table === 'ai_model_prices') {
       return builder(opts.prices ?? { data: [], error: null });
     }
-    return { insert };
+    return {};
   });
-  const db = { from } as unknown as SupabaseClient;
+  const db = { from, rpc } as unknown as SupabaseClient;
   mockSupabaseAdmin.mockReturnValue(db);
-  return { db, insert, from };
+  return { db, rpc, from };
 }
 
-const shadowSettings: Result = {
+const enforcedSettings: Result = {
   data: {
-    billing_mode: 'shadow',
+    billing_mode: 'enforced',
     target_margin_basis_points: 5000,
     nano_usd_per_credit: 1000000,
   },
@@ -72,9 +78,9 @@ describe('resolveUsageBilling', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it('computes cost, price and credits in shadow mode', async () => {
+  it('computes cost, price and credits in enforced mode', async () => {
     const { db } = fakeDb({
-      settings: shadowSettings,
+      settings: enforcedSettings,
       prices: { data: [lunaPrice], error: null },
     });
     // cost = (1000*0.10 + 500*0.50)/1M USD = 350,000 nanoUSD; price = x2
@@ -85,17 +91,17 @@ describe('resolveUsageBilling', () => {
         usage,
       })
     ).resolves.toEqual({
-      mode: 'shadow',
+      mode: 'enforced',
       costNanoUsd: BigInt(350000),
       priceNanoUsd: BigInt(700000),
       creditsCharged: BigInt(1),
     });
   });
 
-  it('records nothing when billing is off', async () => {
+  it('blocks provider usage when billing is off', async () => {
     const { db } = fakeDb({
       settings: {
-        data: { ...(shadowSettings.data as object), billing_mode: 'off' },
+        data: { ...(enforcedSettings.data as object), billing_mode: 'off' },
         error: null,
       },
       prices: { data: [lunaPrice], error: null },
@@ -106,49 +112,26 @@ describe('resolveUsageBilling', () => {
         model: 'gpt-6-luna',
         usage,
       })
-    ).resolves.toBeNull();
+    ).rejects.toThrow('AI usage billing is not enabled.');
   });
 
-  it('does not claim charges in enforced mode until debiting exists', async () => {
+  it('blocks requests for models without configured prices', async () => {
     const { db } = fakeDb({
-      settings: {
-        data: { ...(shadowSettings.data as object), billing_mode: 'enforced' },
-        error: null,
-      },
-      prices: { data: [lunaPrice], error: null },
+      settings: enforcedSettings,
+      prices: { data: [], error: null },
     });
     await expect(
-      resolveUsageBilling(db, {
-        provider: 'openai',
-        model: 'gpt-6-luna',
-        usage,
-      })
-    ).resolves.toBeNull();
+      assertAiBillingReady(db, 'openai', 'unpriced-model')
+    ).rejects.toThrow('No price is configured');
   });
 
-  it('skips models without a configured price', async () => {
+  it('does not fall through when billing configuration cannot be read', async () => {
     const { db } = fakeDb({
-      settings: shadowSettings,
-      prices: { data: [lunaPrice], error: null },
+      settings: { data: null, error: { message: 'missing settings' } },
     });
     await expect(
-      resolveUsageBilling(db, { provider: 'openai', model: 'unknown', usage })
-    ).resolves.toBeNull();
-  });
-
-  it('returns null instead of throwing when configuration cannot be read', async () => {
-    const db = {
-      from: vi.fn(() => {
-        throw new Error('db down');
-      }),
-    } as unknown as SupabaseClient;
-    await expect(
-      resolveUsageBilling(db, {
-        provider: 'openai',
-        model: 'gpt-6-luna',
-        usage,
-      })
-    ).resolves.toBeNull();
+      assertAiBillingReady(db, 'openai', 'gpt-6-luna')
+    ).rejects.toThrow('AI billing settings could not be loaded.');
   });
 });
 
@@ -179,15 +162,15 @@ describe('pickModelPrice', () => {
   });
 });
 
-describe('logAiUsage with shadow billing', () => {
+describe('logAiUsage with enforced billing', () => {
   beforeEach(() => {
     resetBillingConfigCache();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('stores the computed estimate on the usage row', async () => {
-    const { db, insert } = fakeDb({
-      settings: shadowSettings,
+  it('atomically records usage and debits the calculated credits', async () => {
+    const { db, rpc } = fakeDb({
+      settings: enforcedSettings,
       prices: { data: [lunaPrice], error: null },
     });
     await logAiUsage(db, {
@@ -198,28 +181,17 @@ describe('logAiUsage with shadow billing', () => {
       model: 'gpt-6-luna',
       usage,
     });
-    expect(insert).toHaveBeenCalledWith(
+    expect(rpc).toHaveBeenCalledWith(
+      'record_ai_usage_and_debit',
       expect.objectContaining({
-        cost_nano_usd: '350000',
-        price_nano_usd: '700000',
-        credits_charged: '1',
-        billing_mode: 'shadow',
+        p_account_id: 'acct-1',
+        p_prompt_tokens: 1000,
+        p_completion_tokens: 500,
+        p_cost_nano_usd: '350000',
+        p_price_nano_usd: '700000',
+        p_credits: '1',
+        p_idempotency_key: expect.any(String),
       })
     );
-  });
-
-  it('still logs tokens when billing configuration is unavailable', async () => {
-    const { db, insert } = fakeDb({});
-    await logAiUsage(db, {
-      accountId: 'acct-1',
-      conversationId: null,
-      mode: 'analysis',
-      provider: 'openai',
-      model: 'gpt-6-luna',
-      usage,
-    });
-    const row = insert.mock.calls[0][0];
-    expect(row).toMatchObject({ prompt_tokens: 1000, completion_tokens: 500 });
-    expect(row).not.toHaveProperty('billing_mode');
   });
 });

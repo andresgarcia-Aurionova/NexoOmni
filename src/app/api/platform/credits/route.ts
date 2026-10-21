@@ -27,6 +27,31 @@ type UsageSummaryRow = {
   estimated_credits: number | string | null;
   unpriced_calls: number | string;
 };
+type AiUsageMode =
+  | 'auto_reply'
+  | 'draft'
+  | 'analysis'
+  | 'report'
+  | 'call_summary'
+  | 'voice_transcription'
+  | 'image_description'
+  | 'embeddings'
+  | 'credential_test';
+const AI_USAGE_MODES: AiUsageMode[] = [
+  'auto_reply',
+  'draft',
+  'analysis',
+  'report',
+  'call_summary',
+  'voice_transcription',
+  'image_description',
+  'embeddings',
+  'credential_test',
+];
+
+function isAiUsageMode(value: unknown): value is AiUsageMode {
+  return typeof value === 'string' && AI_USAGE_MODES.includes(value as AiUsageMode);
+}
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -111,6 +136,13 @@ export async function GET(request: Request) {
         reason:
           typeof entry.metadata?.reason === 'string'
             ? entry.metadata.reason
+            : null,
+        usage_mode: isAiUsageMode(entry.metadata?.mode)
+          ? entry.metadata.mode
+          : null,
+        source:
+          typeof entry.metadata?.source === 'string'
+            ? entry.metadata.source
             : null,
         actor_user_id: entry.actor_user_id,
         created_at: entry.created_at,

@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateReply, parseGeneration } from './generate';
 import { AiError, type AiConfig } from './types';
 
+vi.mock('./admin-client', () => ({ supabaseAdmin: vi.fn(() => ({})) }));
+vi.mock('./billing-config', () => ({
+  assertAiBillingReady: vi.fn().mockResolvedValue(undefined),
+  AiBillingError: class extends Error {},
+}));
+
 function config(overrides: Partial<AiConfig> = {}): AiConfig {
   return {
     provider: 'openai',
@@ -216,7 +222,10 @@ describe('generateReply — Anthropic', () => {
       vi
         .fn()
         .mockResolvedValue(
-          okResponse({ content: [{ type: 'text', text: '[[HANDOFF]]' }] })
+          okResponse({
+            content: [{ type: 'text', text: '[[HANDOFF]]' }],
+            usage: { input_tokens: 10, output_tokens: 2 },
+          })
         )
     );
     const res = await generateReply({
@@ -232,7 +241,10 @@ describe('generateReply — Anthropic', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        okResponse({ content: [{ type: 'text', text: 'ok' }] })
+        okResponse({
+          content: [{ type: 'text', text: 'ok' }],
+          usage: { input_tokens: 10, output_tokens: 2 },
+        })
       );
     vi.stubGlobal('fetch', fetchMock);
 

@@ -4,6 +4,8 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { loadAiConfig } from '@/lib/ai/config'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
+import { logAiUsage } from '@/lib/ai/usage'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { resolvePromptVariables, substitutePromptVariables } from '@/lib/ai/prompt-variables'
 import { latestUserMessage } from '@/lib/ai/query'
@@ -85,7 +87,17 @@ export async function POST(request: Request) {
       knowledge,
     })
 
-    const { text, handoff } = await generateReply({ config, systemPrompt, messages })
+    const { text, handoff, provider, model, latencyMs, usage } =
+      await generateReply({ config, systemPrompt, messages })
+    await logAiUsage(supabaseAdmin(), {
+      accountId,
+      conversationId: null,
+      mode: 'auto_reply',
+      provider,
+      model,
+      latencyMs,
+      usage,
+    })
     return NextResponse.json({ reply: text, handoff })
   } catch (err) {
     if (err instanceof AiError) {

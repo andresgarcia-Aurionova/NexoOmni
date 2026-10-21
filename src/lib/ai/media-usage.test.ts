@@ -5,6 +5,12 @@ import {
 } from './media-analysis';
 import { embedTexts } from './embeddings';
 
+vi.mock('./admin-client', () => ({ supabaseAdmin: vi.fn(() => ({})) }))
+vi.mock('./billing-config', () => ({
+  assertAiBillingReady: vi.fn().mockResolvedValue(undefined),
+  AiBillingError: class extends Error {},
+}))
+
 function mockFetchJson(body: unknown) {
   const fetchMock = vi
     .fn()
@@ -50,14 +56,14 @@ describe('media usage reporting', () => {
     });
   });
 
-  it('does not report duration-billed transcription as tokens', async () => {
+  it('rejects duration-billed transcription without billable token usage', async () => {
     mockFetchJson({ text: 'hola', usage: { type: 'duration', seconds: 12 } });
     const onUsage = vi.fn();
-    await transcribeAudioWithOpenAi({
+    await expect(transcribeAudioWithOpenAi({
       ...baseArgs,
       model: 'whisper-1',
       onUsage,
-    });
+    })).rejects.toThrow('did not report token usage');
     expect(onUsage).not.toHaveBeenCalled();
   });
 

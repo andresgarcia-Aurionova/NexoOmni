@@ -4,6 +4,10 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { AiError, type AiProvider } from '@/lib/ai/types'
 import { requirePlatformOperator } from '@/lib/platform/operator'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
+
+const ACCOUNT_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * POST /api/ai/test  (platform operator only)
@@ -31,6 +35,23 @@ export async function POST(request: Request) {
       )
     }
     const model = typeof body.model === 'string' ? body.model.trim() : ''
+    const accountId =
+      typeof body.account_id === 'string' ? body.account_id : ''
+    if (!ACCOUNT_ID_RE.test(accountId)) {
+      return NextResponse.json(
+        { error: 'account_id must identify a valid customer.' },
+        { status: 400 },
+      )
+    }
+    const { data: account, error: accountError } = await supabaseAdmin()
+      .from('accounts')
+      .select('id')
+      .eq('id', accountId)
+      .maybeSingle()
+    if (accountError) throw accountError
+    if (!account) {
+      return NextResponse.json({ error: 'Customer was not found.' }, { status: 404 })
+    }
     if (!model) {
       return NextResponse.json({ error: 'model is required' }, { status: 400 })
     }
@@ -56,7 +77,7 @@ export async function POST(request: Request) {
         handoffAgentId: null,
         embeddingsApiKey: null,
         timezone: 'America/Mexico_City',
-      })
+      }, accountId)
     } catch (err) {
       if (err instanceof AiError) {
         return NextResponse.json(

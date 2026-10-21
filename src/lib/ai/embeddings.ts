@@ -1,6 +1,8 @@
 import { AiError, type AiUsage } from './types';
 import { aiRequestTimeoutMs } from './defaults';
 import { providerHttpError, toNetworkError } from './providers/shared';
+import { supabaseAdmin } from './admin-client';
+import { AiBillingError, assertAiBillingReady } from './billing-config';
 
 // ============================================================
 // Embeddings (OpenAI-compatible).
@@ -42,9 +44,14 @@ export function toVectorLiteral(embedding: number[]): string {
 export async function embedTexts(
   apiKey: string,
   inputs: string[],
-  onUsage?: (usage: AiUsage) => void
+  onUsage: (usage: AiUsage) => void | Promise<void>
 ): Promise<number[][]> {
   if (inputs.length === 0) return [];
+  await assertAiBillingReady(
+    supabaseAdmin(),
+    'openai',
+    EMBEDDING_MODEL
+  );
   const timeoutMs = aiRequestTimeoutMs();
   const out: number[][] = [];
 
@@ -75,11 +82,15 @@ export async function embedTexts(
       .catch(() => null)) as EmbeddingResponse | null;
     const rows = data?.data;
     if (data?.usage && typeof data.usage.prompt_tokens === 'number') {
-      onUsage?.({
+      await onUsage({
         promptTokens: data.usage.prompt_tokens,
         completionTokens: 0,
         totalTokens: data.usage.total_tokens ?? data.usage.prompt_tokens,
       });
+    } else {
+      throw new AiBillingError(
+        'OpenAI embeddings did not report billable usage; the embeddings were discarded.'
+      );
     }
     if (!rows || rows.length !== batch.length) {
       throw new AiError('Embeddings response was malformed.', {

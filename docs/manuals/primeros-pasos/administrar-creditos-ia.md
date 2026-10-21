@@ -32,40 +32,55 @@ consultar ni modificar este panel.
 
 ## Importante
 
-- El consumo y el costo mostrados son estimaciones calculadas a partir de los
-  tokens reportados y de los precios configurados. No equivalen a la factura
-  real de OpenAI o Anthropic.
-- Las llamadas sin precio configurado o sin cálculo de cobro se indican como
-  **Sin estimación**; no se deben interpretar como gratuitas.
-- Los abonos todavía no se descuentan automáticamente por el uso de IA.
-  El débito real se habilitará en una fase posterior, después de validar las
-  mediciones en modo sombra.
+- Las solicitudes de IA con precio configurado descuentan créditos cuando el
+  proveedor devuelve el uso y la base confirma el cobro. Los créditos se
+  redondean hacia arriba a unidades enteras; una solicitud pequeña puede
+  consumir un crédito completo.
+- El saldo puede quedar negativo hasta que se registre una recarga. Llegar a
+  cero no detiene automáticamente el uso de IA.
+- Si el proveedor/modelo no tiene precio vigente, NexoOmni bloquea la
+  solicitud antes de enviarla. La prueba de una llave desde el panel también
+  es una solicitud real y descuenta créditos.
+- En llamadas de WhatsApp conectadas con Zernio se cobra el costo de conexión
+  reportado por Zernio con el margen configurado (actualmente 50 %, equivalente
+  a ×2), más MXN $0.50 por cada minuto iniciado de una llamada contestada. El
+  costo de Meta se muestra solo como información y no se descuenta del saldo.
+- Yeastar permite consultar llamadas y minutos hablados, pero el costo de la
+  transcripción generada por una llave de OpenAI configurada en la PBX no se
+  calcula ni se cobra aquí. El análisis posterior que NexoOmni ejecute con IA
+  sí se cobra como uso de IA.
+- La conversión de minutos a créditos depende del FIX de Banxico. La
+  aplicación requiere `BANXICO_API_TOKEN` configurado como variable de entorno
+  en el servidor; no lo compartas en el chat ni lo guardes en el repositorio.
 - Las recargas se registran manualmente. El cobro automático con Stripe aún
   no está conectado.
 - Zernio agrupa las llamadas por número y las vincula a un cliente solo cuando
   su perfil permite identificarlo sin ambigüedad. Las llamadas que no se pueden
   asignar aparecen aparte y no se suman a un cliente. El resumen mensual usa
   el calendario UTC.
-- El cargo de Zernio y el cargo informativo de Meta se muestran en columnas
-  separadas; el segundo no es un cargo que Zernio facture. Estos importes son
-  informativos y no se descuentan de los créditos.
+- El cargo de Zernio se usa para calcular el débito de conexión. El importe
+  informativo de Meta se mantiene separado; no se descuenta de los créditos.
 - Yeastar muestra llamadas, minutos hablados y llamadas con transcripción.
   El costo de transcripción todavía no está conciliado, por lo que no se
   calcula ni se cobra.
 
 ## Preguntas frecuentes
 
-**¿Por qué el saldo no cambia cuando el cliente usa IA?**
+**¿Por qué cambia el saldo cuando se usa IA?**
 
-El sistema registra estimaciones, pero todavía no realiza débitos reales.
-El panel lo indica para evitar confundir saldo acreditado con saldo disponible
-después del consumo.
+Cada uso de IA cuyo proveedor devuelve tokens y tiene precio configurado se
+registra y debita de forma atómica. El historial de movimientos permite
+consultar el débito correspondiente.
 
-**¿El costo mostrado coincide exactamente con OpenAI o Anthropic?**
+**¿El débito coincide exactamente con la factura de OpenAI o Anthropic?**
 
-No necesariamente. Es un cálculo interno con el uso registrado y los precios
-configurados. Para conciliar el gasto real, compara estos datos con la factura
-del proveedor y asegúrate de que todos los modelos tengan precio configurado.
+El débito se calcula con los tokens reportados y el precio vigente configurado
+para el modelo. La conciliación automática con la factura del proveedor aún no
+está disponible; compara los datos con el panel de OpenAI o Anthropic.
+
+**¿El sistema bloquea la IA cuando el saldo llega a cero?**
+
+No. El saldo puede quedar negativo hasta que se registre una recarga.
 
 **¿Puede un cliente ver qué proveedor o modelo se utilizó?**
 

@@ -223,7 +223,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       .select(ANALYSIS_COLUMNS)
       .single()
     if (error) throw error
-    void logAiUsage(admin, { accountId, conversationId, mode: 'analysis', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
+    await logAiUsage(admin, { accountId, conversationId, mode: 'analysis', provider: result.provider, model: result.model, latencyMs: result.latencyMs, usage: result.usage })
     if (qaPolicy?.analysis_auto_route_enabled && insights.handoff_required && recommendedQueueId) {
       await routeConversationToQueue(admin, accountId, conversationId, recommendedQueueId)
     }

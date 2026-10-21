@@ -4,23 +4,20 @@ import { chunkText } from './chunk';
 import { EMBEDDING_MODEL, embedTexts, toVectorLiteral } from './embeddings';
 import { supabaseAdmin } from './admin-client';
 import { logAiUsage } from './usage';
+import { AiBillingError } from './billing-config';
 
 // Embeddings run under whichever client the caller holds (often RLS-scoped),
 // but usage rows can only be written by the service role.
 function embeddingUsageReporter(accountId: string) {
-  return (usage: AiUsage) => {
-    try {
-      void logAiUsage(supabaseAdmin(), {
-        accountId,
-        conversationId: null,
-        mode: 'embeddings',
-        provider: 'openai',
-        model: EMBEDDING_MODEL,
-        usage,
-      });
-    } catch (err) {
-      console.error('[ai knowledge] embedding usage not recorded:', err);
-    }
+  return async (usage: AiUsage) => {
+    await logAiUsage(supabaseAdmin(), {
+      accountId,
+      conversationId: null,
+      mode: 'embeddings',
+      provider: 'openai',
+      model: EMBEDDING_MODEL,
+      usage,
+    });
   };
 }
 
@@ -151,6 +148,7 @@ export async function retrieveKnowledge(
         }
       }
     } catch (err) {
+      if (err instanceof AiBillingError) throw err;
       console.error(
         '[ai knowledge] semantic retrieval failed, falling back to FTS:',
         err

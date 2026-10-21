@@ -233,12 +233,7 @@ export async function dispatchInboundToAiReply(
         messages,
       });
 
-    // Record token spend for the account. Fire-and-forget so it
-    // never adds latency to the customer-facing send: `logAiUsage`
-    // swallows its own errors, so the floating promise can't reject.
-    // Logged regardless of handoff — the provider call happened either
-    // way.
-    void logAiUsage(db, {
+    await logAiUsage(db, {
       accountId,
       conversationId,
       mode: 'auto_reply',

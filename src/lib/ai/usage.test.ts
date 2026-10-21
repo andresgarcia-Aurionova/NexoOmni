@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { logAiUsage } from './usage';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logAiUsage } from './usage';
+import { resolveUsageBilling } from './billing-config';
 
 const { mockSupabaseAdmin } = vi.hoisted(() => ({
   mockSupabaseAdmin: vi.fn(),
@@ -10,16 +11,35 @@ vi.mock('./admin-client', () => ({
   supabaseAdmin: mockSupabaseAdmin,
 }));
 
-function fakeDb() {
-  const insert = vi.fn().mockResolvedValue({ error: null });
-  const db = { from: vi.fn(() => ({ insert })) };
+vi.mock('./billing-config', () => ({
+  AiBillingError: class extends Error {},
+  resolveUsageBilling: vi.fn(),
+}));
+
+function fakeDb(
+  rpcResult: { data: unknown; error: unknown } = {
+    data: [{ result: 'debited' }],
+    error: null,
+  }
+) {
+  const rpc = vi.fn().mockResolvedValue(rpcResult);
+  const db = { rpc } as unknown as SupabaseClient;
   mockSupabaseAdmin.mockReturnValue(db);
-  return { db: db as unknown as SupabaseClient, insert, from: db.from };
+  return { db, rpc };
 }
 
 describe('logAiUsage', () => {
-  it('inserts a row mapping normalized usage to the log columns', async () => {
-    const { db, insert, from } = fakeDb();
+  beforeEach(() => {
+    vi.mocked(resolveUsageBilling).mockResolvedValue({
+      mode: 'enforced',
+      costNanoUsd: BigInt(100),
+      priceNanoUsd: BigInt(200),
+      creditsCharged: BigInt(1),
+    });
+  });
+
+  it('atomically records normalized provider usage and the charge', async () => {
+    const { db, rpc } = fakeDb();
     await logAiUsage(db, {
       accountId: 'acct-1',
       conversationId: 'conv-1',
@@ -28,142 +48,59 @@ describe('logAiUsage', () => {
       model: 'claude-x',
       latencyMs: 250,
       usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
+      billingIdempotencyKey: 'request-1',
     });
-    expect(from).toHaveBeenCalledWith('ai_usage_log');
-    expect(insert).toHaveBeenCalledWith({
-      account_id: 'acct-1',
-      conversation_id: 'conv-1',
-      mode: 'auto_reply',
+
+    expect(resolveUsageBilling).toHaveBeenCalledWith(db, {
       provider: 'anthropic',
       model: 'claude-x',
-      latency_ms: 250,
-      prompt_tokens: 30,
-      completion_tokens: 6,
-      total_tokens: 36,
-    });
-  });
-
-  it('is a no-op when the provider reported no usage', async () => {
-    const { db, from } = fakeDb();
-    await logAiUsage(db, {
-      accountId: 'acct-1',
-      conversationId: null,
-      mode: 'draft',
-      provider: 'openai',
-      model: 'gpt-x',
-      usage: null,
-    });
-    expect(from).not.toHaveBeenCalled();
-  });
-
-  it('preserves token logging if migration 150 is not applied', async () => {
-    const insert = vi
-      .fn()
-      .mockResolvedValueOnce({
-        error: {
-          code: 'PGRST204',
-          message: "Could not find the 'latency_ms' column in the schema cache",
-        },
-      })
-      .mockResolvedValueOnce({ error: null });
-    const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
-    mockSupabaseAdmin.mockReturnValue(db);
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await logAiUsage(db, {
-      accountId: 'acct-1',
-      conversationId: null,
-      mode: 'analysis',
-      provider: 'openai',
-      model: 'gpt-x',
-      latencyMs: 250,
       usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
     });
-
-    expect(insert).toHaveBeenCalledTimes(2);
-    expect(insert.mock.calls[0][0]).toHaveProperty('latency_ms', 250);
-    expect(insert.mock.calls[1][0]).not.toHaveProperty('latency_ms');
-    expect(warning).toHaveBeenCalledOnce();
-    warning.mockRestore();
-  });
-
-  it('stores integer billing amounts as decimal strings', async () => {
-    const { db, insert } = fakeDb();
-    await logAiUsage(db, {
-      accountId: 'acct-1',
-      conversationId: null,
-      mode: 'analysis',
-      provider: 'openai',
-      model: 'gpt-x',
-      usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 },
-      billing: {
-        mode: 'shadow',
-        costNanoUsd: BigInt(1_234_567),
-        priceNanoUsd: BigInt(2_469_134),
-        creditsCharged: BigInt(3),
-      },
+    expect(rpc).toHaveBeenCalledWith('record_ai_usage_and_debit', {
+      p_account_id: 'acct-1',
+      p_conversation_id: 'conv-1',
+      p_mode: 'auto_reply',
+      p_provider: 'anthropic',
+      p_model: 'claude-x',
+      p_prompt_tokens: 30,
+      p_completion_tokens: 6,
+      p_total_tokens: 36,
+      p_latency_ms: 250,
+      p_cost_nano_usd: '100',
+      p_price_nano_usd: '200',
+      p_credits: '1',
+      p_idempotency_key: 'request-1',
     });
-
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cost_nano_usd: '1234567',
-        price_nano_usd: '2469134',
-        credits_charged: '3',
-        billing_mode: 'shadow',
-      })
-    );
   });
 
-  it('preserves token logging when migration 151 is not applied', async () => {
-    const insert = vi
-      .fn()
-      .mockResolvedValueOnce({
-        error: {
-          code: 'PGRST204',
-          message:
-            "Could not find the 'billing_mode' column in the schema cache",
-        },
-      })
-      .mockResolvedValueOnce({ error: null });
-    const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
-    mockSupabaseAdmin.mockReturnValue(db);
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await logAiUsage(db, {
-      accountId: 'acct-1',
-      conversationId: null,
-      mode: 'analysis',
-      provider: 'openai',
-      model: 'gpt-x',
-      usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
-      billing: {
-        mode: 'shadow',
-        costNanoUsd: BigInt(10),
-        priceNanoUsd: BigInt(20),
-        creditsCharged: BigInt(1),
-      },
-    });
-
-    expect(insert).toHaveBeenCalledTimes(2);
-    expect(insert.mock.calls[1][0]).not.toHaveProperty('billing_mode');
-    expect(insert.mock.calls[1][0]).toHaveProperty('latency_ms', null);
-    expect(warning).toHaveBeenCalledOnce();
-    warning.mockRestore();
-  });
-
-  it('never throws when the insert errors', async () => {
-    const insert = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
-    const db = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
-    mockSupabaseAdmin.mockReturnValue(db);
+  it('does not claim success when the provider omitted usage', async () => {
+    const { db, rpc } = fakeDb();
     await expect(
       logAiUsage(db, {
         accountId: 'acct-1',
-        conversationId: 'conv-1',
+        conversationId: null,
         mode: 'draft',
         provider: 'openai',
         model: 'gpt-x',
-        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        usage: null,
       })
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('did not include billable usage');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('surfaces database failures instead of swallowing unbilled usage', async () => {
+    const { db } = fakeDb({ data: null, error: new Error('database unavailable') });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      logAiUsage(db, {
+        accountId: 'acct-1',
+        conversationId: null,
+        mode: 'analysis',
+        provider: 'openai',
+        model: 'gpt-x',
+        usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
+      })
+    ).rejects.toThrow('AI usage could not be charged');
+    errorLog.mockRestore();
   });
 });

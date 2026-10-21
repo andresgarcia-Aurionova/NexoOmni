@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         handoffAgentId: null,
         embeddingsApiKey: null,
         timezone: 'America/Mexico_City',
-      })
+      }, accountId)
     } catch (error) {
       if (error instanceof AiError) {
         return NextResponse.json(

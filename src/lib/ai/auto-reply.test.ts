@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   buildConversationContext: vi.fn(),
   retrieveKnowledge: vi.fn(),
   generateReply: vi.fn(),
+  logAiUsage: vi.fn(),
   engineSendText: vi.fn(),
   sendOmnichannelText: vi.fn(),
   state: {
@@ -23,6 +24,7 @@ vi.mock('./config', () => ({ loadAiConfig: h.loadAiConfig }))
 vi.mock('./context', () => ({ buildConversationContext: h.buildConversationContext }))
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
 vi.mock('./generate', () => ({ generateReply: h.generateReply }))
+vi.mock('./usage', () => ({ logAiUsage: h.logAiUsage }))
 vi.mock('@/lib/flows/meta-send', () => ({ engineSendText: h.engineSendText }))
 vi.mock('@/lib/omnichannel/outbound-text', () => ({ sendOmnichannelText: h.sendOmnichannelText }))
 vi.mock('./admin-client', () => ({
@@ -108,7 +110,16 @@ beforeEach(() => {
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
   h.retrieveKnowledge.mockResolvedValue([])
-    h.generateReply.mockResolvedValue({ text: 'Hello!', handoff: false, handoffQueue: null })
+  h.generateReply.mockResolvedValue({
+    text: 'Hello!',
+    handoff: false,
+    handoffQueue: null,
+    usage: { promptTokens: 4, completionTokens: 2, totalTokens: 6 },
+    provider: 'openai',
+    model: 'gpt-test',
+    latencyMs: 10,
+  })
+  h.logAiUsage.mockResolvedValue(undefined)
   h.engineSendText.mockResolvedValue({ whatsapp_message_id: 'm1' })
   h.sendOmnichannelText.mockResolvedValue({ external_message_id: 'internal-1', message_id: 'zernio:out:conn:internal-1' })
 })
@@ -125,6 +136,15 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.engineSendText).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-1', text: 'Hello!' }),
     )
+    expect(h.logAiUsage).toHaveBeenCalledWith(expect.anything(), {
+      accountId: ARGS.accountId,
+      conversationId: ARGS.conversationId,
+      mode: 'auto_reply',
+      provider: 'openai',
+      model: 'gpt-test',
+      latencyMs: 10,
+      usage: { promptTokens: 4, completionTokens: 2, totalTokens: 6 },
+    })
   })
 
   it('sends connected WhatsApp AI replies through its connector, not direct Meta', async () => {

@@ -1,45 +1,37 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { isUniqueViolation } from '@/lib/contacts/dedupe';
+import { loadBanxicoFix } from '@/lib/billing/banxico-fx';
 import {
   calculateCallCharge,
   parseCallEnded,
   type CallBillingSettings,
 } from './call-billing';
 
-type BillingMode = 'off' | 'shadow' | 'enforced';
-
 async function loadSettings(
   db: SupabaseClient
-): Promise<(CallBillingSettings & { mode: BillingMode }) | null> {
+): Promise<CallBillingSettings> {
   const { data, error } = await db
     .from('ai_billing_settings')
     .select(
-      'billing_mode,target_margin_basis_points,nano_usd_per_credit,call_minute_price_mxn_centavos,mxn_per_usd_micro'
+      'billing_mode,target_margin_basis_points,nano_usd_per_credit,call_minute_price_mxn_centavos'
     )
     .eq('id', true)
     .maybeSingle();
-  if (error || !data) {
-    console.error('[zernio calls] could not read billing settings:', error);
-    return null;
+  if (error) throw error;
+  if (!data || data.billing_mode !== 'enforced') {
+    throw new Error('Call usage billing is not enabled.');
   }
   return {
-    mode: data.billing_mode as BillingMode,
     targetMarginBasisPoints: BigInt(String(data.target_margin_basis_points)),
     nanoUsdPerCredit: BigInt(String(data.nano_usd_per_credit)),
     minutePriceMxnCentavos: BigInt(String(data.call_minute_price_mxn_centavos)),
-    mxnPerUsdMicro:
-      data.mxn_per_usd_micro === null || data.mxn_per_usd_micro === undefined
-        ? null
-        : BigInt(String(data.mxn_per_usd_micro)),
+    mxnPerUsdMicro: null,
   };
 }
 
 /**
- * Records one WhatsApp call from Zernio's `call.ended` webhook, attributed to
- * the tenant that owns the connected WhatsApp number. Measurement only: no
- * wallet is debited. Calls from numbers we cannot tie to a connector are
- * skipped, and redelivery of the same call is ignored.
+ * Bills one WhatsApp call from Zernio's `call.ended` webhook. The RPC writes
+ * the usage row and ledger debit atomically, with the stable call id as the
+ * idempotency key.
  */
 export async function recordCallEnded(
   db: SupabaseClient,
@@ -48,8 +40,7 @@ export async function recordCallEnded(
 ) {
   const call = parseCallEnded(event);
   if (!call) {
-    console.warn('[zernio calls] call.ended payload is missing required fields.');
-    return;
+    throw new Error('Zernio call.ended payload is missing required billing fields.');
   }
 
   const { data: connector, error: connectorError } = await db
@@ -62,30 +53,46 @@ export async function recordCallEnded(
   if (!connector) return;
 
   const settings = await loadSettings(db);
-  if (!settings) return;
-  const charge = calculateCallCharge(call, settings);
+  const fx = await loadBanxicoFix(db);
+  const callSettings = { ...settings, mxnPerUsdMicro: fx.mxnPerUsdMicro };
+  const charge = calculateCallCharge(call, callSettings);
+  if (charge.minutePriceNanoUsd === null || charge.minuteCredits === null) {
+    throw new Error('Banxico exchange rate is required to bill call minutes.');
+  }
 
-  const { error } = await db.from('call_usage_log').insert({
-    account_id: connector.account_id,
-    connector_id: connector.id,
-    zernio_call_id: call.callId,
-    zernio_event_id: eventId,
-    zernio_account_id: call.zernioAccountId,
-    phone_number_id: call.phoneNumberId,
-    direction: call.direction,
-    end_reason: call.endReason,
-    started_at: call.startedAt,
-    ended_at: call.endedAt,
-    duration_seconds: call.durationSeconds,
-    billable_minutes: charge.billableMinutes,
-    zernio_cost_nano_usd: call.zernioCostNanoUsd.toString(),
-    meta_cost_nano_usd: call.metaCostNanoUsd.toString(),
-    connection_price_nano_usd: charge.connectionPriceNanoUsd.toString(),
-    connection_credits: charge.connectionCredits.toString(),
-    minute_price_mxn_centavos: Number(settings.minutePriceMxnCentavos),
-    mxn_per_usd_micro: settings.mxnPerUsdMicro?.toString() ?? null,
-    minute_credits: charge.minuteCredits?.toString() ?? null,
-    billing_mode: settings.mode,
+  const totalCredits = charge.connectionCredits + charge.minuteCredits;
+  const totalPriceNanoUsd =
+    charge.connectionPriceNanoUsd + charge.minutePriceNanoUsd;
+  const { data, error } = await db.rpc('record_whatsapp_call_and_debit', {
+    p_account_id: connector.account_id,
+    p_connector_id: connector.id,
+    p_call_id: call.callId,
+    p_event_id: eventId,
+    p_zernio_account_id: call.zernioAccountId,
+    p_phone_number_id: call.phoneNumberId,
+    p_direction: call.direction,
+    p_end_reason: call.endReason,
+    p_started_at: call.startedAt,
+    p_ended_at: call.endedAt,
+    p_duration_seconds: call.durationSeconds,
+    p_billable_minutes: charge.billableMinutes,
+    p_zernio_cost_nano_usd: call.zernioCostNanoUsd.toString(),
+    p_meta_cost_nano_usd: call.metaCostNanoUsd.toString(),
+    p_connection_price_nano_usd: charge.connectionPriceNanoUsd.toString(),
+    p_connection_credits: charge.connectionCredits.toString(),
+    p_minute_price_mxn_centavos: Number(settings.minutePriceMxnCentavos),
+    p_mxn_per_usd_micro: fx.mxnPerUsdMicro.toString(),
+    p_minute_price_nano_usd: charge.minutePriceNanoUsd.toString(),
+    p_minute_credits: charge.minuteCredits.toString(),
+    p_total_credits: totalCredits.toString(),
+    p_total_price_nano_usd: totalPriceNanoUsd.toString(),
   });
-  if (error && !isUniqueViolation(error)) throw error;
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : null;
+  if (
+    !result ||
+    !['debited', 'duplicate', 'recorded'].includes(result.result)
+  ) {
+    throw new Error('The database did not confirm the WhatsApp call debit.');
+  }
 }

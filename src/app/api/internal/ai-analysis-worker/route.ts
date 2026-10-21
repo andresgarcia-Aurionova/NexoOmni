@@ -499,8 +499,8 @@ async function analyzeMedia(
     bytes,
     mimeType,
     timeoutMs: aiRequestTimeoutMs(),
-    onUsage: ({ model, usage }: { model: string; usage: AiUsage }) => {
-      void logAiUsage(db, {
+    onUsage: async ({ model, usage }: { model: string; usage: AiUsage }) => {
+      await logAiUsage(db, {
         accountId: job.account_id,
         conversationId: job.conversation_id,
         mode: task,

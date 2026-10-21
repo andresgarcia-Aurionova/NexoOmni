@@ -1,18 +1,18 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **Fases 0, 1, 2 y B1 implementadas. El usuario confirmó que la migración 155 está aplicada y que sus permisos y copia de credenciales se validaron en producción; el despliegue de la aplicación B2 no está confirmado. Fase 2c implementada localmente; falta aplicar la migración 156 y validar datos reales de Zernio/Yeastar.**
+Estado: **Fases 0, 1, 2 y B1 implementadas. El usuario confirmó que la migración 155 está aplicada y que sus permisos y copia de credenciales se validaron en producción; el despliegue de la aplicación B2 no está confirmado. La medición 2c y el cobro estricto de IA/llamadas están implementados localmente; las migraciones 156–158 y el código aún requieren validación y despliegue.**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
 
 ### Estado de ejecución
 
 - Fase 0: línea base agregada y exportaciones de OpenAI recibidas. Falta evaluar 50–100 casos anonimizados; `scripts/sql/ai-quality-sample.sql` prepara una muestra con redacción parcial, que requiere revisión humana antes de compartirla.
 - Fase 1: catálogo y enrutamiento por tarea implementados con `AI_TASK_ROUTING_ENABLED=false` por defecto. Los candidatos nuevos no se activan hasta aprobar la evaluación.
-- Fase 2: migración `151_ai_credit_wallet.sql` y cálculo entero en nanodólares publicados en `main`. `billing_mode` queda en `off`; todavía no se cobra ni se bloquea IA.
-- Fase 2, modo sombra: `logAiUsage` calcula costo, precio y créditos de cada llamada con `ai_billing_settings` y `ai_model_prices` (caché de 60 s) y los guarda en `ai_usage_log`, sin tocar saldos. Solo actúa con `billing_mode = 'shadow'`; con `off` no registra nada y `enforced` aún no está implementado (no registra nada). Un modelo sin precio se omite con un aviso. La migración `152_ai_model_prices_seed.sql` siembra solo precios oficiales verificados: `gpt-5.4-mini`, `gpt-6-luna`, `gpt-5.6-terra`, `claude-haiku-5-5` y `claude-sonnet-5-5`. Quedan sin precio `gpt-4.1-mini`, `gpt-5.6-sol`, `claude-haiku-4-5-20251001` (modelo por defecto de Anthropic) y los modelos de transcripción hasta confirmarlos en la página oficial. Para activarlo: `UPDATE ai_billing_settings SET billing_mode = 'shadow', updated_at = now();`.
+- Fase 2: la migración `151_ai_credit_wallet.sql` y el cálculo entero en nanodólares establecieron la billetera, precios y ledger. La implementación local de `158_enforced_usage_billing.sql` fija `billing_mode = 'enforced'`: el código valida el precio antes de llamar al proveedor y registra uso/débito atómicamente después de recibir los tokens. No hay modo sombra operativo. Todo modelo efectivo debe tener un precio vigente; si falta, la solicitud se bloquea antes de llamar al proveedor. Antes de producción hay que revisar especialmente los modelos fijados en código que no aparecen en los precios sembrados: `gpt-4.1-mini`, `gpt-5.6-sol`, `claude-haiku-4-5-20251001`, los modelos de transcripción y embeddings.
+- Cobro real (local, migración 158): se aceptan saldos negativos hasta una recarga, como aprobó el usuario; no se corta la IA al llegar a cero. La prueba de credenciales también consume créditos. Si no se confirma el débito, el resultado no se entrega. La conversión de llamadas usa Banxico SIE serie SF43718 mediante `BANXICO_API_TOKEN` en el servidor.
 - Fase A de cobertura: se registran los tokens reportados de transcripciones de notas de voz, análisis de imágenes y embeddings, además de las tareas de texto existentes. La transcripción Yeastar de llamadas sigue pendiente.
-- Fase B1: el panel interno permite registrar abonos manuales idempotentes y consultar saldos, movimientos y uso mensual estimado por cliente. La migración `154_platform_ai_credit_management.sql` añade la operación SQL segura. Esto **no** descuenta créditos todavía; Stripe queda para la fase de pagos y el débito real requiere la fase E.
+- Fase B1: el panel interno permite registrar abonos manuales idempotentes y consultar saldos, movimientos y uso mensual por cliente. La migración `154_platform_ai_credit_management.sql` añade la operación SQL segura. Con la migración 158, IA y llamadas de WhatsApp ya generan débitos efectivos; Stripe aún no está conectado y las recargas se hacen desde el panel.
 - Fase B2: el panel interno administra y verifica llaves OpenAI y Anthropic por tenant; el cliente conserva los ajustes de comportamiento, pero no recibe proveedor, modelo ni credenciales. El usuario confirmó en producción que la migración `155_platform_ai_provider_credentials.sql` existe, que los permisos esperados se aplican y que no faltan llaves de chat ni embeddings. El despliegue de la aplicación no está confirmado. Guardar Anthropic no cambia el proveedor activo ni habilita el enrutamiento automático. `AI_TASK_ROUTING_ENABLED` sigue apagado hasta aprobar la evaluación ciega.
-- Fase 2c (local): el panel interno consulta las llamadas Zernio del mes calendario UTC por número y las atribuye al tenant solo cuando la relación número → `profileId` → `zernio_profiles.account_id` es única. Llamadas sin relación única quedan en un total separado, sin atribución conjeturada. Se muestran por separado `billableUSD` de Zernio y `metaUSD` informativo de Meta; ninguno se descuenta de créditos. Yeastar muestra llamadas, minutos hablados y transcripciones por tenant desde `yeastar_call_transcriptions`; el costo de la transcripción continúa sin conciliar y no se calcula ni cobra. La migración nueva `156_platform_yeastar_call_usage.sql` añade una agregación mensual restringida a `service_role`. Falta aplicarla en desarrollo, desplegar el código y verificar el mes real contra Zernio y los CDR de Yeastar.
+- Fase 2c y cobro de llamadas (local): el panel interno consulta las llamadas Zernio por tenant. `call.ended` registra cada llamada y debita idempotentemente el `billableCostUSD` de Zernio con margen del 50 % (×2), más MXN $0.50 por minuto iniciado de llamadas contestadas. El FIX se obtiene de Banxico; `metaUSD` es informativo y nunca se debita. Las llamadas/minutos de Yeastar siguen visibles como medición; el costo de transcripción que Yeastar obtiene con su propia llave OpenAI no es observable ni se cobra aquí. Las migraciones 156–158 están pendientes de validación/aplicación y el código local de despliegue.
 - Función futura separada de 2c: configurar desde NexoOmni el enrutamiento de llamadas de WhatsApp conectadas por OAuth de Zernio hacia Yeastar. La documentación de Zernio describe `GET/POST/PATCH /v1/phone-numbers/{id}/whatsapp/calling` y los eventos de llamada, pero aún se debe confirmar que los números conectados por OAuth sean elegibles para activar esa API y definir el destino SIP real de Yeastar. No se habilita ni configura el enrutamiento en esta fase.
 - El fallback entre OpenAI y Anthropic queda pendiente: cada `ai_configs` solo contiene una llave/proveedor; no se debe intentar el otro proveedor sin credencial y autorización de gasto.
 
@@ -23,10 +23,10 @@ Fecha de la investigación de precios y modelos: 19-oct-2026.
 | Proveedor                                | Uno por cuenta (OpenAI **o** Anthropic) en `ai_configs`. Código: `src/lib/ai/generate.ts`, `providers/openai.ts`, `providers/anthropic.ts`.                                                                                                        |
 | Llaves                                   | La aplicación conserva compatibilidad con las llaves cifradas anteriores. Las nuevas llaves se administran desde el panel interno y se guardan cifradas por tenant en `ai_provider_credentials`; el navegador del cliente no puede leer ni escribir secretos. |
 | Modelos por defecto                      | `gpt-5.4-mini` / `claude-haiku-4-5-20251001` (`src/lib/ai/defaults.ts`). Imagen `gpt-4.1-mini` y voz `gpt-4o-mini-transcribe` están **fijos en código** (`config.ts`, `media-analysis.ts`, worker `ai-analysis-worker/route.ts`, `ai-config.tsx`). |
-| Consumo                                  | `ai_usage_log` guarda tokens y modelo, **sin costo ni precio**.                                                                                                                                                                                    |
+| Consumo                                  | IA: `ai_usage_log` conserva tokens, costo y precio; `ai_credit_ledger` confirma el débito atómico. Llamadas WhatsApp: `call_usage_log` y el mismo ledger.                                                                                           |
 | Asistente de chat / reportes a la medida | No existen.                                                                                                                                                                                                                                        |
-| Facturación                              | `account_subscriptions` + `entitlements.ts` (planes `ai`, `yeastar_voice`, `whatsapp_voice`). No hay cobro por uso.                                                                                                                                |
-| Migración                                | La última aplicada y validada por el usuario en producción es la **155**; el repositorio ahora incluye la nueva **156**, todavía pendiente de aplicar y validar.                                                                                   |
+| Facturación                              | Las migraciones locales 156–158 habilitan medición Yeastar y cobro estricto de IA/llamadas WhatsApp. Las recargas son manuales; Stripe y el panel de consumo para clientes siguen pendientes.                                                      |
+| Migración                                | La última aplicación confirmada por el usuario en producción es la **155**. Las migraciones **156, 157 y 158** deben validarse y aplicarse en orden antes de desplegar este cambio.                                                               |
 
 ## 2. Modelos vigentes y precios oficiales (USD por 1M tokens)
 
@@ -95,7 +95,7 @@ Ejemplo mensual de una cuenta mediana (3,000 auto-respuestas, 1,500 análisis, 2
 precio al cliente = costo real / (1 − 0.50) = costo real × 2
 ```
 
-Esto aplica a **todo** consumo (IA, minutos de llamada, transcripción): **el multiplicador vigente es ×2**; se guarda en `ai_billing_settings` (no en código).
+En IA y en el costo de conexión Zernio, el objetivo de margen del 50 % equivale a ×2 y se guarda en `ai_billing_settings`. Los minutos WhatsApp usan la tarifa fija configurada de MXN $0.50 por minuto iniciado; no se les vuelve a aplicar ×2. La transcripción generada por una llave externa configurada en Yeastar no se cobra porque NexoOmni no recibe su uso/costo.
 
 **Unidad de crédito (interpretación del ejemplo del cliente):** US$1 de compra = **1,000 créditos**; por tanto **1 crédito = US$0.001 de precio = US$0.0005 de costo real**. El crédito es una unidad de _dinero_, no de tokens: los tokens valen distinto en cada modelo, así que "1,000 tokens por dólar" no puede ser fijo.
 
@@ -122,15 +122,13 @@ Esto aplica a **todo** consumo (IA, minutos de llamada, transcripción): **el mu
 | gpt-5.6-terra                    | 250               | 42               | 4,000 / 24,000 créditos                   |
 | gpt-5.4-mini (referencia actual) | 667               | 111              | 1,500 / 9,000 créditos                    |
 
-Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna cuesta US$0.0007, se cobra US$0.0014 = **1.4 créditos**; con US$50 alcanzan ≈ **35,714** respuestas.
+Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna cuesta aproximadamente US$0.0007. El precio calculado es US$0.0014; como el sistema factura créditos enteros redondeando hacia arriba, se debitan **2 créditos**. El número de respuestas por paquete debe estimarse con ese redondeo por solicitud.
 
 **Aritmética sin margen de error (implementación):**
 
-- Todo en **enteros**, nunca `float`: precios del proveedor en **micro-USD por millón de tokens** (Luna: 100,000 entrada / 500,000 salida).
-- `costo_micro = CEIL((tokens_in × precio_in + tokens_out × precio_out) / 1,000,000)` — se redondea **hacia arriba**, a favor de la plataforma, una sola vez por llamada.
-- `precio_micro = costo_micro × 2`; `créditos = precio_micro / 1,000` (se guarda en micro-USD; la pantalla muestra créditos con 3 decimales).
-- Se guarda por llamada: tokens, precio unitario usado, versión de precios, tipo de cambio y ambos importes, para poder auditar cualquier cobro.
-- Pruebas unitarias con casos fijos (el ejemplo de arriba: 4,000/600 en Luna ⇒ costo 700, precio 1,400 micro-USD).
+- Todo en **enteros**, nunca `float`: el código calcula costo/precio en nanodólares usando los precios por millón de tokens configurados.
+- El costo de tokens y el precio se redondean hacia arriba. Los créditos se calculan con la equivalencia configurada (por defecto, 1 crédito = US$0.001 de precio) y también se redondean hacia arriba a créditos enteros.
+- Se guarda por llamada el uso reportado, modo, proveedor/modelo, costo/precio calculado y débito asociado en el ledger; la conciliación automática contra reportes de OpenAI/Anthropic aún no está implementada.
 
 **Lo que la regla ×2 NO incluye** (hay que decidir si se traslada al cliente): comisión de la pasarela (f), IVA, pérdida por tipo de cambio y costos fijos. Si la pasarela cobra f, el margen neto sobre lo que realmente recibes baja: con f = 4 %, un paquete de US$50 deja 50 − 2 − 25 = **US$23** (no 25). Para conservar US$25 netos el paquete debe costar `2 × costo / (1 − f)` = **US$52.08** por los mismos 50,000 créditos. Y como el cliente paga en MXN, el precio del paquete en pesos debe calcularse con el FIX del día más un colchón (p. ej. 2 %) para no perder por variación cambiaria. Los créditos quedan fijos en USD; solo el precio en pesos se recalcula.
 
@@ -140,27 +138,26 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 
 ### 5.1 Unidad
 
-- Contabilidad interna en **micro-USD** (`bigint`, 1 = US$0.000001) → exacto, sin redondeos acumulados.
-- Se muestra al cliente en **créditos**: propuesta **1 crédito = US$0.001 de precio al cliente** (una auto-respuesta ≈ 1 crédito; una consulta con datos ≈ 78; un reporte ≈ 135). Equivalente en MXN al tipo de cambio de la compra.
+- Contabilidad de costos en nanodólares enteros (`bigint`); los saldos son créditos enteros. La configuración vigente por defecto equivale a **1 crédito = US$0.001 de precio al cliente**. La interfaz de consumo todavía es interna para el operador de plataforma.
 - Paquetes de ejemplo (a confirmar): 5,000 / 20,000 / 100,000 créditos.
 
 ### 5.2 Tablas (migraciones nuevas ≥ 150, una por cambio)
 
-- `ai_model_pricing`: modelo, proveedor, `input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, vigencia, versión. Los precios cambian: **no van en código**.
-- `ai_billing_settings`: multiplicador, tipo de cambio USD→MXN (con fecha/fuente), margen de seguridad.
-- `ai_credit_wallets`: `account_id` PK, saldo en micro-USD, umbral de aviso, modo (`byo` | `credits`).
+- `ai_model_prices`: modelo/proveedor, precio de entrada y salida, fecha de vigencia. Los precios cambian: **no van en código**.
+- `ai_billing_settings`: modo de cobro, margen, equivalencia de crédito y FIX de Banxico (con fecha/fuente).
+- `ai_credit_wallets`: saldo de créditos por cuenta; los saldos negativos se permiten hasta que se registre una recarga.
 - `ai_credit_ledger` (solo inserción): compra, consumo, reembolso, ajuste, regalo, vencimiento; `idempotency_key` único; `balance_after`.
 - `ai_credit_packs`: catálogo de paquetes.
-- Extender `ai_usage_log` (el `CHECK` de `mode` se redefinió en las migraciones 039, 071 y 087: partir de la **087**, la más reciente, y agregar los modos nuevos como `assistant` sin perder los existentes): agregar `task`, `cost_micro`, `price_micro`, `fx_rate`, `pricing_version`, `billed`. La migración 150 agrega `latency_ms` para la línea base de rendimiento.
-- Función SQL `ai_credit_debit(...)` `SECURITY DEFINER` con bloqueo de fila: valida saldo y descuenta en una sola transacción. Para llamadas largas (asistente/reportes): **reservar** el máximo estimado y **liquidar** con el uso real.
+- `ai_usage_log` registra costo/precio y la clave de idempotencia; `call_usage_log` conserva costo de conexión, minutos y estado del débito de cada llamada WhatsApp.
+- Funciones SQL `SECURITY DEFINER` restringidas a `service_role` registran uso y débito en una transacción idempotente. No se reserva saldo antes de IA: el costo real se conoce con los tokens devueltos por el proveedor.
 - RLS: wallet y ledger legibles para `supervisor+` de la cuenta; **escritura solo con service role** (se documenta con comentario en la migración para que no parezca un olvido).
 
 ### 5.3 Flujo de cada llamada de IA
 
-1. `generateForTask(task, ctx)` resuelve el candidato del catálogo para el proveedor activo y su llave obtenida desde el almacén de servidor. El cliente no selecciona proveedor/modelo ni recibe credenciales. El segundo proveedor queda guardado, pero no se usa automáticamente hasta aprobar la evaluación.
-2. Revisa saldo → llama al proveedor → calcula costo real con tokens reportados → debita → registra en `ai_usage_log` y ledger.
-3. Sin saldo: auto-respuesta **entrega a un humano** (comportamiento seguro ya existente), análisis se pone en pausa/cola, asistente avisa y ofrece recargar. Nunca falla en silencio.
-4. Avisos de saldo bajo (80 % / 95 % / 0 %) vía el sistema de notificaciones (agregar el tipo nuevo hará fallar `tsc` en los `Record<NotificationType, …>` hasta completarlos — es la red de seguridad).
+1. Antes de llamar al proveedor se confirma que la facturación esté en `enforced` y exista un precio vigente para el proveedor/modelo; si falta cualquiera, se bloquea la solicitud.
+2. Tras la respuesta del proveedor, se exige el uso de tokens y se registra el costo/precio y el débito en una operación atómica e idempotente. La respuesta no se entrega si la base no confirma el registro/cobro.
+3. El saldo puede pasar a negativo hasta recargar; no hay corte por saldo cero. Las alertas automáticas por umbral y el panel de consumo para clientes todavía no están implementados.
+4. La prueba de credenciales también es facturable. Si falla la base después de una solicitud externa, la salida se bloquea, aunque el proveedor pudo haber cobrado su llamada.
 
 ### 5.4 Compra y cobro
 
@@ -171,7 +168,7 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 ### 5.5 Migración de clientes existentes (DECIDIDO: migran todos)
 
 - **Todos** los clientes pasan a llaves de la plataforma y créditos; se elimina el modo BYO. Consecuencias que hay que planear: (a) cada cliente necesita saldo inicial antes del corte o su IA se detiene; (b) las llaves BYO guardadas (`ai_configs.api_key`) dejan de usarse — se conservan cifradas unos días como respaldo y luego se borran de forma auditada; (c) comunicación previa al cliente, con fecha de corte.
-- Modo **sombra** 2 semanas antes del corte: se calcula y registra costo/precio sin debitar, para validar supuestos y mostrar al cliente su consumo estimado.
+- No habrá un periodo de modo sombra para este lanzamiento: la facturación queda en `enforced`. Los precios/modelos deben validarse antes del uso y las migraciones deben probarse en desarrollo antes de producción.
 - **Datos (DECIDIDO: aprobado):** los datos pasan por cuentas de Aurionova. Acciones: actualizar aviso de privacidad y términos, y revisar la retención/entrenamiento de datos de cada proveedor (solo lo documentado por ellos; no se asume).
 
 ## 6. Asistente por tenant ("Nexo Asistente")
@@ -248,9 +245,9 @@ Lo que ya existe en el repo y resuelve la atribución **sin depender de la clave
 ### Pantallas y alertas
 
 - **Cliente (supervisor/admin/owner):** saldo en créditos y en MXN estimado, consumo del mes por actividad (respuestas, análisis, llamadas, transcripción, asistente), proyección de agotamiento, historial de recargas.
-- **Alertas** (notificaciones del sistema + correo): **10 % restante** (la solicitada), y recomendadas 25 % y 0 %. Al llegar a 0: auto-respuesta se transfiere a humano, análisis en pausa y el asistente avisa; nunca falla en silencio.
+- **Alertas** (pendientes): aviso al **10 % restante** (el solicitado) y al agotarse; 25 % queda como umbral opcional. El saldo negativo está permitido hasta recargar, por lo que el aviso de 0 % no implica corte automático de IA.
 - **Super administrador (panel de plataforma):** consumo por tenant, margen real (precio cobrado − costo real conciliado), diferencias contra proveedores, llaves por tenant, tipo de cambio y precios vigentes, alta manual de créditos.
-- Conversión a pesos: tabla `ai_billing_settings` con FIX y fecha de captura (la fuente debe ser Banxico; **definir cómo se actualiza**: manual diario o API de Banxico con token).
+- Conversión a pesos: tabla `ai_billing_settings` guarda el FIX y su fecha; el código lo consulta a Banxico con `BANXICO_API_TOKEN` cuando procesa llamadas.
 
 ## 7. Fases (un PR pequeño por fase)
 
@@ -258,10 +255,10 @@ Lo que ya existe en el repo y resuelve la atribución **sin depender de la clave
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | 0    | Línea base: medianas/p95 de tokens y latencia por modo/modelo desde `ai_usage_log`; evaluación ciega de 50–100 casos anonimizados; conciliación de la transcripción de Yeastar con el uso real de OpenAI y confirmación de FX.                       | Ejecutar SQL en Supabase de desarrollo, informe de calidad/costo y decisión de modelos. |
 | 1    | Catálogo de modelos y `generateForTask`; rutas por tarea; salida registra proveedor, modelo y latencia; candidatos opt-in con `AI_TASK_ROUTING_ENABLED`. Fallback cruzado se aplaza hasta guardar/proveer ambas llaves.                              | Pruebas unitarias, `tsc`, `lint`; activar solo tras aprobar Fase 0.                     |
-| 2    | Precios, ajustes, wallet a saldo cero, ledger, débito atómico e idempotente, extensión de `ai_usage_log` y aritmética entera. La base admite `off` / `shadow` / `enforced`, con modo `off` por defecto hasta completar recargas y llaves por tenant. | Pruebas + aplicación y validación manual de RLS en base de desarrollo.                  |
+| 2    | Precios, wallet, ledger, débito atómico e idempotente, y aritmética entera. La migración 158 fuerza `enforced`, bloquea modelos sin precio y permite saldo negativo hasta recarga. | Pruebas + aplicación y validación manual de RLS en base de desarrollo.                  |
 | 2b   | Administración de llaves por tenant (panel de plataforma y `ai_provider_credentials`; migración 155). La conciliación diaria con OpenAI/Anthropic sigue pendiente.                                                                                   | Revisión humana (secretos/RLS); aplicación de migración en base de desarrollo.           |
-| 2c   | Resumen interno mensual de llamadas Zernio por número/tenant y de llamadas/minutos hablados Yeastar por tenant. Mostrar `billableUSD` Zernio y `metaUSD` por separado; no debitar créditos ni estimar el costo de transcripción.                  | Aplicar la migración 156 en desarrollo; verificar Zernio contra su factura y Yeastar contra CDR. Confirmar los números no asignados. |
-| 3    | Paquetes, compra (manual o pasarela), vencimiento mensual, pantalla de saldo/consumo, alertas 25/10/0 %, corte seguro sin saldo; manual.                                                                                                             | Revisión humana (facturación/RLS/legal).                                                |
+| 2c   | Resumen interno de llamadas Zernio/Yeastar por tenant y débito de WhatsApp: costo de conexión Zernio ×2 más MXN $0.50 por minuto iniciado contestado. Meta es informativo; no se factura al crédito. La transcripción externa de Yeastar no es cobrable con la telemetría actual. | Aplicar 156–158 en orden en desarrollo; cotejar Zernio con su reporte y Yeastar con CDR; probar duplicados de webhook y FIX. |
+| 3    | Compra por Stripe, vencimiento mensual, panel de saldo/consumo para clientes y alertas 10 %/agotado; el saldo puede seguir negativo hasta recarga y no hay corte automático por saldo cero. Manual actualizado. | Revisión humana (facturación/RLS/legal).                                                |
 | 3b   | Corte de clientes BYO → créditos: saldo inicial, aviso previo, retiro de llaves BYO.                                                                                                                                                                 | Plan de salida revisado con el cliente.                                                 |
 | 4    | Asistente v1 solo lectura + ayuda de plataforma.                                                                                                                                                                                                     | Pruebas de aislamiento entre tenants.                                                   |
 | 5    | Reportes a la medida y exportación.                                                                                                                                                                                                                  | Cifras verificadas contra consultas conocidas.                                          |
@@ -279,7 +276,7 @@ Cada fase cierra con `npx tsc --noEmit`, `npm run lint`, `npm test`, manual y ch
 - Planes: **Plan 1** sin IA ni créditos; **Plan 2** = Plan 1 + IA con créditos; **Plan 3** = Plan 2 + llamadas PSTN y de WhatsApp. El costo de Meta/Zernio de las llamadas va incluido en la renta mensual: **no se debita de créditos** (Zernio/Meta solo se leen para medir el margen real). Entitlement nuevo `ai_credits` (planes 2 y 3).
 - Transcripción de llamadas Yeastar: Yeastar no cobra; el costo es el de la llave OpenAI configurada en la central. La PBX usa `gpt-4o-transcribe`, pero su costo real por minuto y su atribución por tenant siguen pendientes de conciliación. El estimado anterior de US$0.003/min y 6 créditos/min queda retirado; no se configura ni se cobra hasta contar con minutos facturables y costos conciliados. Minutos por tenant: `yeastar_call_transcriptions` (extension_filter de la migración 149).
 - El usuario confirmó que más adelante quiere configurar en NexoOmni el reenvío de llamadas de WhatsApp hacia Yeastar desde las conexiones Zernio existentes. Mantenerlo separado de la medición 2c: antes de implementarlo, validar elegibilidad de conexiones OAuth en los endpoints oficiales de Zernio y obtener el URI SIP/datos de conexión exactos del PBX Yeastar. El registro del uso por `profileId` no depende de habilitar ese enrutamiento.
-- Tipo de cambio **automático** vía API SIE de Banxico (serie SF43718, token gratuito, cron diario); sin captura manual.
+- Tipo de cambio automático vía API SIE de Banxico (serie SF43718). El código actual consulta al recibir llamadas y renueva su caché cada 12 horas; acepta como respaldo una tasa de hasta cinco días. `BANXICO_API_TOKEN` debe configurarse en EasyPanel para el contenedor de aplicación, nunca en el repositorio.
 
 **Abiertas:**
 
@@ -287,4 +284,4 @@ Cada fase cierra con `npx tsc --noEmit`, `npm run lint`, `npm test`, manual y ch
 2. Confirmar que los créditos no usados vencen al cierre del mes (validar con asesoría legal).
 3. ¿Se incluye en la v1 el escalamiento a soporte humano desde el asistente?
 
-**Decidido (turno 3):** pasarela **Stripe** (Checkout + webhook firmado, acreditación idempotente); paquetes sin bonos: Inicio US$10 / 10,000, Crecimiento US$25 / 25,000, Pro US$50 / 50,000, Empresa US$100 / 100,000 créditos; token de Banxico disponible (va en variable de entorno del servidor, nunca en el repo).
+**Decidido (turno 3):** pasarela **Stripe** (Checkout + webhook firmado, acreditación idempotente); paquetes sin bonos: Inicio US$10 / 10,000, Crecimiento US$25 / 25,000, Pro US$50 / 50,000, Empresa US$100 / 100,000 créditos. La llave de Banxico se configura como variable de entorno del servidor; su disponibilidad en EasyPanel aún debe confirmarse antes de cobrar llamadas.

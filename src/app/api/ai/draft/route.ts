@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     //  - it's fire-and-forget (`void`), not awaited, so the response
     //    isn't held for a DB round-trip.
     try {
-      void logAiUsage(supabaseAdmin(), {
+      await logAiUsage(supabaseAdmin(), {
         accountId,
         conversationId,
         mode: 'draft',
