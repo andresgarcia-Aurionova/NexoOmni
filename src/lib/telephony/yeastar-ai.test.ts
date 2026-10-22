@@ -10,7 +10,14 @@ describe('Yeastar transcript parsing', () => {
     expect(parsePbxLocalTime('2026/10/05 12:30:00 AM')?.toISOString()).toBe('2026-10-05T06:30:00.000Z')
     expect(parsePbxLocalTime('10/05/2026 13:30:00')?.toISOString()).toBe('2026-10-05T19:30:00.000Z')
     expect(parsePbxLocalTime('2026/02/30 10:00:00')).toBeNull()
-    expect(parsePbxLocalTime('13/05/2026 10:00:00')).toBeNull()
+    expect(parsePbxLocalTime('13/05/2026 10:00:00')?.toISOString()).toBe('2026-05-13T16:00:00.000Z')
+    expect(parsePbxLocalTime('31/31/2026 10:00:00')).toBeNull()
+  })
+  it('resolves ambiguous day/month dates with the transcript epoch instead of inventing a future date', () => {
+    const reference = Date.parse('2026-10-12T21:27:30.000Z')
+    expect(parsePbxLocalTime('12/10/2026 15:27:00', undefined, reference)?.toISOString()).toBe('2026-10-12T21:27:00.000Z')
+    expect(parsePbxLocalTime('10/12/2026 15:27:00', undefined, reference)?.toISOString()).toBe('2026-10-12T21:27:00.000Z')
+    expect(parsePbxLocalTime('01/02/2020 10:00:00')?.toISOString()).toBe('2020-01-02T16:00:00.000Z')
   })
   it('uses leg identifiers, never uid or call_id', () => {
     expect(aiCdrIds({ uid: 'record-1', call_id: 'call-1', call_note_id: 'leg-1', legs: [{ leg_id: 'leg-2' }, { leg_id: 'leg-1' }] }))

@@ -109,6 +109,15 @@ export function NexPhone() {
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
   const remoteAudio = useRef<HTMLAudioElement>(null);
+  const liveInbound = [t.incoming, t.active].find((call) => call?.status?.communicationType === 'inbound' && call.status.callId);
+  const liveInboundCallId = liveInbound?.status?.callId ?? null;
+  // The context stays on screen after hang-up until the agent dismisses it.
+  const [contextCallId, setContextCallId] = useState<string | null>(null);
+  const [seenCallId, setSeenCallId] = useState<string | null>(null);
+  if (liveInboundCallId && liveInboundCallId !== seenCallId) {
+    setSeenCallId(liveInboundCallId);
+    setContextCallId(liveInboundCallId);
+  }
 
   useEffect(() => {
     if (localVideo.current) localVideo.current.srcObject = t.localStream;
@@ -143,10 +152,8 @@ export function NexPhone() {
         <span className={`absolute right-0.5 top-0.5 size-2 rounded-full ring-2 ring-background ${t.connected ? 'bg-emerald-400' : t.connecting ? 'animate-pulse bg-amber-400' : 'bg-red-500'}`} />
       </Button>
 
-      {t.incoming?.status?.communicationType === 'inbound' && t.incoming.status.callId
-        ? <CallContextDialog key={t.incoming.status.callId} callId={t.incoming.status.callId} />
-        : t.active?.status?.communicationType === 'inbound' && t.active.status.callId
-          ? <CallContextDialog key={t.active.status.callId} callId={t.active.status.callId} />
+      {contextCallId
+        ? <CallContextDialog key={contextCallId} callId={contextCallId} callEnded={liveInboundCallId !== contextCallId} onDismiss={() => setContextCallId(null)} />
         : null}
 
       {t.incoming && typeof document !== 'undefined' ? createPortal(

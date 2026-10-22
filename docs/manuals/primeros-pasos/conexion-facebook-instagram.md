@@ -50,9 +50,9 @@ una conversación independiente de Messenger. El encabezado indica que
 es un comentario público y muestra el texto, imagen y enlace de la
 publicación cuando el proveedor los entrega.
 
-Si usas la conexión guiada por Zernio, su webhook debe incluir el evento
+Si usas la conexión guiada, su webhook debe incluir el evento
 oficial **`comment.received`**, además de **`message.received`**. No es
-necesario abandonar Zernio ni configurar Meta manualmente para obtener
+necesario abandonar la conexión guiada ni configurar Meta manualmente para obtener
 esta trazabilidad. Si el evento no puede habilitarse en esa cuenta, se
 puede usar la conexión Meta nativa como complemento para comentarios.
 

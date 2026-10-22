@@ -107,7 +107,7 @@ describe('Yeastar archive synchronization', () => {
     expect(databaseFetch.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
   })
   it('keeps a transcript when Yeastar provides an unrecognized date without inventing a timestamp', () => {
-    const [row] = parseTranscriptionArchive([{ ...record(1), time: '13/05/2026 10:00:00' }])
+    const [row] = parseTranscriptionArchive([{ ...record(1), time: '31/31/2026 10:00:00' }])
     expect(row).toMatchObject({
       transcript: '+525512345678: Necesito seguimiento 1',
       startedAt: null,
@@ -116,7 +116,7 @@ describe('Yeastar archive synchronization', () => {
     })
   })
   it('imports transcript rows with unrecognized dates and reports them', async () => {
-    upstream([{ ...record(1), time: '13/05/2026 10:00:00' }])
+    upstream([{ ...record(1), time: '31/31/2026 10:00:00' }])
     const saved: { value?: Record<string, unknown> } = {}
     const db = createClient('https://db.example.test', 'test-key', { global: { fetch: async (_input, init) => {
       if (init?.method === 'POST') {

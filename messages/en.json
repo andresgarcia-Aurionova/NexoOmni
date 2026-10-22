@@ -220,7 +220,7 @@
       "embeddings": "Knowledge search",
       "assistant": "Nexo Assistant",
       "credential_test": "AI connection test",
-      "whatsapp_call": "WhatsApp calls (Zernio)",
+      "whatsapp_call": "WhatsApp calls",
       "other": "Other usage"
     },
     "historyTitle": "Recent activity",
@@ -252,7 +252,7 @@
     "threshold5Body": "Your balance is {credits} credits. Contact NexoOmni now to avoid interruptions.",
     "threshold5EmailSubject": "Urgent: your NexoOmni balance is at 5%",
     "threshold5EmailHeading": "Your balance reached 5% of the latest paid top-up",
-    "threshold5EmailBody": "You have {credits} credits left. Contact the NexoOmni team now. When the balance runs out, new AI requests will be blocked and Zernio calls will be paused.",
+    "threshold5EmailBody": "You have {credits} credits left. Contact the NexoOmni team now. When the balance runs out, new AI requests will be blocked and WhatsApp calls will be paused.",
     "viewBalance": "View balance"
   },
   "PlatformBillingRates": {
@@ -294,7 +294,7 @@
   "PlatformCredits": {
     "title": "AI credits by customer",
     "description": "Manage balances and review actual debits for this month. Provider cost is calculated using configured token prices; credits are deducted from the balance.",
-    "noDebitYet": "AI usage with a configured price is debited automatically. Models without a price are blocked before calling the provider. When the balance is exhausted, AI is blocked and Zernio calls are paused.",
+    "noDebitYet": "AI usage with a configured price is debited automatically. Models without a price are blocked before calling the provider. When the balance is exhausted, AI is blocked and WhatsApp calls are paused.",
     "account": "Customer",
     "availableBalance": "Available balance (credits)",
     "refresh": "Refresh",
@@ -334,7 +334,7 @@
     "aiUsageEntry": "AI usage: {mode}",
     "whatsappCallEntry": "WhatsApp call",
     "voiceTitle": "Call usage this month",
-    "voiceDescription": "Zernio calls and Yeastar transcriptions are shown separately. Yeastar uses an estimated per-minute cost and adds 50%; this is not a measurement of OpenAI tokens.",
+    "voiceDescription": "WhatsApp calls and Yeastar transcriptions are shown separately. Yeastar uses an estimated per-minute cost and adds 50%; this is not a measurement of OpenAI tokens.",
     "voicePeriod": "Reporting period: {month} (UTC)",
     "yeastarTitle": "Yeastar",
     "answeredCalls": "Answered",
@@ -343,12 +343,12 @@
     "yeastarCost": "Estimated transcription cost",
     "notCalculated": "Set per-minute cost",
     "yeastarTranscriptionEntry": "Yeastar call transcription (estimated)",
-    "zernioTitle": "Zernio / WhatsApp",
-    "zernioCost": "Zernio charge",
+    "zernioTitle": "WhatsApp (calls)",
+    "zernioCost": "Connection provider charge",
     "metaCost": "Meta informational charge",
-    "zernioNotConfigured": "The Zernio integration is not configured on the server.",
-    "zernioLoadError": "Could not retrieve Zernio call usage.",
-    "zernioUnassigned": "{calls} Zernio calls ({cost} billed by Zernio; {metaCost} informational Meta charges) could not be confidently linked to a customer and remain unassigned.",
+    "zernioNotConfigured": "The WhatsApp calls integration is not configured on the server.",
+    "zernioLoadError": "Could not retrieve WhatsApp call usage.",
+    "zernioUnassigned": "{calls} WhatsApp calls ({cost} billed by the connection provider; {metaCost} informational Meta charges) could not be confidently linked to a customer and remain unassigned.",
     "voiceLoadError": "Could not load call usage.",
     "ledgerTitle": "Balance history",
     "noLedger": "There are no credit transactions yet.",
@@ -897,7 +897,7 @@
     "socialPublication": {
       "facebookComment": "Public Facebook comment",
       "instagramComment": "Public Instagram comment",
-      "unknownPost": "Meta or Zernio did not provide the post text.",
+      "unknownPost": "Meta did not provide the post text.",
       "paidAd": "Ad {id}",
       "openPost": "View post"
     },

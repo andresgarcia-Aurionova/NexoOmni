@@ -12,7 +12,7 @@ updated: '2026-10-21'
 El panel de Administración NexoOmni permite consultar los créditos de cada
 cliente, revisar el uso de IA registrado durante el mes y dejar constancia
 de una recarga o ajuste manual. También permite revisar las llamadas informadas por
-Zernio y los minutos hablados registrados por Yeastar.
+WhatsApp y los minutos hablados registrados por Yeastar.
 
 ## ¿Para quién es?
 
@@ -24,7 +24,7 @@ consultar ni modificar este panel.
 1. Abre **Administración NexoOmni** y baja hasta **Créditos de IA por cliente**.
 2. Selecciona el cliente para consultar su saldo, consumo registrado del mes
    y movimientos recientes. Más abajo, **Consumo de llamadas este mes** muestra
-   por separado los registros de Zernio y Yeastar.
+   por separado los registros de WhatsApp y Yeastar.
 3. Para acreditar saldo, indica la cantidad de créditos, selecciona
    **Recarga cobrada** o **Ajuste o cortesía**, y agrega un motivo o referencia.
 4. Pulsa **Registrar abono**. El saldo y el movimiento se guardan juntos y
@@ -94,12 +94,12 @@ llamadas** (arriba de los créditos):
   consumir un crédito completo. Los débitos no reducen el saldo por debajo de
   cero.
 - Al llegar a cero, las nuevas solicitudes de IA se bloquean. Los números de
-  WhatsApp que estaban habilitados para llamadas en Zernio se pausan y se
+  WhatsApp que estaban habilitados para llamadas se pausan y se
   reactivan al registrar saldo positivo. La llamada ya iniciada puede terminar;
   el sistema registra su consumo al recibir el evento de fin de llamada.
 - Si una llamada ya terminada cuesta más que el saldo restante, el débito no
   deja la billetera en negativo: queda identificada sin cobrar y las llamadas
-  de Zernio se pausan hasta registrar otra recarga.
+  de WhatsApp se pausan hasta registrar otra recarga.
 - La regla comercial acordada es que cada recarga dure 30 días desde su
   acreditación. Una vez desplegada esta actualización, el saldo existente se
   conservará sin vencimiento; las nuevas recargas pagadas vencerán 30 días
@@ -108,8 +108,8 @@ llamadas** (arriba de los créditos):
 - Si el proveedor/modelo no tiene precio vigente, NexoOmni bloquea la
   solicitud antes de enviarla. La prueba de una llave desde el panel también
   es una solicitud real y descuenta créditos.
-- En llamadas de WhatsApp conectadas con Zernio se cobra el costo de conexión
-  reportado por Zernio con el margen configurado (actualmente 50 %, equivalente
+- En llamadas de WhatsApp conectadas se cobra el costo de conexión
+  reportado por el proveedor con el margen configurado (actualmente 50 %, equivalente
   a ×2), más MXN $0.50 por cada minuto iniciado de una llamada contestada. El
   costo de Meta se muestra solo como información y no se descuenta del saldo.
 - Yeastar permite consultar llamadas y minutos hablados, pero el costo de la
@@ -123,11 +123,11 @@ llamadas** (arriba de los créditos):
   mediante webhook. Los pagos reales requieren que el operador active el modo
   correspondiente después de revisar precios, impuestos y cumplimiento. Los
   ajustes y cortesías siguen registrándose manualmente desde este panel.
-- Zernio agrupa las llamadas por número y las vincula a un cliente solo cuando
+- Las llamadas de WhatsApp se agrupan por número y se vinculan a un cliente solo cuando
   su perfil permite identificarlo sin ambigüedad. Las llamadas que no se pueden
   asignar aparecen aparte y no se suman a un cliente. El resumen mensual usa
   el calendario UTC.
-- El cargo de Zernio se usa para calcular el débito de conexión. El importe
+- El cargo del proveedor de conexión se usa para calcular el débito de conexión. El importe
   informativo de Meta se mantiene separado; no se descuenta de los créditos.
 - Yeastar muestra llamadas, minutos hablados y llamadas con transcripción.
   Como la central no entrega los tokens de cada tenant, el costo se estima por
@@ -159,8 +159,8 @@ de la central y ajustarla cuando cambie el costo promedio.
 **¿El sistema bloquea la IA y las llamadas cuando el saldo llega a cero?**
 
 Sí. La IA deja de aceptar solicitudes nuevas y NexoOmni pausa los números de
-Zernio que estaban habilitados. Al acreditar saldo positivo, reactiva solo los
-números que NexoOmni había pausado. Si Zernio no responde, el panel indica que
+WhatsApp que estaban habilitados. Al acreditar saldo positivo, reactiva solo los
+números que NexoOmni había pausado. Si el proveedor no responde, el panel indica que
 la reactivación está pendiente y el worker vuelve a intentarlo.
 
 **¿Puede un cliente ver qué proveedor o modelo se utilizó?**

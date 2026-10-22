@@ -57,14 +57,14 @@ Un comentario público no se mezcla con un mensaje privado de Messenger.
 La lista y el encabezado lo identifican como **Comentario público de
 Facebook** o **Comentario público de Instagram**. Arriba del hilo aparece
 la publicación de origen con su texto, vista previa y botón **Ver
-publicación**, cuando Meta o Zernio entregan esos datos.
+publicación**, cuando Meta o el proveedor de conexión entregan esos datos.
 
 Si el comentario pertenece a contenido pagado y el proveedor informa el
 anuncio, también se muestra su identificador o título. Las respuestas que
 escribes desde ese hilo se publican como respuesta al comentario; no se
 envían por Messenger.
 
-Para conexiones Zernio, el administrador debe mantener suscritos
+Para conexiones a través de proveedor, el administrador debe mantener suscritos
 `message.received` y `comment.received`. Para conexión Meta nativa,
 Facebook requiere la suscripción `feed`.
 
@@ -132,7 +132,7 @@ en el hilo y se marca con **(editado)**. Solo Messenger permite esto
 (no Instagram), y el cliente puede editar un mensaje hasta 5 veces.
 
 Todo lo anterior funciona igual si tu Facebook/Instagram está conectado
-directo o a través de un proveedor conectado como Zernio. La única
+directo o a través de un proveedor conectado. La única
 diferencia: si usas un proveedor conectado, pide a quien administra esa
 cuenta que su webhook tenga suscrito el evento de "mensaje editado"
 (además del de "mensaje recibido", que ya suele estar activo) para que

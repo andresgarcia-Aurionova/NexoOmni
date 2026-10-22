@@ -24,7 +24,7 @@ function channelTranslationKey(channel: string): string {
   }
 }
 
-export function CallContextDialog({ callId }: { callId: string }) {
+export function CallContextDialog({ callId, callEnded = false, onDismiss }: { callId: string; callEnded?: boolean; onDismiss?: () => void }) {
   const t = useTranslations('NexPhoneContext')
   const [open, setOpen] = useState(true)
   const [context, setContext] = useState<CallContext | null>(null)
@@ -65,7 +65,19 @@ export function CallContextDialog({ callId }: { callId: string }) {
 
   return <>
     <Button variant="outline" size="sm" onClick={() => setOpen(true)}><BookOpen className="size-4" />{t('open')}</Button>
-    <Dialog open={open} onOpenChange={setOpen} modal={false}>
+    <Dialog
+      open={open}
+      onOpenChange={(next, details) => {
+        // Only the agent's explicit close (X / Esc) may dismiss it.
+        if (!next && (details.reason === 'outside-press' || details.reason === 'focus-out')) {
+          details.cancel()
+          return
+        }
+        setOpen(next)
+        if (!next && callEnded) onDismiss?.()
+      }}
+      modal={false}
+    >
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>

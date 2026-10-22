@@ -220,7 +220,7 @@
       "embeddings": "Búsqueda de conocimiento",
       "assistant": "Nexo Asistente",
       "credential_test": "Prueba de conexión de IA",
-      "whatsapp_call": "Llamadas de WhatsApp (Zernio)",
+      "whatsapp_call": "Llamadas de WhatsApp",
       "other": "Otros usos"
     },
     "historyTitle": "Movimientos recientes",
@@ -252,7 +252,7 @@
     "threshold5Body": "Tu saldo es de {credits} créditos. Contacta ahora a NexoOmni para evitar interrupciones.",
     "threshold5EmailSubject": "Aviso urgente: tu saldo de NexoOmni está al 5 %",
     "threshold5EmailHeading": "Tu saldo llegó al 5 % del último paquete pagado",
-    "threshold5EmailBody": "Te quedan {credits} créditos. Contacta ahora al equipo de NexoOmni. Al agotarse el saldo, las nuevas solicitudes de IA se bloquearán y las llamadas de Zernio se pausarán.",
+    "threshold5EmailBody": "Te quedan {credits} créditos. Contacta ahora al equipo de NexoOmni. Al agotarse el saldo, las nuevas solicitudes de IA se bloquearán y las llamadas de WhatsApp se pausarán.",
     "viewBalance": "Ver saldo"
   },
   "PlatformBillingRates": {
@@ -294,7 +294,7 @@
   "PlatformCredits": {
     "title": "Créditos de IA por cliente",
     "description": "Administra saldos y revisa los débitos efectivos del mes. El costo del proveedor se calcula con el precio por tokens configurado; los créditos se descuentan del saldo.",
-    "noDebitYet": "El consumo de IA con tarifa configurada se descuenta automáticamente. Los modelos sin precio se bloquean antes de llamar al proveedor. Al agotarse el saldo, la IA se bloquea y las llamadas de Zernio se pausan.",
+    "noDebitYet": "El consumo de IA con tarifa configurada se descuenta automáticamente. Los modelos sin precio se bloquean antes de llamar al proveedor. Al agotarse el saldo, la IA se bloquea y las llamadas de WhatsApp se pausan.",
     "account": "Cliente",
     "availableBalance": "Saldo disponible (créditos)",
     "refresh": "Actualizar",
@@ -334,7 +334,7 @@
     "aiUsageEntry": "Consumo de IA: {mode}",
     "whatsappCallEntry": "Llamada de WhatsApp",
     "voiceTitle": "Consumo de llamadas este mes",
-    "voiceDescription": "Las llamadas Zernio y las transcripciones Yeastar se muestran por separado. Yeastar usa un costo por minuto estimado y agrega 50%; la cifra no equivale a tokens observados en OpenAI.",
+    "voiceDescription": "Las llamadas de WhatsApp y las transcripciones Yeastar se muestran por separado. Yeastar usa un costo por minuto estimado y agrega 50%; la cifra no equivale a tokens observados en OpenAI.",
     "voicePeriod": "Periodo consultado: {month} (UTC)",
     "yeastarTitle": "Yeastar",
     "answeredCalls": "Contestadas",
@@ -343,12 +343,12 @@
     "yeastarCost": "Costo de transcripción estimado",
     "notCalculated": "Configura el costo/minuto",
     "yeastarTranscriptionEntry": "Transcripción de llamada Yeastar (estimada)",
-    "zernioTitle": "Zernio / WhatsApp",
-    "zernioCost": "Cargo de Zernio",
+    "zernioTitle": "WhatsApp (llamadas)",
+    "zernioCost": "Cargo del proveedor de conexión",
     "metaCost": "Cargo informativo de Meta",
-    "zernioNotConfigured": "La integración de Zernio no está configurada en el servidor.",
-    "zernioLoadError": "No fue posible consultar el consumo de llamadas de Zernio.",
-    "zernioUnassigned": "{calls} llamadas de Zernio ({cost} facturados por Zernio; {metaCost} informativos de Meta) no se pudieron vincular con certeza a un cliente y quedan sin asignar.",
+    "zernioNotConfigured": "La integración de llamadas de WhatsApp no está configurada en el servidor.",
+    "zernioLoadError": "No fue posible consultar el consumo de llamadas de WhatsApp.",
+    "zernioUnassigned": "{calls} llamadas de WhatsApp ({cost} facturados por el proveedor de conexión; {metaCost} informativos de Meta) no se pudieron vincular con certeza a un cliente y quedan sin asignar.",
     "voiceLoadError": "No se pudo cargar el consumo de llamadas.",
     "ledgerTitle": "Historial de saldo",
     "noLedger": "Aún no hay movimientos de créditos.",
@@ -897,7 +897,7 @@
     "socialPublication": {
       "facebookComment": "Comentario público de Facebook",
       "instagramComment": "Comentario público de Instagram",
-      "unknownPost": "Meta o Zernio no entregaron el texto de la publicación.",
+      "unknownPost": "Meta no entregó el texto de la publicación.",
       "paidAd": "Anuncio {id}",
       "openPost": "Ver publicación"
     },

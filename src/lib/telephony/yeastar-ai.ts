@@ -26,26 +26,47 @@ function partsAsUtcMs(parts: LocalParts) { return Date.UTC(parts.year, parts.mon
 // stored/displayed time drifts by the timezone offset (the bug reported as
 // "shows 3:34 PM when it's actually 9:39 PM"). Convert using the PBX's real
 // timezone instead.
-export function parsePbxLocalTime(value: string, timezone = 'America/Mexico_City'): Date | null {
-  const text = value.trim()
-  const yearFirst = /^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\s*(AM|PM))?$/i.exec(text)
-  const monthFirst = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(text)
-  if (!yearFirst && !monthFirst) return null
-  const match = yearFirst ?? monthFirst!
-  const parts: LocalParts = yearFirst
-    ? { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]), hour: Number(match[4]), minute: Number(match[5]), second: Number(match[6]) }
-    : { year: Number(match[3]), month: Number(match[1]), day: Number(match[2]), hour: Number(match[4]), minute: Number(match[5]), second: Number(match[6]) }
-  const meridiem = yearFirst ? match[7] : undefined
-  if (meridiem) {
-    if (parts.hour < 1 || parts.hour > 12) return null
-    parts.hour = parts.hour % 12 + (meridiem.toUpperCase() === 'PM' ? 12 : 0)
-  }
+function pbxPartsToDate(parts: LocalParts, timezone: string): Date | null {
   const check = new Date(partsAsUtcMs(parts))
   if (check.getUTCFullYear() !== parts.year || check.getUTCMonth() + 1 !== parts.month
     || check.getUTCDate() !== parts.day || parts.hour > 23 || parts.minute > 59 || parts.second > 59) return null
   let guess = partsAsUtcMs(parts)
   for (let index = 0; index < 3; index += 1) guess += partsAsUtcMs(parts) - partsAsUtcMs(localPartsFromDate(new Date(guess), timezone))
   return new Date(guess)
+}
+
+// The PBX renders dates in the format chosen on the PBX (Year/Month/Day,
+// Month/Day/Year or Day/Month/Year). A slash date whose first two numbers are
+// both <= 12 is ambiguous, so it is resolved with independent evidence: the
+// epoch of the call's own transcript turns (`referenceMs`) when available,
+// otherwise the fact that a finished call cannot be in the future.
+export function parsePbxLocalTime(value: string, timezone = 'America/Mexico_City', referenceMs?: number | null): Date | null {
+  const text = value.trim()
+  const yearFirst = /^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\s*(AM|PM))?$/i.exec(text)
+  if (yearFirst) {
+    const parts: LocalParts = { year: Number(yearFirst[1]), month: Number(yearFirst[2]), day: Number(yearFirst[3]), hour: Number(yearFirst[4]), minute: Number(yearFirst[5]), second: Number(yearFirst[6]) }
+    if (yearFirst[7]) {
+      if (parts.hour < 1 || parts.hour > 12) return null
+      parts.hour = parts.hour % 12 + (yearFirst[7].toUpperCase() === 'PM' ? 12 : 0)
+    }
+    return pbxPartsToDate(parts, timezone)
+  }
+  const slash = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(text)
+  if (!slash) return null
+  const [first, second, year] = [Number(slash[1]), Number(slash[2]), Number(slash[3])]
+  const time = { hour: Number(slash[4]), minute: Number(slash[5]), second: Number(slash[6]) }
+  const monthFirst = pbxPartsToDate({ year, month: first, day: second, ...time }, timezone)
+  const dayFirst = first === second ? null : pbxPartsToDate({ year, month: second, day: first, ...time }, timezone)
+  const candidates = [monthFirst, dayFirst].filter((date): date is Date => date !== null)
+  if (candidates.length < 2) return candidates[0] ?? null
+  if (typeof referenceMs === 'number' && Number.isFinite(referenceMs)) {
+    const nearest = candidates
+      .map((date) => ({ date, distance: Math.abs(date.getTime() - referenceMs) }))
+      .sort((a, b) => a.distance - b.distance)[0]
+    if (nearest.distance <= 3 * 24 * 60 * 60_000) return nearest.date
+  }
+  const plausible = candidates.filter((date) => date.getTime() <= Date.now() + 60 * 60_000)
+  return plausible[0] ?? candidates[0]
 }
 
 export async function accessToken(accountId: string, pbxUrl: string, clientId: string, clientSecret: string) {

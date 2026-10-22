@@ -72,7 +72,7 @@ recarga; una nueva recarga pagada inicia un nuevo ciclo de alertas. El aviso
 del 5 % se resalta como urgente.
 
 Al agotarse el saldo, las nuevas solicitudes de IA se bloquean y las llamadas
-de Zernio se pausan. Solicita la recarga antes de llegar a cero para evitar
+de WhatsApp se pausan. Solicita la recarga antes de llegar a cero para evitar
 interrupciones.
 
 ## Preguntas frecuentes

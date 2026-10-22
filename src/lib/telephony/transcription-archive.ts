@@ -47,7 +47,13 @@ export function parseTranscriptionArchive(value: unknown) {
       ? turns.find((turn) => String(turn.source_number ?? '').trim() === agentExtension
         && typeof turn.name === 'string' && turn.name.trim())
       : undefined
-    const startedAt = typeof row.time === 'string' ? parsePbxLocalTime(row.time)?.toISOString() : undefined
+    const turnEpochs = turns.flatMap((turn) => {
+      const spoken = Number(turn.timestamp)
+      const created = Number(turn.created_at) * 1000
+      return [spoken, created].filter((epoch) => Number.isFinite(epoch) && epoch > 1e12)
+    })
+    const referenceMs = turnEpochs.length ? Math.min(...turnEpochs) : null
+    const startedAt = typeof row.time === 'string' ? parsePbxLocalTime(row.time, undefined, referenceMs)?.toISOString() : undefined
     event.time_start = startedAt ? String(row.time) : null
     return {
       cdrId: row.leg_id, uid: row.uid,
@@ -159,7 +165,11 @@ export async function syncTranscriptionArchive(db: SupabaseClient, accountId: st
   })
   const dateRepairs = rows.filter((row) => {
     const existing = byCdr.get(row.cdrId)
-    return Boolean(existing?.transcript && !existing.started_at && row.startedAt)
+    return Boolean(
+      existing?.transcript && row.startedAt && existing.started_at !== row.startedAt
+      && (!existing.started_at
+        || Math.abs(new Date(existing.started_at).getTime() - new Date(row.startedAt).getTime()) > 60_000)
+    )
   })
   const queuedIds = new Set([...pending, ...improved, ...dateRepairs].map((row) => row.cdrId))
   const retryIds = (known ?? []).filter((row) => row.transcript && ['failed', 'unavailable'].includes(row.analysis_status)).map((row) => row.id)

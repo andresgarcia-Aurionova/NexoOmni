@@ -13,7 +13,7 @@ describe('AI credit alert email copy', () => {
     const email = buildAiCreditAlertEmail(5, '500', 'en');
     expect(email.subject).toContain('5%');
     expect(email.html).toContain('#b91c1c');
-    expect(email.html).toContain('Zernio calls will be paused');
+    expect(email.html).toContain('WhatsApp calls will be paused');
   });
 
   it('rejects malformed balances instead of producing misleading email', () => {

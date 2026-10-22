@@ -220,7 +220,7 @@
       "embeddings": "지식 검색",
       "assistant": "Nexo 어시스턴트",
       "credential_test": "AI 연결 테스트",
-      "whatsapp_call": "WhatsApp 통화 (Zernio)",
+      "whatsapp_call": "WhatsApp 통화",
       "other": "기타 사용"
     },
     "historyTitle": "최근 내역",
@@ -252,7 +252,7 @@
     "threshold5Body": "잔액은 {credits} 크레딧입니다. 서비스 중단을 막으려면 지금 NexoOmni에 문의하세요.",
     "threshold5EmailSubject": "긴급: NexoOmni 잔액이 5% 남았습니다",
     "threshold5EmailHeading": "최근 결제 충전액의 5%가 남았습니다",
-    "threshold5EmailBody": "{credits} 크레딧이 남았습니다. 지금 NexoOmni 팀에 문의하세요. 잔액이 소진되면 새 AI 요청이 차단되고 Zernio 통화가 일시 중지됩니다.",
+    "threshold5EmailBody": "{credits} 크레딧이 남았습니다. 지금 NexoOmni 팀에 문의하세요. 잔액이 소진되면 새 AI 요청이 차단되고 WhatsApp 통화가 일시 중지됩니다.",
     "viewBalance": "잔액 보기"
   },
   "PlatformBillingRates": {
@@ -294,7 +294,7 @@
   "PlatformCredits": {
     "title": "고객별 AI 크레딧",
     "description": "잔액을 관리하고 이번 달 실제 차감 내역을 확인합니다. 공급자 비용은 설정된 토큰 가격으로 계산되며 크레딧 잔액에서 차감됩니다.",
-    "noDebitYet": "가격이 설정된 AI 사용량은 자동으로 차감됩니다. 가격이 없는 모델은 공급자 호출 전에 차단됩니다. 잔액이 소진되면 AI가 차단되고 Zernio 통화가 일시 중지됩니다.",
+    "noDebitYet": "가격이 설정된 AI 사용량은 자동으로 차감됩니다. 가격이 없는 모델은 공급자 호출 전에 차단됩니다. 잔액이 소진되면 AI가 차단되고 WhatsApp 통화가 일시 중지됩니다.",
     "account": "고객",
     "availableBalance": "사용 가능 잔액(크레딧)",
     "refresh": "새로고침",
@@ -334,7 +334,7 @@
     "aiUsageEntry": "AI 사용량: {mode}",
     "whatsappCallEntry": "WhatsApp 통화",
     "voiceTitle": "이번 달 통화 사용량",
-    "voiceDescription": "Zernio 통화와 Yeastar 전사는 별도로 표시됩니다. Yeastar는 분당 예상 비용에 50%를 더하며, 이는 OpenAI 토큰의 실제 측정값이 아닙니다.",
+    "voiceDescription": "WhatsApp 통화와 Yeastar 전사는 별도로 표시됩니다. Yeastar는 분당 예상 비용에 50%를 더하며, 이는 OpenAI 토큰의 실제 측정값이 아닙니다.",
     "voicePeriod": "조회 기간: {month} (UTC)",
     "yeastarTitle": "Yeastar",
     "answeredCalls": "응답된 통화",
@@ -343,12 +343,12 @@
     "yeastarCost": "예상 전사 비용",
     "notCalculated": "분당 비용 설정",
     "yeastarTranscriptionEntry": "Yeastar 통화 전사 (추정)",
-    "zernioTitle": "Zernio / WhatsApp",
-    "zernioCost": "Zernio 요금",
+    "zernioTitle": "WhatsApp (통화)",
+    "zernioCost": "연결 공급자 요금",
     "metaCost": "Meta 참고 요금",
-    "zernioNotConfigured": "서버에 Zernio 연동이 설정되어 있지 않습니다.",
-    "zernioLoadError": "Zernio 통화 사용량을 가져오지 못했습니다.",
-    "zernioUnassigned": "Zernio 통화 {calls}건(Zernio 청구 {cost}, Meta 참고 요금 {metaCost})을 고객과 확실하게 연결할 수 없어 미할당 상태로 표시합니다.",
+    "zernioNotConfigured": "서버에 WhatsApp 통화 연동이 설정되어 있지 않습니다.",
+    "zernioLoadError": "WhatsApp 통화 사용량을 가져오지 못했습니다.",
+    "zernioUnassigned": "WhatsApp 통화 {calls}건(연결 공급자 청구 {cost}, Meta 참고 요금 {metaCost})을 고객과 확실하게 연결할 수 없어 미할당 상태로 표시합니다.",
     "voiceLoadError": "통화 사용량을 불러오지 못했습니다.",
     "ledgerTitle": "잔액 내역",
     "noLedger": "아직 크레딧 거래가 없습니다.",
@@ -897,7 +897,7 @@
     "socialPublication": {
       "facebookComment": "Facebook 공개 댓글",
       "instagramComment": "Instagram 공개 댓글",
-      "unknownPost": "Meta 또는 Zernio에서 게시물 텍스트를 제공하지 않았습니다.",
+      "unknownPost": "Meta에서 게시물 텍스트를 제공하지 않았습니다.",
       "paidAd": "광고 {id}",
       "openPost": "게시물 보기"
     },
