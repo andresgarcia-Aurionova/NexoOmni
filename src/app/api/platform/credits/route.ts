@@ -35,6 +35,7 @@ type AiUsageMode =
   | 'report'
   | 'call_summary'
   | 'voice_transcription'
+  | 'yeastar_transcription'
   | 'image_description'
   | 'embeddings'
   | 'credential_test'
@@ -46,6 +47,7 @@ const AI_USAGE_MODES: AiUsageMode[] = [
   'report',
   'call_summary',
   'voice_transcription',
+  'yeastar_transcription',
   'image_description',
   'embeddings',
   'credential_test',

@@ -29,6 +29,7 @@ type AiUsageMode =
   | 'report'
   | 'call_summary'
   | 'voice_transcription'
+  | 'yeastar_transcription'
   | 'image_description'
   | 'embeddings'
   | 'credential_test'
@@ -56,6 +57,23 @@ type LedgerEntry = {
   source: string | null;
   actor_user_id: string | null;
   created_at: string;
+};
+type FinancialRow = {
+  account_id: string;
+  activity: string;
+  provider: 'openai' | 'anthropic';
+  model: string;
+  operation_count: string;
+  prompt_tokens: string | null;
+  completion_tokens: string | null;
+  total_tokens: string | null;
+  cost_nano_usd: string;
+  charged_price_nano_usd: string;
+  expected_price_nano_usd: string;
+  profit_nano_usd: string;
+  credits_charged: string;
+  pending_charges: string;
+  estimated: boolean;
 };
 type CreditData = {
   accounts: CreditAccount[];
@@ -90,10 +108,10 @@ type VoiceUsageData = {
 
 function formatInteger(value: string | null | undefined, locale: string) {
   if (!value) return '—';
-  const parsed = Number(value);
-  return Number.isFinite(parsed)
-    ? new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(parsed)
-    : '—';
+  if (!/^-?\d+$/.test(value)) return '—';
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+    BigInt(value)
+  );
 }
 
 function formatUsdNano(value: string | null, locale: string) {
@@ -151,6 +169,31 @@ export function AiCreditsPanel({
   const [voiceData, setVoiceData] = useState<VoiceUsageData | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceError, setVoiceError] = useState(false);
+  const [financialRows, setFinancialRows] = useState<FinancialRow[]>([]);
+  const [financialLoading, setFinancialLoading] = useState(false);
+  const [financialError, setFinancialError] = useState(false);
+
+  const loadFinancialReport = useCallback(async () => {
+    if (!accountId) return;
+    setFinancialLoading(true);
+    setFinancialError(false);
+    try {
+      const query = `?account_id=${encodeURIComponent(accountId)}`;
+      const response = await fetch(
+        `/api/platform/credits/financial-report${query}`,
+        { cache: 'no-store' }
+      );
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? t('loadError'));
+      setFinancialRows(json.rows ?? []);
+    } catch (error) {
+      console.error('[platform credits] Financial report could not be loaded:', error);
+      setFinancialRows([]);
+      setFinancialError(true);
+    } finally {
+      setFinancialLoading(false);
+    }
+  }, [accountId, t]);
 
   const loadVoiceUsage = useCallback(async () => {
     setVoiceLoading(true);
@@ -198,6 +241,10 @@ export function AiCreditsPanel({
     if (accountOptions.length > 0) void loadVoiceUsage();
   }, [accountOptions.length, loadVoiceUsage]);
 
+  useEffect(() => {
+    if (accountId) void loadFinancialReport();
+  }, [accountId, loadFinancialReport]);
+
   const selectedAccount = data.accounts.find(
     (account) => account.id === accountId
   );
@@ -211,6 +258,46 @@ export function AiCreditsPanel({
   );
   const yeastarUsage = voiceData?.yeastar.find(
     (row) => row.account_id === accountId
+  );
+  const yeastarFinancial = financialRows.find(
+    (row) => row.activity === 'yeastar_transcription'
+  );
+  const financialTotals = useMemo(
+    () =>
+      financialRows.reduce(
+        (totals, row) => ({
+          tokensKnown: totals.tokensKnown || row.total_tokens !== null,
+          operations:
+            totals.operations + BigInt(row.operation_count || '0'),
+          promptTokens:
+            totals.promptTokens + BigInt(row.prompt_tokens || '0'),
+          completionTokens:
+            totals.completionTokens + BigInt(row.completion_tokens || '0'),
+          totalTokens: totals.totalTokens + BigInt(row.total_tokens || '0'),
+          cost: totals.cost + BigInt(row.cost_nano_usd),
+          chargedPrice:
+            totals.chargedPrice + BigInt(row.charged_price_nano_usd),
+          expectedPrice:
+            totals.expectedPrice + BigInt(row.expected_price_nano_usd),
+          profit: totals.profit + BigInt(row.profit_nano_usd),
+          credits: totals.credits + BigInt(row.credits_charged),
+          pending: totals.pending + BigInt(row.pending_charges),
+        }),
+        {
+          tokensKnown: false,
+          operations: BigInt(0),
+          promptTokens: BigInt(0),
+          completionTokens: BigInt(0),
+          totalTokens: BigInt(0),
+          cost: BigInt(0),
+          chargedPrice: BigInt(0),
+          expectedPrice: BigInt(0),
+          profit: BigInt(0),
+          credits: BigInt(0),
+          pending: BigInt(0),
+        }
+      ),
+    [financialRows]
   );
   const zernioUsage =
     voiceData?.zernio.status === 'ready'
@@ -231,6 +318,7 @@ export function AiCreditsPanel({
     report: t('modes.report'),
     call_summary: t('modes.call_summary'),
     voice_transcription: t('modes.voice_transcription'),
+    yeastar_transcription: t('yeastarTranscriptionEntry'),
     image_description: t('modes.image_description'),
     embeddings: t('modes.embeddings'),
     credential_test: t('modes.credential_test'),
@@ -343,8 +431,9 @@ export function AiCreditsPanel({
             onClick={() => {
               void load();
               void loadVoiceUsage();
+              void loadFinancialReport();
             }}
-            disabled={loading || voiceLoading}
+            disabled={loading || voiceLoading || financialLoading}
           >
             {loading ? (
               <LoaderCircle className="animate-spin" />
@@ -465,6 +554,150 @@ export function AiCreditsPanel({
 
         <div className="space-y-3 border-t pt-5">
           <div>
+            <h3 className="font-medium">{t('financialTitle')}</h3>
+            <p className="text-muted-foreground text-xs">
+              {t('financialDescription')}
+            </p>
+          </div>
+          {financialLoading ? (
+            <div className="flex justify-center py-5">
+              <LoaderCircle className="text-muted-foreground animate-spin" />
+            </div>
+          ) : financialError ? (
+            <p className="rounded-md border border-destructive/30 px-3 py-3 text-sm text-destructive">
+              {t('loadError')}
+            </p>
+          ) : financialRows.length === 0 ? (
+            <p className="text-muted-foreground rounded-md border px-3 py-5 text-center text-sm">
+              {t('noFinancialData')}
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted/50 text-muted-foreground text-xs">
+                  <tr>
+                    <th className="p-3">{t('activity')}</th>
+                    <th className="p-3">{t('providerModel')}</th>
+                    <th className="p-3">{t('operations')}</th>
+                    <th className="p-3">{t('promptTokens')}</th>
+                    <th className="p-3">{t('completionTokens')}</th>
+                    <th className="p-3">{t('totalTokens')}</th>
+                    <th className="p-3">{t('providerCost')}</th>
+                    <th className="p-3">{t('billedPrice')}</th>
+                    <th className="p-3">{t('expectedPrice')}</th>
+                    <th className="p-3">{t('profit')}</th>
+                    <th className="p-3">{t('credits')}</th>
+                    <th className="p-3">{t('pendingCharges')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {financialRows.map((row) => (
+                    <tr key={`${row.activity}:${row.provider}:${row.model}`}>
+                      <td className="p-3">
+                        {row.activity === 'yeastar_transcription'
+                          ? t('yeastarCost')
+                          : modeLabels[row.activity as AiUsageMode] ??
+                            row.activity}
+                        {row.estimated ? (
+                          <span className="text-muted-foreground block text-xs">
+                            {t('estimated')}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="p-3">
+                        {providerLabels[row.provider]} · {row.model}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.operation_count, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.prompt_tokens, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.completion_tokens, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.total_tokens, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatUsdNano(row.cost_nano_usd, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatUsdNano(row.charged_price_nano_usd, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatUsdNano(row.expected_price_nano_usd, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatUsdNano(row.profit_nano_usd, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.credits_charged, locale)}
+                      </td>
+                      <td className="p-3">
+                        {formatInteger(row.pending_charges, locale)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t bg-muted/30 font-medium">
+                  <tr>
+                    <td className="p-3">{t('totalTokens')}</td>
+                    <td className="p-3">—</td>
+                    <td className="p-3">
+                      {formatInteger(financialTotals.operations.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {financialTotals.tokensKnown
+                        ? formatInteger(
+                            financialTotals.promptTokens.toString(),
+                            locale
+                          )
+                        : '—'}
+                    </td>
+                    <td className="p-3">
+                      {financialTotals.tokensKnown
+                        ? formatInteger(
+                            financialTotals.completionTokens.toString(),
+                            locale
+                          )
+                        : '—'}
+                    </td>
+                    <td className="p-3">
+                      {financialTotals.tokensKnown
+                        ? formatInteger(
+                            financialTotals.totalTokens.toString(),
+                            locale
+                          )
+                        : '—'}
+                    </td>
+                    <td className="p-3">
+                      {formatUsdNano(financialTotals.cost.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {formatUsdNano(financialTotals.chargedPrice.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {formatUsdNano(financialTotals.expectedPrice.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {formatUsdNano(financialTotals.profit.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {formatInteger(financialTotals.credits.toString(), locale)}
+                    </td>
+                    <td className="p-3">
+                      {formatInteger(financialTotals.pending.toString(), locale)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t pt-5">
+          <div>
             <h3 className="font-medium">{t('voiceTitle')}</h3>
             <p className="text-muted-foreground text-xs">
               {t('voiceDescription')}
@@ -529,7 +762,14 @@ export function AiCreditsPanel({
                       <p className="text-muted-foreground text-xs">
                         {t('yeastarCost')}
                       </p>
-                      <p className="font-medium">{t('notCalculated')}</p>
+                      <p className="font-medium">
+                        {yeastarFinancial
+                          ? formatUsdNano(
+                              yeastarFinancial.cost_nano_usd,
+                              locale
+                            )
+                          : t('notCalculated')}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -639,6 +879,8 @@ export function AiCreditsPanel({
                       {entry.reason ??
                         (entry.source === 'zernio_whatsapp_call'
                           ? t('whatsappCallEntry')
+                          : entry.source === 'yeastar_transcription_estimate'
+                            ? t('yeastarTranscriptionEntry')
                           : entry.usage_mode
                             ? t('aiUsageEntry', {
                                 mode: modeLabels[entry.usage_mode],

@@ -139,6 +139,29 @@ export async function POST(request: Request) {
     console.error('[yeastar] call context worker failed:', error)
     callTranscriptions = { error: 'Could not synchronize call context' }
   }
+  let yeastarTranscriptionCharges:
+    | { considered: number; charged: number; pending: number; rate_configured: boolean }
+    | { error: string }
+  try {
+    const { data, error } = await db.rpc(
+      'platform_process_yeastar_transcription_charges',
+      { p_limit: 50 }
+    )
+    if (error) throw error
+    const result = Array.isArray(data) ? data[0] : null
+    if (!result) throw new Error('Yeastar transcription charge worker returned no result.')
+    yeastarTranscriptionCharges = {
+      considered: Number(result.considered),
+      charged: Number(result.charged),
+      pending: Number(result.pending),
+      rate_configured: Boolean(result.rate_configured),
+    }
+  } catch (error) {
+    console.error('[yeastar] transcription estimate billing failed:', error)
+    yeastarTranscriptionCharges = {
+      error: 'Could not process Yeastar transcription estimates',
+    }
+  }
   // Media (image/voice-note) analysis runs first so any job that completes
   // within this same tick is already reflected in `messages` before the
   // conversation-analysis loop below builds its context — reduces the
@@ -290,7 +313,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[appointments] Google Calendar inbound sync could not start:', error)
   }
-  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, credit_call_pauses: creditCallPauses, calls: callTranscriptions, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
+  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, credit_call_pauses: creditCallPauses, calls: callTranscriptions, yeastar_transcription_charges: yeastarTranscriptionCharges, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in yeastarTranscriptionCharges || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
 }
 
 async function processAppointmentReminders(db: ReturnType<typeof supabaseAdmin>) {

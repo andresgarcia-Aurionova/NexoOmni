@@ -23,18 +23,22 @@ type Rates = {
   fx_source: string | null;
   call_minute_price_mxn_centavos: number;
   target_margin_basis_points: number;
+  yeastar_transcription_cost_usd_per_minute: number | null;
   banxico_token_configured: boolean;
   banxico_token_source: 'panel' | 'env' | null;
 };
 
 const API_ERROR_KEYS = {
   BILLING_MIGRATION_PENDING: 'migrationPending',
+  BILLING_MIGRATION_159_PENDING: 'migrationPending',
+  BILLING_MIGRATION_171_PENDING: 'yeastarMigrationPending',
   BANXICO_TOKEN_INVALID: 'tokenInvalid',
   BANXICO_TOKEN_MISSING: 'tokenMissing',
   BANXICO_TOKEN_UNREADABLE: 'tokenUnreadable',
   BANXICO_REFRESH_FAILED: 'refreshError',
   MANUAL_FX_INVALID: 'manualFxInvalid',
   BILLING_RATES_INVALID: 'ratesInvalid',
+  YEASTAR_RATE_INVALID: 'yeastarRateInvalid',
   BILLING_ACTION_INVALID: 'error',
 } as const;
 
@@ -46,12 +50,18 @@ export function BillingRatesPanel() {
   const [manualFx, setManualFx] = useState('');
   const [minutePrice, setMinutePrice] = useState('');
   const [margin, setMargin] = useState('');
+  const [yeastarRate, setYeastarRate] = useState('');
   const [token, setToken] = useState('');
 
   const apply = useCallback((json: Rates) => {
     setRates(json);
     setMinutePrice((json.call_minute_price_mxn_centavos / 100).toFixed(2));
     setMargin(String(json.target_margin_basis_points / 100));
+    setYeastarRate(
+      json.yeastar_transcription_cost_usd_per_minute == null
+        ? ''
+        : String(json.yeastar_transcription_cost_usd_per_minute)
+    );
   }, []);
 
   const call = useCallback(
@@ -257,6 +267,40 @@ export function BillingRatesPanel() {
             <Save />
             {t('saveRates')}
           </Button>
+        </form>
+
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-md border p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void post({
+              action: 'set_yeastar_transcription_rate',
+              cost_usd_per_minute: Number(yeastarRate),
+            });
+          }}
+        >
+          <div className="min-w-56 space-y-2">
+            <Label htmlFor="yeastar-transcription-rate">
+              {t('yeastarTranscriptionRate')}
+            </Label>
+            <Input
+              id="yeastar-transcription-rate"
+              type="number"
+              min="0.000001"
+              max="100"
+              step="0.000001"
+              value={yeastarRate}
+              onChange={(event) => setYeastarRate(event.target.value)}
+              required
+            />
+          </div>
+          <Button type="submit" disabled={busy}>
+            <Save />
+            {t('saveYeastarRate')}
+          </Button>
+          <p className="text-muted-foreground w-full text-xs">
+            {t('yeastarRateHelp')}
+          </p>
         </form>
       </CardContent>
     </Card>

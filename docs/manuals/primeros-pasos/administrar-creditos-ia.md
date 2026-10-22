@@ -79,6 +79,12 @@ llamadas** (arriba de los créditos):
   se vuelve a consultar Banxico.
 - Puedes cambiar el **precio por minuto** (MXN) y el **margen objetivo**; el
   cambio aplica a las llamadas que se cobren desde ese momento.
+- En **Costo promedio de transcripción Yeastar (USD/min)**, captura la tarifa
+  promedio que hayas calculado con el gasto de la central y sus minutos
+  transcritos. NexoOmni prorratea ese costo por la duración hablada de cada
+  llamada y añade 50 % sobre el costo para calcular el precio en créditos.
+  No hay débito automático hasta guardar una tarifa válida. Las llamadas sin
+  saldo suficiente quedan pendientes y se reintentan después de una recarga.
 
 ## Importante
 
@@ -124,8 +130,10 @@ llamadas** (arriba de los créditos):
 - El cargo de Zernio se usa para calcular el débito de conexión. El importe
   informativo de Meta se mantiene separado; no se descuenta de los créditos.
 - Yeastar muestra llamadas, minutos hablados y llamadas con transcripción.
-  El costo de transcripción todavía no está conciliado, por lo que no se
-  calcula ni se cobra.
+  Como la central no entrega los tokens de cada tenant, el costo se estima por
+  duración hablada usando la tarifa promedio configurada. El reporte separa
+  costo estimado, precio cargado, ganancia estimada y créditos debitados. Para
+  cada transcripción se conserva la tarifa usada en ese momento.
 
 ## Preguntas frecuentes
 
@@ -140,6 +148,13 @@ consultar el débito correspondiente.
 El débito se calcula con los tokens reportados y el precio vigente configurado
 para el modelo. La conciliación automática con la factura del proveedor aún no
 está disponible; compara los datos con el panel de OpenAI o Anthropic.
+
+**¿El cargo por transcripción Yeastar es exacto?**
+
+No. Yeastar no comparte con NexoOmni los tokens usados por la central para
+cada cliente. El cargo es una estimación por duración hablada y tarifa promedio,
+con un 50 % añadido al costo. Debes revisar esa tarifa con los reportes de uso
+de la central y ajustarla cuando cambie el costo promedio.
 
 **¿El sistema bloquea la IA y las llamadas cuando el saldo llega a cero?**
 

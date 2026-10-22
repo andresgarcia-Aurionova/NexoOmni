@@ -28,11 +28,15 @@ function adminClient() {
   });
 }
 
-class MigrationPendingError extends Error {}
+class MigrationPendingError extends Error {
+  constructor(readonly migration: 159 | 171) {
+    super(`Migration ${migration} is pending.`);
+  }
+}
 
-function migrationPendingResponse() {
+function migrationPendingResponse(error: MigrationPendingError) {
   return NextResponse.json(
-    { error: 'BILLING_MIGRATION_PENDING' },
+    { error: `BILLING_MIGRATION_${error.migration}_PENDING` },
     { status: 503 }
   );
 }
@@ -41,12 +45,18 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
   const { data, error } = await admin
     .from('ai_billing_settings')
     .select(
-      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points, banxico_token_encrypted'
+      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points, banxico_token_encrypted, yeastar_transcription_cost_nano_usd_per_minute'
     )
     .eq('id', true)
     .maybeSingle();
   // 42703 = columna inexistente: la migración 159 aún no se aplica.
-  if (error?.code === '42703') throw new MigrationPendingError();
+  if (error?.code === '42703') {
+    throw new MigrationPendingError(
+      error.message.includes('yeastar_transcription_cost_nano_usd_per_minute')
+        ? 171
+        : 159
+    );
+  }
   if (error || !data) throw error ?? new Error('Billing settings not found');
   return {
     mxn_per_usd: data.mxn_per_usd_micro
@@ -57,6 +67,11 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
     fx_source: data.mxn_fx_source as string | null,
     call_minute_price_mxn_centavos: Number(data.call_minute_price_mxn_centavos),
     target_margin_basis_points: Number(data.target_margin_basis_points),
+    yeastar_transcription_cost_usd_per_minute:
+      data.yeastar_transcription_cost_nano_usd_per_minute == null
+        ? null
+        : Number(data.yeastar_transcription_cost_nano_usd_per_minute) /
+          1_000_000_000,
     banxico_token_configured:
       Boolean(data.banxico_token_encrypted) ||
       Boolean(process.env.BANXICO_API_TOKEN),
@@ -74,7 +89,7 @@ export async function GET() {
     return NextResponse.json(await readSettings(adminClient()));
   } catch (error) {
     if (error instanceof MigrationPendingError) {
-      return migrationPendingResponse();
+      return migrationPendingResponse(error);
     }
     return toErrorResponse(error);
   }
@@ -188,6 +203,29 @@ export async function POST(request: Request) {
         })
         .eq('id', true);
       if (error) throw error;
+    } else if (action === 'set_yeastar_transcription_rate') {
+      const rate = body?.cost_usd_per_minute;
+      if (
+        typeof rate !== 'number' ||
+        !Number.isFinite(rate) ||
+        rate <= 0 ||
+        rate > 100
+      ) {
+        return NextResponse.json(
+          { error: 'YEASTAR_RATE_INVALID' },
+          { status: 400 }
+        );
+      }
+      const { error } = await admin
+        .from('ai_billing_settings')
+        .update({
+          yeastar_transcription_cost_nano_usd_per_minute: Math.round(
+            rate * 1_000_000_000
+          ),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', true);
+      if (error) throw error;
     } else {
       return NextResponse.json(
         { error: 'BILLING_ACTION_INVALID' },
@@ -198,7 +236,7 @@ export async function POST(request: Request) {
     return NextResponse.json(await readSettings(admin));
   } catch (error) {
     if (error instanceof MigrationPendingError) {
-      return migrationPendingResponse();
+      return migrationPendingResponse(error);
     }
     return toErrorResponse(error);
   }

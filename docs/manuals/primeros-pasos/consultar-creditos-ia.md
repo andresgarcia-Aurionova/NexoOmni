@@ -3,7 +3,7 @@ title: "Consultar créditos de IA"
 description: "Consulta el saldo, el consumo mensual, las recargas y los movimientos de créditos de IA de tu cuenta."
 section: "primeros-pasos"
 role: ["supervisor", "admin", "owner"]
-plan: ["ai"]
+plan: ["ai", "yeastar_voice", "whatsapp_voice"]
 updated: "2026-10-21"
 ---
 
@@ -26,6 +26,10 @@ de una cuenta con funciones de IA activas.
 3. Revisa el consumo de créditos del mes calendario UTC, agrupado por
    actividad y cantidad de usos. Solo se incluyen débitos confirmados en el
    libro de créditos.
+   Si tu cuenta usa transcripciones Yeastar, sus créditos pueden aparecer
+   como **Transcripción Yeastar (estimada)**. El cálculo se basa en la duración
+   hablada y en una tarifa promedio; no representa los tokens exactos usados
+   por la central.
 4. Revisa los últimos 50 movimientos: recargas, ajustes, uso, reembolsos o
    vencimientos.
 5. Usa **Actualizar** para volver a consultar la información.
@@ -44,6 +48,11 @@ disponible al iniciar el Checkout, por lo que puede cambiar e incluye el costo
 estimado de procesamiento del pago. Las tarjetas
 internacionales también se aceptan cuando el pago en línea está habilitado.
 La pantalla no muestra nombres de proveedores ni modelos de IA.
+
+Las transcripciones Yeastar se cobran solo cuando NexoOmni tiene configurada
+una tarifa promedio y el saldo alcanza. El precio estimado incluye un 50 %
+adicional sobre ese costo. Si no hay créditos suficientes, el cargo queda
+pendiente y puede procesarse después de una recarga.
 
 Si la opción de compra aparece deshabilitada, el equipo de NexoOmni aún no ha
 activado las recargas en línea. Si Stripe confirmó un cobro y el saldo no se

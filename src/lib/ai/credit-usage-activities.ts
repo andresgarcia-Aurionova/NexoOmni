@@ -5,6 +5,7 @@ export const AI_CREDIT_USAGE_ACTIVITIES = [
   'report',
   'call_summary',
   'voice_transcription',
+  'yeastar_transcription',
   'image_description',
   'embeddings',
   'credential_test',

@@ -22,6 +22,11 @@ importa grabaciones**; el audio permanece en el PBX y no se copia al
 almacenamiento de NexoOmni. Para escuchar una grabación, consúltala
 directamente en Yeastar.
 
+Las transcripciones Yeastar pueden generar un débito estimado de créditos
+según los minutos hablados y la tarifa promedio configurada por el operador.
+La central no entrega a NexoOmni los tokens usados por cada cliente, por lo
+que ese importe no es una medición exacta del consumo del proveedor.
+
 Yeastar puede dividir una llamada transferida en varios tramos CDR.
 NexoOmni conserva cada tramo para no perder su transcripción, pero los
 relaciona con el identificador raíz de la misma llamada. Si el recepcionista
