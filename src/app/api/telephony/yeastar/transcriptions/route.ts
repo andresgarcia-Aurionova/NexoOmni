@@ -5,6 +5,7 @@ import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { normalizeCallSummary } from '@/lib/telephony/call-summary'
 import { sortTranscriptionsNewestFirst } from '@/lib/telephony/transcription-order'
+import { repairFutureTranscriptionDates } from '@/lib/telephony/transcription-date-repair'
 
 function admin() {
   return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'La búsqueda contiene caracteres no permitidos.' }, { status: 400 })
     }
     const db = admin()
+    await repairFutureTranscriptionDates(db, accountId).catch((reason) => console.error('[transcriptions] date repair failed:', reason))
     let requestQuery = db.from('yeastar_call_transcriptions')
       .select('id, call_id, session_call_id, cdr_id, contact_id, customer_phone, customer_name, customer_email, agent_user_id, agent_extension, agent_name, direction, started_at, answered_at, ended_at, duration_seconds, routing_duration_seconds, handling_duration_seconds, ring_duration_seconds, hold_duration_seconds, talk_duration_seconds, disconnected_by, timeline, transcript, summary, key_points, action_items, language, transcription_status, analysis_status, sentiment, sentiment_score, memory_applied_at, error_message, created_at, updated_at', { count: 'exact' })
       .eq('account_id', accountId)
