@@ -1,3 +1,10 @@
+import {
+  reportSheetsCsv,
+  reportSheetsExcelXml,
+  reportSheetsPrintHtml,
+  type ReportExportSheet,
+} from './export-utils'
+
 export type ExecutiveReport = {
   meta: { operating_mode: 'commercial' | 'support' | 'hybrid'; currency: string; range: { from: string; to: string; days: number }; response_metrics_capped: boolean }
   operational: { new_conversations: number; previous_new_conversations: number; open_backlog: number; resolved: number; first_response_minutes: number | null; first_response_samples: number }
@@ -67,24 +74,13 @@ export type ExecutiveReportInsight = {
   data_note: string | null
 }
 
-type ExportCell = string | number | null | undefined
-type ExportSheet = { name: string; rows: ExportCell[][] }
-
-function display(value: ExportCell) { return value === null || value === undefined ? 'Sin datos' : String(value) }
-
-// Prevent spreadsheet formula injection when report fields contain user-supplied values.
-function safeCell(value: ExportCell) {
-  const text = display(value)
-  return /^[=+\-@]/.test(text.trimStart()) ? `'${text}` : text
-}
-
 function asPercent(value: number | null) { return value === null ? 'Sin datos' : `${value}%` }
 function minutes(value: number | null) { return value === null ? 'Sin datos' : value < 60 ? `${value} min` : `${Math.floor(value / 60)} h ${value % 60} min` }
 function callDuration(seconds: number | null) { return seconds === null ? 'Sin datos' : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` }
 function operatingMode(mode: ExecutiveReport['meta']['operating_mode']) { return mode === 'commercial' ? 'Comercial' : mode === 'support' ? 'Soporte' : 'Híbrido' }
 
-function reportSheets(report: ExecutiveReport, insight?: ExecutiveReportInsight | null): ExportSheet[] {
-  const sheets: ExportSheet[] = [
+function reportSheets(report: ExecutiveReport, insight?: ExecutiveReportInsight | null): ReportExportSheet[] {
+  const sheets: ReportExportSheet[] = [
     { name: 'Resumen', rows: [
       ['Reporte ejecutivo NexoOmni'],
       ['Periodo', `${report.meta.range.from} al ${report.meta.range.to}`],
@@ -180,22 +176,12 @@ function reportSheets(report: ExecutiveReport, insight?: ExecutiveReportInsight 
   return sheets
 }
 
-function escapeCsv(value: ExportCell) {
-  const text = safeCell(value).replaceAll('"', '""')
-  return /[;"\n\r]/.test(text) ? `"${text}"` : text
-}
-
-function escapeXml(value: ExportCell) {
-  return safeCell(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;')
-}
-
 export function executiveReportCsv(report: ExecutiveReport, insight?: ExecutiveReportInsight | null) {
-  return `\uFEFF${reportSheets(report, insight).flatMap((sheet, index) => [...(index === 0 ? [] : [['']]), [sheet.name], ...sheet.rows]).map((row) => row.map(escapeCsv).join(';')).join('\r\n')}`
+  return reportSheetsCsv(reportSheets(report, insight))
 }
 
 export function executiveReportExcelXml(report: ExecutiveReport, insight?: ExecutiveReportInsight | null) {
-  const sheets = reportSheets(report, insight).map((sheet) => `<Worksheet ss:Name="${escapeXml(sheet.name)}"><Table>${sheet.rows.map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="String">${escapeXml(cell)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`).join('')
-  return `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${sheets}</Workbook>`
+  return reportSheetsExcelXml(reportSheets(report, insight))
 }
 
 export function reportExportFilename(report: ExecutiveReport, extension: 'csv' | 'xls') {
@@ -203,6 +189,11 @@ export function reportExportFilename(report: ExecutiveReport, extension: 'csv' |
 }
 
 export function executiveReportPrintHtml(report: ExecutiveReport, insight?: ExecutiveReportInsight | null) {
-  const sheetTable = (sheet: ExportSheet) => `<section><h2>${escapeXml(sheet.name)}</h2><table><tbody>${sheet.rows.map((row, index) => `<tr>${row.map((cell) => `<${index === 0 ? 'th' : 'td'}>${escapeXml(cell)}</${index === 0 ? 'th' : 'td'}>`).join('')}</tr>`).join('')}</tbody></table></section>`
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>NexoOmni - Reporte ejecutivo</title><style>body{font-family:Arial,sans-serif;color:#172033;margin:36px}h1{font-size:24px;margin:0 0 6px}p{color:#536075;margin:0 0 22px}h2{font-size:16px;margin:26px 0 8px}table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:14px}th,td{border:1px solid #d8dee9;padding:7px;text-align:left;vertical-align:top}th{background:#f1f4f8;font-weight:700}@media print{body{margin:18px}section{break-inside:avoid}}</style></head><body><h1>Reporte ejecutivo NexoOmni</h1><p>Periodo: ${escapeXml(report.meta.range.from)} al ${escapeXml(report.meta.range.to)} · Perfil: ${escapeXml(operatingMode(report.meta.operating_mode))}</p>${reportSheets(report, insight).map(sheetTable).join('')}</body></html>`
+  return reportSheetsPrintHtml(
+    reportSheets(report, insight),
+    'Reporte ejecutivo NexoOmni',
+    `Periodo: ${report.meta.range.from} al ${report.meta.range.to} · Perfil: ${operatingMode(report.meta.operating_mode)}`,
+    'es',
+    'NexoOmni - Reporte ejecutivo'
+  )
 }

@@ -15,6 +15,8 @@ import {
   buildFinalMessages,
 } from '@/lib/assistant/prompts'
 import { parseAssistantDecision, runAssistantTool } from '@/lib/assistant/tools'
+import { AssistantReportValidationError } from '@/lib/assistant/build-report'
+import type { AssistantReportData } from '@/lib/assistant/report-types'
 
 const ThreadIdSchema = z.string().uuid()
 const TurnSchema = z.object({
@@ -37,6 +39,7 @@ type AssistantMessage = {
   role: 'user' | 'assistant'
   content: string
   sources: unknown
+  report_data: AssistantReportData | null
   created_at: string
 }
 
@@ -70,7 +73,7 @@ async function getAssistantResponse(
 ): Promise<AssistantMessage | null> {
   const { data, error } = await db
     .from('assistant_messages')
-    .select('id, role, content, sources, created_at')
+    .select('id, role, content, sources, report_data, created_at')
     .eq('reply_to_message_id', messageId)
     .eq('role', 'assistant')
     .maybeSingle()
@@ -119,7 +122,7 @@ export async function GET(request: Request) {
     }
     const { data, error } = await supabase
       .from('assistant_messages')
-      .select('id, role, content, sources, created_at')
+      .select('id, role, content, sources, report_data, created_at')
       .eq('thread_id', threadId)
       .eq('account_id', accountId)
       .eq('user_id', userId)
@@ -141,7 +144,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId, entitlements } = await requireEntitlement(
+    const { supabase, accountId, userId, role, entitlements } = await requireEntitlement(
       'ai_assistant',
       'supervisor'
     )
@@ -299,6 +302,7 @@ export async function POST(request: Request) {
 
     let answer: string
     let sources: Awaited<ReturnType<typeof runAssistantTool>>['sources'] = []
+    let reportData: AssistantReportData | null = null
     let billableUsage: AiUsage
     let provider = plan.provider
     let model = plan.model
@@ -334,6 +338,7 @@ export async function POST(request: Request) {
       const toolResult = await runAssistantTool({
         db: supabase,
         accountId,
+        role,
         config,
         features: entitlements.features,
         tool: decision.tool,
@@ -347,6 +352,7 @@ export async function POST(request: Request) {
       })
       answer = final.text.trim()
       sources = toolResult.sources
+      reportData = toolResult.reportData ?? null
       if (!final.usage || !answer) {
         throw new AiError('Assistant usage was not reported.', {
           code: 'usage_missing',
@@ -365,7 +371,7 @@ export async function POST(request: Request) {
       usage: billableUsage,
     })
     const { data: recorded, error: billingError } = await admin.rpc(
-      'record_ai_assistant_turn',
+      'record_ai_assistant_turn_with_report',
       {
         p_account_id: accountId,
         p_user_id: userId,
@@ -383,6 +389,7 @@ export async function POST(request: Request) {
         p_price_nano_usd: billing.priceNanoUsd.toString(),
         p_credits: billing.creditsCharged.toString(),
         p_idempotency_key: `assistant:response:${userMessage.id}`,
+        p_report_data: reportData,
       }
     )
     if (billingError) {
@@ -410,7 +417,7 @@ export async function POST(request: Request) {
 
     const response = await admin
       .from('assistant_messages')
-      .select('id, role, content, sources, created_at')
+      .select('id, role, content, sources, report_data, created_at')
       .eq('id', result.assistant_message_id)
       .single()
     if (response.error || !response.data) {
@@ -424,6 +431,12 @@ export async function POST(request: Request) {
       available_credits: String(result.available_credits),
     })
   } catch (err) {
+    if (err instanceof AssistantReportValidationError) {
+      return NextResponse.json(
+        { error: 'invalid_report_request', code: 'invalid_report_request' },
+        { status: 422 }
+      )
+    }
     if (err instanceof AiError) return publicAiError(err)
     return toErrorResponse(err)
   }

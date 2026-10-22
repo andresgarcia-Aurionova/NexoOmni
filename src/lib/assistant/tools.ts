@@ -1,11 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import type { AccountEntitlements } from '@/lib/account/entitlements'
+import type { AccountRole } from '@/lib/auth/roles'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import type { AiConfig } from '@/lib/ai/types'
 import { searchPlatformManuals, type AssistantSource } from './manual-search'
+import { buildAssistantReport, summarizeAssistantReport } from './build-report'
+import {
+  AssistantReportRequestSchema,
+  type AssistantReportData,
+} from './report-types'
 
 const AssistantToolCallSchema = z.discriminatedUnion('name', [
+  AssistantReportRequestSchema.extend({
+    name: z.literal('generate_custom_report'),
+  }).strict(),
   z.object({
     name: z.literal('search_platform_manuals'),
     query: z.string().trim().min(2).max(160),
@@ -50,6 +59,7 @@ export type AssistantDecision = z.infer<typeof AssistantDecisionSchema>
 export interface AssistantToolResult {
   data: Record<string, unknown>
   sources: AssistantSource[]
+  reportData?: AssistantReportData
 }
 
 export class InvalidAssistantDecisionError extends Error {
@@ -92,13 +102,28 @@ function sanitizeContactSearch(value: string): string {
 export async function runAssistantTool(args: {
   db: SupabaseClient
   accountId: string
+  role: AccountRole
   config: Pick<AiConfig, 'embeddingsApiKey'>
-  features: Pick<AccountEntitlements['features'], 'social_messaging' | 'yeastar_telephony'>
+  features: Pick<AccountEntitlements['features'], 'social_messaging' | 'yeastar_telephony' | 'ai_conversation_intelligence'>
   tool: AssistantToolCall
 }): Promise<AssistantToolResult> {
-  const { db, accountId, config, features, tool } = args
+  const { db, accountId, role, config, features, tool } = args
 
   switch (tool.name) {
+    case 'generate_custom_report': {
+      const reportData = await buildAssistantReport({
+        db,
+        accountId,
+        role,
+        features,
+        request: tool,
+      })
+      return {
+        data: { report: summarizeAssistantReport(reportData) },
+        reportData,
+        sources: dataSource('Reportes agregados de la cuenta', '/reports'),
+      }
+    }
     case 'search_platform_manuals': {
       const result = await searchPlatformManuals(tool.query)
       return {
