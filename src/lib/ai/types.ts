@@ -25,6 +25,9 @@ export interface AiConfig {
   /** Optional OpenAI audio-transcription model for voice notes. */
   voiceTranscriptionModel?: string
   apiKey: string
+  /** Decrypted chat credentials for every provider the account has. Task
+   *  routing picks the best provider/model per task among these. */
+  providerKeys?: Partial<Record<AiProvider, string>>
   systemPrompt: string | null
   isActive: boolean
   autoReplyEnabled: boolean

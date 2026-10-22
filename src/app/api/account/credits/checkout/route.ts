@@ -62,7 +62,7 @@ function stripeAmount(value: string): number {
 export async function POST(request: Request) {
   try {
     const { accountId, userId } = await requireEntitlement(
-      'ai_conversation_intelligence',
+      'ai_credits',
       'supervisor'
     );
     const limit = checkRateLimit(

@@ -519,7 +519,7 @@ async function analyzeMedia(
   const task = job.kind === 'image' ? 'image_description' : 'voice_transcription'
   const args = {
     accountId: job.account_id,
-    apiKey: config.apiKey,
+    apiKey: config.providerKeys?.openai ?? (config.provider === 'openai' ? config.apiKey : ''),
     model: resolveAiTaskConfig(config, task).model,
     bytes,
     mimeType,
@@ -557,7 +557,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
     try {
       const config = await loadAiConfig(db, job.account_id)
       if (!config) throw new Error('La IA no está activa.')
-      if (config.provider !== 'openai') {
+      if (!config.providerKeys?.openai && config.provider !== 'openai') {
         await finishMediaJob(db, job, 'skipped_unsupported', 'El análisis de medios requiere OpenAI.', 'skipped')
         skipped++; continue
       }

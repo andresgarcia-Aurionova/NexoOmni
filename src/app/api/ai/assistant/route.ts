@@ -272,7 +272,7 @@ export async function POST(request: Request) {
 
     const plan = await generateText({
       config,
-      task: 'reply',
+      task: 'assistant_router',
       systemPrompt: buildAssistantPlannerPrompt(),
       messages: history,
       maxOutputTokens: 600,
@@ -345,7 +345,7 @@ export async function POST(request: Request) {
       })
       const final = await generateText({
         config,
-        task: 'reply',
+        task: 'assistant_data',
         systemPrompt: buildAssistantFinalPrompt(),
         messages: buildFinalMessages(history, toolResult),
         maxOutputTokens: 800,

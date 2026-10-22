@@ -15,7 +15,7 @@ import { BillingRatesPanel } from '@/components/platform/billing-rates-panel'
 import { AiProviderCredentialsPanel } from '@/components/platform/ai-provider-credentials-panel'
 import { StripeSettingsPanel } from '@/components/platform/stripe-settings-panel'
 
-type PlanCode = 'ai' | 'yeastar_voice' | 'whatsapp_voice'
+type PlanCode = 'basic' | 'ai' | 'yeastar_voice' | 'whatsapp_voice'
 type PlatformAccount = {
   id: string
   name: string
@@ -38,9 +38,10 @@ type PlatformMember = {
 type SubscriptionStatus = 'active' | 'trial' | 'suspended' | 'cancelled'
 
 const PLAN_LABELS: Record<PlanCode, string> = {
-  ai: 'IA omnicanal',
-  yeastar_voice: 'IA + voz Yeastar',
-  whatsapp_voice: 'IA + Yeastar + voz WhatsApp',
+  basic: 'Plan 1 · Básico (sin IA)',
+  ai: 'Plan 2 · IA (sin llamadas)',
+  yeastar_voice: 'IA + Yeastar (heredado)',
+  whatsapp_voice: 'Plan 3 · IA + telefonía',
 }
 const STATUS_LABELS: Record<SubscriptionStatus, string> = { active: 'Activa', trial: 'Demo', suspended: 'Pausada', cancelled: 'Cancelada' }
 function dateInputValue(value: string | null) { return value ? value.slice(0, 10) : '' }

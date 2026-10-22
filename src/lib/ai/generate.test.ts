@@ -43,6 +43,7 @@ function errResponse(status: number, json: unknown): Response {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  vi.stubEnv('AI_TASK_ROUTING_ENABLED', 'false');
 });
 afterEach(() => {
   vi.unstubAllGlobals();

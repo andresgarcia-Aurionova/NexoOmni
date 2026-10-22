@@ -115,7 +115,7 @@ describe('POST /api/account/credits/checkout', () => {
       fx_date: '2026-10-21',
     });
     expect(mocks.requireEntitlement).toHaveBeenCalledWith(
-      'ai_conversation_intelligence',
+      'ai_credits',
       'supervisor'
     );
 

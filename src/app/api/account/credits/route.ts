@@ -115,7 +115,7 @@ async function getBalanceMxnEstimate(balance: string) {
 export async function GET() {
   try {
     const { accountId, supabase } = await requireEntitlement(
-      'ai_conversation_intelligence',
+      'ai_credits',
       'supervisor'
     );
     const now = new Date();

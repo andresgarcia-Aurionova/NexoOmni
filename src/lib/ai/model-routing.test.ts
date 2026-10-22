@@ -37,10 +37,34 @@ describe('resolveAiTaskConfig', () => {
     expect(resolveAiTaskConfig(config(), 'reply', true).model).toBe(
       'gpt-6-luna'
     );
-    expect(
-      resolveAiTaskConfig(config({ provider: 'anthropic' }), 'report', true)
-        .model
-    ).toBe('claude-sonnet-5-5');
+  });
+
+  it('routes each task to its best provider when both keys exist', () => {
+    const both = config({ providerKeys: { openai: 'o-key', anthropic: 'a-key' } });
+    const report = resolveAiTaskConfig(both, 'report', true);
+    expect(report).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      apiKey: 'a-key',
+    });
+    const reply = resolveAiTaskConfig(
+      config({ provider: 'anthropic', apiKey: 'a-key', providerKeys: { openai: 'o-key', anthropic: 'a-key' } }),
+      'reply',
+      true
+    );
+    expect(reply).toMatchObject({ provider: 'openai', model: 'gpt-6-luna', apiKey: 'o-key' });
+  });
+
+  it('falls back to the provider that has a key', () => {
+    const anthropicOnly = config({
+      provider: 'anthropic',
+      apiKey: 'a-key',
+      providerKeys: { anthropic: 'a-key' },
+    });
+    expect(resolveAiTaskConfig(anthropicOnly, 'reply', true)).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-haiku-5-5',
+    });
   });
 
   it('keeps explicit task-specific model overrides ahead of candidates', () => {
@@ -62,10 +86,9 @@ describe('resolveAiTaskConfig', () => {
     ).toBe('gpt-4o-mini-transcribe');
   });
 
-  it('enables candidate routing only with an explicit environment flag', () => {
+  it('enables candidate routing by default and allows disabling it', () => {
+    expect(isAiTaskRoutingEnabled()).toBe(true);
     vi.stubEnv('AI_TASK_ROUTING_ENABLED', 'false');
     expect(isAiTaskRoutingEnabled()).toBe(false);
-    vi.stubEnv('AI_TASK_ROUTING_ENABLED', 'true');
-    expect(isAiTaskRoutingEnabled()).toBe(true);
   });
 });

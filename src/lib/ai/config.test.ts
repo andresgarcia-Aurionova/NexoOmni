@@ -1,8 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const { mockSupabaseAdmin } = vi.hoisted(() => ({
+const { mockSupabaseAdmin, mockEntitlements } = vi.hoisted(() => ({
   mockSupabaseAdmin: vi.fn(),
+  mockEntitlements: vi.fn(),
+}));
+
+vi.mock('@/lib/account/entitlements', () => ({
+  getAccountEntitlements: mockEntitlements,
 }));
 
 // decrypt is identity in tests so we don't depend on real ciphertext.
@@ -14,6 +19,31 @@ vi.mock('./admin-client', () => ({
 }));
 
 import { loadAiConfig, loadEmbeddingsKey } from './config';
+
+beforeEach(() => {
+  mockEntitlements.mockReset();
+  mockEntitlements.mockResolvedValue({ features: { ai_credits: true } });
+});
+
+describe('plan gate', () => {
+  it('returns no AI config or embeddings key for accounts without the AI plan', async () => {
+    mockEntitlements.mockResolvedValue({ features: { ai_credits: false } });
+    mockSupabaseAdmin.mockReturnValue(
+      dbReturning(
+        { ...ROW, is_active: true },
+        {
+          'openai:chat': { encrypted_api_key: 'k' },
+          'openai:embeddings': { encrypted_api_key: 'e' },
+        }
+      )
+    );
+    expect(await loadAiConfig(dbReturning(null), 'acct')).toBeNull();
+    expect(await loadEmbeddingsKey(dbReturning(null), 'acct')).toEqual({
+      key: null,
+      corrupt: false,
+    });
+  });
+});
 
 function dbReturning(
   row: Record<string, unknown> | null,

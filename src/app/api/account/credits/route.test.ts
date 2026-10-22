@@ -127,7 +127,7 @@ describe('GET /api/account/credits', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(mocks.requireEntitlement).toHaveBeenCalledWith(
-      'ai_conversation_intelligence',
+      'ai_credits',
       'supervisor'
     );
     expect(await response.json()).toEqual({

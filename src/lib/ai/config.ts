@@ -2,6 +2,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from './admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import type { AiConfig } from './types';
+import { getAccountEntitlements } from '@/lib/account/entitlements';
+
+/** Plan 1 (basic), suspended or unprovisioned accounts never reach a provider. */
+async function accountHasAiPlan(
+  db: SupabaseClient,
+  accountId: string
+): Promise<boolean> {
+  const entitlements = await getAccountEntitlements(db, accountId);
+  return entitlements?.features.ai_credits === true;
+}
 
 interface AiConfigRow {
   provider: 'openai' | 'anthropic';
@@ -75,6 +85,7 @@ export async function loadAiConfig(
 ): Promise<AiConfig | null> {
   const { requireActive = true } = opts;
   const db = supabaseAdmin();
+  if (!(await accountHasAiPlan(db, accountId))) return null;
   const primary = await db
     .from('ai_configs')
     .select(CONFIG_COLUMNS)
@@ -141,9 +152,29 @@ export async function loadAiConfig(
     }
   }
 
+  const providerKeys: Partial<Record<'openai' | 'anthropic', string>> = {};
+  for (const provider of ['openai', 'anthropic'] as const) {
+    const encrypted =
+      provider === row.provider
+        ? encryptedApiKey
+        : await loadEncryptedCredential(db, accountId, provider, 'chat');
+    if (!encrypted) continue;
+    try {
+      providerKeys[provider] = decrypt(encrypted);
+    } catch {
+      if (provider === row.provider) throw new Error(
+        `The ${provider} credential for account ${accountId} could not be decrypted.`
+      );
+      console.error(
+        `[ai config] ${provider} key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY.`
+      );
+    }
+  }
+
   return {
     accountId,
     provider: row.provider,
+    providerKeys,
     model: row.model,
     // Existing rows keep working after the additive migration even before an
     // administrator saves the new routing fields.
@@ -183,6 +214,9 @@ export async function loadEmbeddingsKey(
   accountId: string
 ): Promise<{ key: string | null; corrupt: boolean }> {
   const db = supabaseAdmin();
+  if (!(await accountHasAiPlan(db, accountId))) {
+    return { key: null, corrupt: false };
+  }
   const encryptedKey = await loadEncryptedCredential(
     db,
     accountId,

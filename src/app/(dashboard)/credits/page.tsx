@@ -6,7 +6,7 @@ import { ForbiddenError } from '@/lib/auth/account';
 
 export default async function CreditsPage() {
   try {
-    await requireEntitlement('ai_conversation_intelligence', 'supervisor');
+    await requireEntitlement('ai_credits', 'supervisor');
   } catch (error) {
     if (error instanceof ForbiddenError) {
       redirect('/dashboard?access_denied=1');

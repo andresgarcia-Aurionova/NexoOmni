@@ -2,31 +2,56 @@ import type { AiConfig, AiProvider } from './types';
 
 export type AiTask =
   | 'reply'
+  | 'agent'
   | 'analysis'
   | 'call_summary'
   | 'report'
+  | 'assistant_router'
+  | 'assistant_data'
   | 'image_description'
   | 'voice_transcription';
 
-type TaskModelCandidates = Partial<Record<AiTask, string>>;
+export type TaskCandidate = { provider: AiProvider; model: string };
 
-export const AI_TASK_MODEL_CANDIDATES: Record<AiProvider, TaskModelCandidates> =
-  {
-    openai: {
-      reply: 'gpt-6-luna',
-      analysis: 'gpt-6-luna',
-      call_summary: 'gpt-6-luna',
-      report: 'gpt-5.6-terra',
-      image_description: 'gpt-6-luna',
-      voice_transcription: 'gpt-4o-mini-transcribe',
-    },
-    anthropic: {
-      reply: 'claude-haiku-5-5',
-      analysis: 'claude-haiku-5-5',
-      call_summary: 'claude-haiku-5-5',
-      report: 'claude-sonnet-5-5',
-    },
-  };
+/**
+ * Ordered policy per task: the first candidate whose provider credential the
+ * tenant has wins. Every tenant is expected to have both providers; the order
+ * only matters as a fallback when one key is missing.
+ */
+export const AI_TASK_POLICY: Record<AiTask, TaskCandidate[]> = {
+  reply: [
+    { provider: 'openai', model: 'gpt-6-luna' },
+    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+  ],
+  agent: [
+    { provider: 'openai', model: 'gpt-6-luna' },
+    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+  ],
+  analysis: [
+    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+    { provider: 'openai', model: 'gpt-6-luna' },
+  ],
+  call_summary: [
+    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+    { provider: 'openai', model: 'gpt-6-luna' },
+  ],
+  report: [
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    { provider: 'openai', model: 'gpt-5.6-terra' },
+  ],
+  assistant_router: [
+    { provider: 'openai', model: 'gpt-6-luna' },
+    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+  ],
+  assistant_data: [
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    { provider: 'openai', model: 'gpt-5.6-terra' },
+  ],
+  image_description: [{ provider: 'openai', model: 'gpt-6-luna' }],
+  voice_transcription: [
+    { provider: 'openai', model: 'gpt-4o-mini-transcribe' },
+  ],
+};
 
 function configuredModel(config: AiConfig, task: AiTask): string | undefined {
   switch (task) {
@@ -38,13 +63,26 @@ function configuredModel(config: AiConfig, task: AiTask): string | undefined {
     case 'voice_transcription':
       return config.voiceTranscriptionModel;
     case 'reply':
+    case 'agent':
     case 'report':
+    case 'assistant_router':
+    case 'assistant_data':
       return undefined;
   }
 }
 
+/** Task routing is on by default; set AI_TASK_ROUTING_ENABLED=false to pin every task to the tenant model. */
 export function isAiTaskRoutingEnabled(): boolean {
-  return process.env.AI_TASK_ROUTING_ENABLED === 'true';
+  return process.env.AI_TASK_ROUTING_ENABLED !== 'false';
+}
+
+export function resolveProviderKey(
+  config: AiConfig,
+  provider: AiProvider
+): string | null {
+  const key = config.providerKeys?.[provider];
+  if (key) return key;
+  return provider === config.provider && config.apiKey ? config.apiKey : null;
 }
 
 export function resolveAiTaskConfig(
@@ -56,8 +94,17 @@ export function resolveAiTaskConfig(
   if (override) return { ...config, model: override };
 
   if (routingEnabled) {
-    const candidate = AI_TASK_MODEL_CANDIDATES[config.provider][task];
-    if (candidate) return { ...config, model: candidate };
+    for (const candidate of AI_TASK_POLICY[task]) {
+      const apiKey = resolveProviderKey(config, candidate.provider);
+      if (apiKey) {
+        return {
+          ...config,
+          provider: candidate.provider,
+          apiKey,
+          model: candidate.model,
+        };
+      }
+    }
   }
 
   if (task === 'image_description') {

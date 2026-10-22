@@ -228,7 +228,7 @@ export async function dispatchInboundToAiReply(
     const { text, handoff, handoffQueue, usage, provider, model, latencyMs } =
       await generateReply({
         config,
-        task: 'reply',
+        task: 'agent',
         systemPrompt,
         messages,
       });
