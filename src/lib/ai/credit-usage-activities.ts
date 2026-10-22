@@ -8,6 +8,7 @@ export const AI_CREDIT_USAGE_ACTIVITIES = [
   'image_description',
   'embeddings',
   'credential_test',
+  'assistant',
   'whatsapp_call',
   'other',
 ] as const;

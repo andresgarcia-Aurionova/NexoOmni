@@ -22,7 +22,8 @@ export interface LogAiUsageArgs {
     | 'voice_transcription'
     | 'image_description'
     | 'embeddings'
-    | 'credential_test';
+    | 'credential_test'
+    | 'assistant';
   provider: AiProvider;
   model: string;
   latencyMs?: number;

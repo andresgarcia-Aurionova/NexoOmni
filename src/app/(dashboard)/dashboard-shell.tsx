@@ -11,6 +11,7 @@ import { TelephonyProvider } from '@/components/telephony/telephony-provider';
 import { NexPhone } from '@/components/telephony/softphone';
 import { PwaInstallControl } from '@/components/pwa/pwa-controls';
 import { MobileMessageBadge } from '@/components/pwa/mobile-message-badge';
+import { AssistantWidget } from '@/components/assistant/assistant-widget';
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -51,6 +52,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <PresenceHeartbeat />
       <IncomingMessageAlert />
       <MobileMessageBadge />
+      <AssistantWidget />
       <TelephonyProvider><Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header

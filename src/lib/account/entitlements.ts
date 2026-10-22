@@ -7,6 +7,7 @@ export const PLAN_CODES = ['ai', 'yeastar_voice', 'whatsapp_voice'] as const
 export type PlanCode = (typeof PLAN_CODES)[number]
 
 export const ENTITLEMENTS = [
+  'ai_assistant',
   'ai_conversation_intelligence',
   'yeastar_telephony',
   'yeastar_live_chat',
@@ -35,9 +36,9 @@ export type AccountEntitlements = {
 }
 
 const PLAN_FEATURES: Record<PlanCode, Record<Entitlement, boolean>> = {
-  ai: { ai_conversation_intelligence: true, yeastar_telephony: false, yeastar_live_chat: false, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true },
-  yeastar_voice: { ai_conversation_intelligence: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true },
-  whatsapp_voice: { ai_conversation_intelligence: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: true, automation_flows: true },
+  ai: { ai_assistant: true, ai_conversation_intelligence: true, yeastar_telephony: false, yeastar_live_chat: false, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true },
+  yeastar_voice: { ai_assistant: true, ai_conversation_intelligence: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true },
+  whatsapp_voice: { ai_assistant: true, ai_conversation_intelligence: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: true, automation_flows: true },
 }
 
 function isPlanCode(value: string): value is PlanCode {

@@ -13,7 +13,17 @@ const DEFAULT_WINDOW_DAYS = 30
 
 interface UsageRow {
   created_at: string
-  mode: 'auto_reply' | 'draft' | 'analysis' | 'report' | 'call_summary'
+  mode:
+    | 'auto_reply'
+    | 'draft'
+    | 'analysis'
+    | 'report'
+    | 'call_summary'
+    | 'voice_transcription'
+    | 'image_description'
+    | 'embeddings'
+    | 'credential_test'
+    | 'assistant'
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
@@ -87,6 +97,11 @@ export async function GET(request: Request) {
       analysis: { calls: 0, tokens: 0 },
       report: { calls: 0, tokens: 0 },
       call_summary: { calls: 0, tokens: 0 },
+      voice_transcription: { calls: 0, tokens: 0 },
+      image_description: { calls: 0, tokens: 0 },
+      embeddings: { calls: 0, tokens: 0 },
+      credential_test: { calls: 0, tokens: 0 },
+      assistant: { calls: 0, tokens: 0 },
     }
     // Zero-filled daily buckets so the chart shows quiet days as gaps,
     // not missing points. Local-day keys, oldest → newest — the same

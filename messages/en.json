@@ -1,4 +1,37 @@
 {
+  "Assistant": {
+    "title": "Nexo Assistant",
+    "open": "Open Nexo Assistant",
+    "close": "Close Nexo Assistant",
+    "newConversation": "New conversation",
+    "history": "Previous conversations",
+    "deleteConversation": "Delete conversation",
+    "confirmDelete": "Delete this conversation and its history?",
+    "loading": "Loading conversation…",
+    "empty": "Ask about NexoOmni or look up information from your account.",
+    "thinking": "Looking up information…",
+    "messageLabel": "Your question",
+    "placeholder": "Ask a question…",
+    "send": "Send",
+    "creditNotice": "Responses use AI credits.",
+    "readOnlyNotice": "Read-only; no changes are made.",
+    "sourceKinds": {
+      "account_data": "Account data",
+      "account_knowledge": "Knowledge base"
+    },
+    "errors": {
+      "credits": "Your credit balance is insufficient. Top up to continue.",
+      "notConfigured": "Nexo Assistant is not configured for this account yet.",
+      "timeout": "The request took too long. Please try again.",
+      "rateLimit": "The request limit was reached. Wait a moment and try again.",
+      "pending": "This question is already being processed. Wait before sending another.",
+      "generic": "The request could not be completed. Please try again."
+    }
+  },
+  "AiUsageCard": {
+    "description": "Tokens used by AI features, including drafts, automatic replies, and Nexo Assistant.",
+    "assistant": "Nexo Assistant"
+  },
   "AiCredits": {
     "title": "AI credits",
     "description": "View your account's available balance and recent credit activity.",
@@ -45,6 +78,7 @@
       "voice_transcription": "Voice transcription",
       "image_description": "Image analysis",
       "embeddings": "Knowledge search",
+      "assistant": "Nexo Assistant",
       "credential_test": "AI connection test",
       "whatsapp_call": "WhatsApp calls (Zernio)",
       "other": "Other usage"
@@ -175,7 +209,8 @@
       "voice_transcription": "Voice note transcription",
       "image_description": "Image analysis",
       "embeddings": "Knowledge base",
-      "credential_test": "Credential test"
+      "credential_test": "Credential test",
+      "assistant": "Nexo Assistant"
     },
     "entries": {
       "purchase": "Top-up",

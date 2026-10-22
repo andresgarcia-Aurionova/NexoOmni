@@ -37,7 +37,8 @@ type AiUsageMode =
   | 'voice_transcription'
   | 'image_description'
   | 'embeddings'
-  | 'credential_test';
+  | 'credential_test'
+  | 'assistant';
 const AI_USAGE_MODES: AiUsageMode[] = [
   'auto_reply',
   'draft',
@@ -48,6 +49,7 @@ const AI_USAGE_MODES: AiUsageMode[] = [
   'image_description',
   'embeddings',
   'credential_test',
+  'assistant',
 ];
 
 function isAiUsageMode(value: unknown): value is AiUsageMode {

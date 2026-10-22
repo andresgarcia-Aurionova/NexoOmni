@@ -1,4 +1,37 @@
 {
+  "Assistant": {
+    "title": "Nexo Asistente",
+    "open": "Abrir Nexo Asistente",
+    "close": "Cerrar Nexo Asistente",
+    "newConversation": "Nueva conversación",
+    "history": "Conversaciones anteriores",
+    "deleteConversation": "Eliminar conversación",
+    "confirmDelete": "¿Eliminar esta conversación y su historial?",
+    "loading": "Cargando conversación…",
+    "empty": "Pregunta sobre NexoOmni o consulta información de tu cuenta.",
+    "thinking": "Consultando información…",
+    "messageLabel": "Tu pregunta",
+    "placeholder": "Escribe una pregunta…",
+    "send": "Enviar",
+    "creditNotice": "Las respuestas consumen créditos de IA.",
+    "readOnlyNotice": "Solo consulta; no realiza cambios.",
+    "sourceKinds": {
+      "account_data": "Datos de la cuenta",
+      "account_knowledge": "Base de conocimiento"
+    },
+    "errors": {
+      "credits": "Tu saldo de créditos no es suficiente. Recarga para continuar.",
+      "notConfigured": "Nexo Asistente todavía no está configurado para esta cuenta.",
+      "timeout": "La consulta tardó demasiado. Inténtalo de nuevo.",
+      "rateLimit": "Se alcanzó el límite de consultas. Espera un momento e inténtalo de nuevo.",
+      "pending": "Esta pregunta ya está en proceso. Espera un momento antes de enviar otra.",
+      "generic": "No se pudo completar la consulta. Inténtalo de nuevo."
+    }
+  },
+  "AiUsageCard": {
+    "description": "Tokens consumidos por funciones de IA, incluidos los borradores, las respuestas automáticas y Nexo Asistente.",
+    "assistant": "Nexo Asistente"
+  },
   "AiCredits": {
     "title": "Créditos de IA",
     "description": "Consulta tu saldo disponible y los movimientos recientes de créditos de tu cuenta.",
@@ -45,6 +78,7 @@
       "voice_transcription": "Transcripción de voz",
       "image_description": "Análisis de imágenes",
       "embeddings": "Búsqueda de conocimiento",
+      "assistant": "Nexo Asistente",
       "credential_test": "Prueba de conexión de IA",
       "whatsapp_call": "Llamadas de WhatsApp (Zernio)",
       "other": "Otros usos"
@@ -175,7 +209,8 @@
       "voice_transcription": "Transcripción de nota de voz",
       "image_description": "Análisis de imagen",
       "embeddings": "Base de conocimiento",
-      "credential_test": "Prueba de credenciales"
+      "credential_test": "Prueba de credenciales",
+      "assistant": "Nexo Asistente"
     },
     "entries": {
       "purchase": "Recarga",

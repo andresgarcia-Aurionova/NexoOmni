@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { BarChart3, Bot, BrainCircuit, FileBarChart, PencilLine } from 'lucide-react';
+import { BarChart3, Bot, BrainCircuit, FileBarChart, MessageCircle, PencilLine } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useTranslations } from 'next-intl';
 import { canEditSettings } from '@/lib/auth/roles';
 import {
   Card,
@@ -38,6 +39,7 @@ interface UsageResponse {
     draft: { calls: number; tokens: number };
     analysis: { calls: number; tokens: number };
     report: { calls: number; tokens: number };
+    assistant: { calls: number; tokens: number };
   };
   daily: { date: string; tokens: number; calls: number }[];
 }
@@ -51,6 +53,7 @@ const WINDOWS = [7, 30, 90] as const;
  */
 export function AiUsageCard() {
   const { accountId, accountRole, profileLoading } = useAuth();
+  const t = useTranslations('AiUsageCard');
   const canView = accountRole ? canEditSettings(accountRole) : false;
 
   const [days, setDays] = useState<number>(30);
@@ -103,10 +106,7 @@ export function AiUsageCard() {
             <CardTitle className="flex items-center gap-2 text-base">
               <BarChart3 className="h-4 w-4 text-primary" /> Token usage
             </CardTitle>
-            <CardDescription>
-              Tokens used by drafts and the auto-reply bot. Counts only — no
-              message content is stored here.
-            </CardDescription>
+            <CardDescription>{t('description')}</CardDescription>
           </div>
           <Select
             value={String(days)}
@@ -138,7 +138,7 @@ export function AiUsageCard() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-7">
               <Stat label="Total tokens" value={formatCompactNumber(data.totals.total_tokens)} />
               <Stat label="LLM calls" value={String(data.totals.calls)} />
               <Stat
@@ -160,6 +160,11 @@ export function AiUsageCard() {
                 label="Reportes"
                 value={formatCompactNumber(data.by_mode.report.tokens)}
                 icon={FileBarChart}
+              />
+              <Stat
+                label={t('assistant')}
+                value={formatCompactNumber(data.by_mode.assistant.tokens)}
+                icon={MessageCircle}
               />
             </div>
 

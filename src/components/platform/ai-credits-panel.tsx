@@ -31,7 +31,8 @@ type AiUsageMode =
   | 'voice_transcription'
   | 'image_description'
   | 'embeddings'
-  | 'credential_test';
+  | 'credential_test'
+  | 'assistant';
 type UsageRow = {
   account_id: string;
   mode: AiUsageMode;
@@ -233,6 +234,7 @@ export function AiCreditsPanel({
     image_description: t('modes.image_description'),
     embeddings: t('modes.embeddings'),
     credential_test: t('modes.credential_test'),
+    assistant: t('modes.assistant'),
   };
   const entryLabels: Record<LedgerEntry['entry_type'], string> = {
     purchase: t('entries.purchase'),

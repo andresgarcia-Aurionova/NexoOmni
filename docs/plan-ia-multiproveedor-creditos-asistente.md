@@ -1,6 +1,6 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **Fases 0, 1, 2, B1, B2 y 3 implementadas. El usuario confirmó en producción el portal de saldo/historial, las alertas 10 %/5 %, Checkout y la acreditación de una compra de prueba por webhook. La configuración Stripe test/live está desplegada; los pagos reales siguen sujetos a revisión humana de precios, impuestos y cumplimiento. La fase 3b elimina el uso runtime de las copias antiguas de credenciales: estas se conservan intactas y las llaves vigentes se administran manualmente desde el panel de plataforma.**
+Estado: **Fases 0, 1, 2, B1, B2 y 3 implementadas. La fase 4 (Nexo Asistente v1, solo lectura) está implementada localmente; faltan validar la migración 168 en desarrollo, revisar RLS/privacidad y completar la validación automatizada antes de desplegar. El usuario confirmó en producción el portal de saldo/historial, las alertas 10 %/5 %, Checkout y la acreditación de una compra de prueba por webhook. La configuración Stripe test/live está desplegada; los pagos reales siguen sujetos a revisión humana de precios, impuestos y cumplimiento. La fase 3b elimina el uso runtime de las copias antiguas de credenciales: estas se conservan intactas y las llaves vigentes se administran manualmente desde el panel de plataforma.**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
 
 ### Estado de ejecución
@@ -175,33 +175,35 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 
 ## 6. Asistente por tenant ("Nexo Asistente")
 
-### 6.1 Alcance
+### 6.1 Alcance y decisiones de v1
 
-- Responde dudas de la plataforma y de la operación del cliente; genera **reportes a la medida** con sus datos; propone **acciones con confirmación**.
+- V1 responde dudas de la plataforma y permite consultas **de solo lectura** sobre datos de la cuenta.
 - **Supervisor, administrador y owner** (`requireRole('supervisor')`; `owner` accede por jerarquía). Nunca comparar strings de rol.
 - Nuevo entitlement `ai_assistant` en `entitlements.ts` (el mapa `PLAN_FEATURES` es exhaustivo: `tsc` marcará cada lugar).
 - Aislamiento por tenant: **todas las herramientas usan el cliente Supabase con RLS del usuario**, nunca service role, y `account_id` jamás viene de la entrada del modelo. Aunque el modelo se equivoque o sea manipulado, RLS bloquea datos de otra cuenta.
+- Decisiones confirmadas por el dueño del producto: sin escalamiento a soporte humano; incluir ayuda de manuales y datos propios; conservar el historial hasta que el usuario elimine la conversación; posponer streaming y mostrar la respuesta solo después de confirmar el débito.
+- Fuera de esta v1: reportes personalizados, acciones con confirmación, envío de mensajes y cambios de datos. Se evaluarán en fases posteriores.
 
-### 6.2 Herramientas (el modelo no escribe SQL)
+### 6.2 Herramientas de solo lectura (el modelo no escribe SQL)
 
-- **Lectura:** KPIs del dashboard, rendimiento de agentes (supervisión), pipelines/ventas, difusiones, llamadas, citas, contactos (con límite), consumo y saldo de créditos.
-- **Reportes:** una herramienta `build_report` que recibe una especificación validada con zod (métrica, dimensión, filtros, rango de fechas, límite de filas) de una **lista cerrada**; devuelve tabla/gráfica y permite exportar con el módulo existente de reportes ejecutivos. Se pueden guardar reportes.
-- **Ayuda:** búsqueda sobre `docs/manuals/` (base global de la plataforma, solo lectura) y la base de conocimiento propia del tenant.
-- **Acciones (v1):** crear tarea, agregar/quitar etiqueta, agregar nota, reasignar conversación. **Fuera de la v1:** enviar mensajes, difusiones, borrar datos.
-- **Confirmación obligatoria:** el modelo solo _propone_ la acción; se guarda en `assistant_pending_actions` (con vencimiento, ligada al usuario y a un hash de parámetros). La UI muestra una tarjeta "Confirmar/Cancelar"; al confirmar, el **servidor** la ejecuta con los permisos del usuario y su rol mínimo propio. El modelo no puede confirmar. Todo queda en una bitácora de auditoría.
+- **Lectura:** resumen de la cuenta, carga de conversaciones asignadas por agente, oportunidades, difusiones, llamadas/transcripciones Yeastar recientes, citas, contactos con límite y saldo de créditos.
+- **Ayuda:** búsqueda local acotada sobre `docs/manuals/` (excluye guías internas del operador) y recuperación de la base de conocimiento del tenant.
+- **Lista cerrada de herramientas:** cada llamada se valida con Zod; las consultas se ejecutan con el cliente autenticado y filtros `account_id` del contexto, nunca del modelo. La respuesta incluye fuentes permitidas.
+- **Cobro:** las respuestas directas se guardan junto al débito en una transacción. Si se consulta una herramienta, el selector se cobra idempotentemente y la respuesta final solo se persiste y entrega cuando la base confirma su débito. Los usos de embeddings, si aplican, siguen su registro facturable existente.
 
 ### 6.3 Seguridad (puntos críticos)
 
-- Contenido de clientes (mensajes, notas, nombres) = **dato no confiable**: va marcado como tal en el prompt y las herramientas de acción exigen confirmación humana, así una inyección de prompt no puede ejecutar nada sola.
+- Contenido de clientes, manuales y resultados de consultas = **dato no confiable**: las instrucciones incluidas en esos datos no se ejecutan ni amplían las herramientas permitidas.
 - Límites por turno (máx. iteraciones de herramientas, máx. filas, máx. tokens) y tope mensual de créditos configurable por la cuenta.
 - Respuestas de error genéricas al usuario (`toErrorResponse`), sin filtrar mensajes del proveedor.
 - Rate limit por usuario (`checkRateLimit`).
 
 ### 6.4 Datos y UI
 
-- `assistant_threads`, `assistant_messages` (RLS por cuenta + usuario), `assistant_pending_actions`, `assistant_audit`. Todas con RLS y política explícita.
-- Panel flotante en el dashboard, con streaming; visible solo si el rol y el entitlement lo permiten.
+- `assistant_threads` y `assistant_messages` (migración 168; RLS por cuenta + usuario). Lecturas y borrado se limitan al supervisor dueño del hilo; las escrituras quedan reservadas al endpoint service-role después de validar al usuario.
+- Widget flotante del dashboard; visible para supervisor+ y protegido en servidor por `ai_assistant`. La UI permite consultar y borrar el historial propio.
 - Textos en `messages/{es,en,ko}.json`; manual nuevo `docs/manuals/agentes-ia/asistente.md` y entrada en `docs/manuals/changelog/2026-10.md`.
+- Sin streaming real en v1. No desplegar hasta validar la migración 168 y las políticas RLS en una base de desarrollo, y completar la revisión humana de privacidad.
 
 ## 6bis. Tarificador de consumo (créditos vs costo en pesos, con conciliación)
 
@@ -262,7 +264,7 @@ Lo que ya existe en el repo y resuelve la atribución **sin depender de la clave
 | 2c   | Resumen interno de llamadas Zernio/Yeastar por tenant y débito de WhatsApp: costo de conexión Zernio ×2 más MXN $0.50 por minuto iniciado contestado. Meta es informativo; no se factura al crédito. La transcripción externa de Yeastar no es cobrable con la telemetría actual. | Aplicar 156–158 en orden en desarrollo; cotejar Zernio con su reporte y Yeastar con CDR; probar duplicados de webhook y FIX. |
 | 3    | Vencimiento auditable por lote (migración 163), portal de saldo/movimientos y alertas 10 %/5 % (migración 164) confirmados por el usuario en producción. Resumen mensual/estimado MXN (migración 165), Checkout con webhook firmado/idempotente (166) y configuración central cifrada test/live (167) desplegados y validados mediante una compra de prueba. | Revisión humana de precios, impuestos y conciliación antes de habilitar cobros reales. |
 | 3b   | Uso exclusivo de credenciales administradas por el operador desde `ai_provider_credentials`; copias históricas de `ai_configs` conservadas cifradas, sin fallback runtime ni borrado automático. Sin saldo de cortesía ni aviso previo para el corte inmediato confirmado por el usuario. | Pruebas de no-fallback, credenciales rotables desde el panel, `tsc`, `lint`, `npm test` y actualización de manual/changelog. |
-| 4    | Asistente v1 solo lectura + ayuda de plataforma.                                                                                                                                                                                                     | Pruebas de aislamiento entre tenants.                                                   |
+| 4    | Asistente v1 solo lectura + ayuda de plataforma, historial eliminable, control de rol/entitlement y débito antes de entregar la respuesta. Implementado localmente; no desplegado. | Pruebas automatizadas; validar migración 168 y aislamiento RLS en base de desarrollo; revisión humana de privacidad antes de producción. |
 | 5    | Reportes a la medida y exportación.                                                                                                                                                                                                                  | Cifras verificadas contra consultas conocidas.                                          |
 | 6    | Acciones con confirmación + auditoría.                                                                                                                                                                                                               | Pruebas de inyección de prompt.                                                         |
 
