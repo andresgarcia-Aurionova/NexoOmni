@@ -9,7 +9,6 @@ interface AiConfigRow {
   analysis_model?: string | null;
   image_analysis_model?: string | null;
   voice_transcription_model?: string | null;
-  api_key: string;
   system_prompt: string | null;
   is_active: boolean;
   auto_reply_enabled: boolean;
@@ -18,18 +17,17 @@ interface AiConfigRow {
   handoff_target?: 'unassigned' | 'agent' | 'queue' | 'ai_queue' | null;
   handoff_queue_id?: string | null;
   channel_types?: string[] | null;
-  embeddings_api_key: string | null;
   timezone?: string | null;
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, analysis_model, image_analysis_model, voice_transcription_model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, embeddings_api_key, timezone';
+  'provider, model, analysis_model, image_analysis_model, voice_transcription_model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, timezone';
 
 // Keep AI operational while a rolling deployment is waiting for migration 101.
 // The dedicated model columns are additive, so the existing general model is a
 // safe fallback until the database schema catches up.
 const LEGACY_CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key';
+  'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id';
 
 function isMissingModelColumn(error: { code?: string; message?: string }) {
   return (
@@ -38,10 +36,6 @@ function isMissingModelColumn(error: { code?: string; message?: string }) {
       error.message ?? ''
     )
   );
-}
-
-function isMissingCredentialTable(error: { code?: string; message?: string }) {
-  return error.code === '42P01' || error.code === 'PGRST205';
 }
 
 async function loadEncryptedCredential(
@@ -58,12 +52,6 @@ async function loadEncryptedCredential(
     .eq('credential_type', credentialType)
     .maybeSingle();
   if (error) {
-    if (isMissingCredentialTable(error)) {
-      console.warn(
-        '[ai config] Migration 155 is pending; falling back to the encrypted legacy key.'
-      );
-      return null;
-    }
     throw error;
   }
   return data?.encrypted_api_key ?? null;
@@ -72,10 +60,10 @@ async function loadEncryptedCredential(
 /**
  * Load and decrypt the account's AI config for *use* (draft or
  * auto-reply). Returns `null` when there's no row or the master switch
- * (`is_active`) is off — both mean "AI is not available", which callers
- * treat identically. Throws only if the stored key can't be decrypted
- * (mismatched `ENCRYPTION_KEY`), so that distinct failure surfaces
- * rather than looking like "not configured".
+ * (`is_active`) is off. Provider credentials are read only from the
+ * platform-managed credential table; legacy values in `ai_configs` are
+ * retained but never used. Throws if an active config has no credential or
+ * its stored credential can't be decrypted.
  *
  * The passed client is retained for caller compatibility. Secrets and
  * configuration are always loaded with the server-only service-role client.
@@ -115,20 +103,31 @@ export async function loadAiConfig(
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null;
-  // Defensive: the column is NOT NULL, but a partial write / manual DB
-  // edit could leave it empty. The credential table remains authoritative.
-  const encryptedApiKey =
-    (await loadEncryptedCredential(db, accountId, row.provider, 'chat')) ??
-    row.api_key;
-  if (!encryptedApiKey) return null;
+  const encryptedApiKey = await loadEncryptedCredential(
+    db,
+    accountId,
+    row.provider,
+    'chat'
+  );
+  if (!encryptedApiKey) {
+    if (requireActive && row.is_active) {
+      throw new Error(
+        `The platform-managed ${row.provider} credential is not configured for account ${accountId}.`
+      );
+    }
+    return null;
+  }
 
   // The embeddings key is optional and independent of the chat key —
   // a corrupt/undecryptable one should downgrade to lexical KB, not
   // take down draft/auto-reply, so decrypt failures are swallowed here.
   let embeddingsApiKey: string | null = null;
-  const encryptedEmbeddingsKey =
-    (await loadEncryptedCredential(db, accountId, 'openai', 'embeddings')) ??
-    row.embeddings_api_key;
+  const encryptedEmbeddingsKey = await loadEncryptedCredential(
+    db,
+    accountId,
+    'openai',
+    'embeddings'
+  );
   if (encryptedEmbeddingsKey) {
     try {
       embeddingsApiKey = decrypt(encryptedEmbeddingsKey);
@@ -201,19 +200,5 @@ export async function loadEmbeddingsKey(
     }
   }
 
-  const { data, error } = await db
-    .from('ai_configs')
-    .select('embeddings_api_key')
-    .eq('account_id', accountId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.embeddings_api_key) return { key: null, corrupt: false };
-  try {
-    return { key: decrypt(data.embeddings_api_key), corrupt: false };
-  } catch {
-    console.error(
-      `[ai config] embeddings key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY.`
-    );
-    return { key: null, corrupt: true };
-  }
+  return { key: null, corrupt: false };
 }

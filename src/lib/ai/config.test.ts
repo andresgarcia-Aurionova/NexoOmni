@@ -13,11 +13,12 @@ vi.mock('./admin-client', () => ({
   supabaseAdmin: mockSupabaseAdmin,
 }));
 
-import { loadAiConfig } from './config';
+import { loadAiConfig, loadEmbeddingsKey } from './config';
 
 function dbReturning(
   row: Record<string, unknown> | null,
-  credentials: Record<string, Record<string, unknown> | null> = {}
+  credentials: Record<string, Record<string, unknown> | null> = {},
+  credentialQueryError: { code: string; message: string } | null = null
 ): SupabaseClient {
   return {
     from(table: string) {
@@ -35,8 +36,8 @@ function dbReturning(
             data:
               table === 'ai_configs'
                 ? row
-                : credentials[`${provider}:${credentialType}`] ?? null,
-            error: null,
+                : (credentials[`${provider}:${credentialType}`] ?? null),
+            error: table === 'ai_configs' ? null : credentialQueryError,
           }),
       };
       return chain;
@@ -74,16 +75,50 @@ describe('loadAiConfig requireActive', () => {
   });
 
   it('returns the config when requireActive is false (Playground path)', async () => {
-    mockSupabaseAdmin.mockReturnValue(dbReturning(ROW));
+    mockSupabaseAdmin.mockReturnValue(
+      dbReturning(ROW, {
+        'openai:chat': { encrypted_api_key: 'managed-encrypted-key' },
+      })
+    );
     const config = await loadAiConfig(dbReturning(ROW), 'acct', {
       requireActive: false,
     });
     expect(config).not.toBeNull();
     expect(config!.provider).toBe('openai');
-    expect(config!.apiKey).toBe('plain:enc-key');
+    expect(config!.apiKey).toBe('plain:managed-encrypted-key');
     expect(config!.analysisModel).toBeUndefined();
     expect(config!.imageAnalysisModel).toBeUndefined();
     expect(config!.voiceTranscriptionModel).toBeUndefined();
+  });
+
+  it('does not use the legacy ai_configs key when no managed key exists', async () => {
+    mockSupabaseAdmin.mockReturnValue(dbReturning(ROW));
+    expect(
+      await loadAiConfig(dbReturning(ROW), 'acct', { requireActive: false })
+    ).toBeNull();
+  });
+
+  it('does not fall back to legacy keys when the credential table is unavailable', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      dbReturning(
+        ROW,
+        {},
+        {
+          code: 'PGRST205',
+          message: 'Could not find the table in the schema cache',
+        }
+      )
+    );
+    await expect(
+      loadAiConfig(dbReturning(ROW), 'acct', { requireActive: false })
+    ).rejects.toMatchObject({ code: 'PGRST205' });
+  });
+
+  it('reports an active config without a managed provider credential', async () => {
+    mockSupabaseAdmin.mockReturnValue(dbReturning({ ...ROW, is_active: true }));
+    await expect(loadAiConfig(dbReturning(ROW), 'acct')).rejects.toThrow(
+      'The platform-managed openai credential is not configured for account acct.'
+    );
   });
 
   it('returns null when there is no row', async () => {
@@ -91,5 +126,33 @@ describe('loadAiConfig requireActive', () => {
     expect(
       await loadAiConfig(dbReturning(null), 'acct', { requireActive: false })
     ).toBeNull();
+  });
+});
+
+describe('loadEmbeddingsKey', () => {
+  it('does not use a legacy embeddings key from ai_configs', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      dbReturning({ ...ROW, embeddings_api_key: 'legacy-embedding-key' })
+    );
+    await expect(loadEmbeddingsKey(dbReturning(null), 'acct')).resolves.toEqual(
+      {
+        key: null,
+        corrupt: false,
+      }
+    );
+  });
+
+  it('loads the platform-managed embeddings key', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      dbReturning(null, {
+        'openai:embeddings': { encrypted_api_key: 'managed-embedding-key' },
+      })
+    );
+    await expect(loadEmbeddingsKey(dbReturning(null), 'acct')).resolves.toEqual(
+      {
+        key: 'plain:managed-embedding-key',
+        corrupt: false,
+      }
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { generateReply } from './generate'
+import { EMBEDDING_MODEL, embedTexts } from './embeddings'
 import { supabaseAdmin } from './admin-client'
 import { logAiUsage } from './usage'
 import type { AiConfig } from './types'
@@ -11,10 +12,7 @@ import type { AiConfig } from './types'
  * persisting a config — the same "verify before save" discipline the
  * WhatsApp config uses with Meta.
  */
-export async function validateAiCredentials(
-  config: AiConfig,
-  accountId: string
-): Promise<void> {
+export async function validateAiCredentials(config: AiConfig, accountId: string): Promise<void> {
   const result = await generateReply({
     config,
     systemPrompt: 'You are a connectivity check. Reply with the single word: OK.',
@@ -29,4 +27,23 @@ export async function validateAiCredentials(
     latencyMs: result.latencyMs,
     usage: result.usage,
   })
+}
+
+export async function validateEmbeddingCredentials(apiKey: string, accountId: string): Promise<void> {
+  const db = supabaseAdmin()
+  await embedTexts(
+    apiKey,
+    ['NexoOmni credential check'],
+    async (usage) => {
+      await logAiUsage(db, {
+        accountId,
+        conversationId: null,
+        mode: 'credential_test',
+        provider: 'openai',
+        model: EMBEDDING_MODEL,
+        usage,
+      })
+    },
+    accountId
+  )
 }

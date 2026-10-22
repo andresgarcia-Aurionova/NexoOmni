@@ -24,16 +24,26 @@ verifican el acceso; ocultar el panel en pantalla no es el único control.
 1. Abre **Administración NexoOmni** y localiza **Llaves de IA por cliente**.
 2. Selecciona el cliente y revisa el proveedor que está usando actualmente y
    el estado de las llaves registradas.
-3. Selecciona OpenAI o Anthropic, pega la llave y pulsa **Verificar y guardar**.
-4. NexoOmni envía una solicitud corta de prueba. Si el proveedor la acepta,
-   la llave queda cifrada y el panel muestra solo sus últimos cuatro
-   caracteres.
+3. Elige **Chat y análisis** para guardar una llave de OpenAI o Anthropic, o
+   **Embeddings de la base de conocimiento** para guardar una llave de OpenAI
+   usada en la búsqueda semántica.
+4. Pega la llave y pulsa **Verificar y guardar**. NexoOmni envía una solicitud
+   corta de prueba. Si el proveedor la acepta, la llave queda cifrada y el
+   panel muestra solo sus últimos cuatro caracteres.
+
+Las credenciales que usa el runtime se leen de la tabla cifrada administrada
+por la plataforma. Puedes agregar o reemplazar una llave desde este panel
+cuando sea necesario; el sistema no rota ni elimina llaves automáticamente.
+Las copias históricas de la configuración anterior se conservan cifradas, pero
+no se usan como respaldo cuando falta una credencial administrada.
 
 ## Importante
 
 - La prueba genera una solicitud real: el proveedor puede cobrarla y NexoOmni
   también registra el consumo en los créditos del cliente cuando la base
   confirma el débito. Revisa el panel de créditos después de probar.
+- La llave de embeddings solo se puede configurar para OpenAI. Sin ella, la
+  búsqueda de conocimiento usa coincidencias por palabras clave.
 - Las llaves no se devuelven completas al navegador ni se escriben en los
   registros de la aplicación.
 - Guardar una llave no cambia automáticamente el proveedor activo. Agregar

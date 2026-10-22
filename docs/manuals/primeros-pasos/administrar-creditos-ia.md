@@ -113,8 +113,10 @@ llamadas** (arriba de los créditos):
 - La conversión de minutos a créditos depende del FIX de Banxico. El token se
   puede guardar cifrado desde el panel o configurarse como `BANXICO_API_TOKEN`
   en el servidor; no lo compartas en el chat ni lo guardes en el repositorio.
-- Las recargas se registran manualmente. El cobro automático con Stripe aún
-  no está conectado.
+- Checkout con Stripe se validó en modo de prueba, incluida la acreditación
+  mediante webhook. Los pagos reales requieren que el operador active el modo
+  correspondiente después de revisar precios, impuestos y cumplimiento. Los
+  ajustes y cortesías siguen registrándose manualmente desde este panel.
 - Zernio agrupa las llamadas por número y las vincula a un cliente solo cuando
   su perfil permite identificarlo sin ambigüedad. Las llamadas que no se pueden
   asignar aparecen aparte y no se suman a un cliente. El resumen mensual usa

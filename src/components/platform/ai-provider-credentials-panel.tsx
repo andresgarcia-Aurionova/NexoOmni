@@ -11,8 +11,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 type AiProvider = 'openai' | 'anthropic'
+type CredentialType = 'chat' | 'embeddings'
 type ProviderCredential = {
   provider: AiProvider
+  credential_type: CredentialType
   has_key: boolean
   readable: boolean
   last_four: string | null
@@ -31,23 +33,17 @@ const PROVIDERS: { id: AiProvider; label: string }[] = [
   { id: 'anthropic', label: 'Anthropic' },
 ]
 
-export function AiProviderCredentialsPanel({
-  accounts,
-}: {
-  accounts: { id: string; name: string }[]
-}) {
+export function AiProviderCredentialsPanel({ accounts }: { accounts: { id: string; name: string }[] }) {
   const t = useTranslations('PlatformAiCredentials')
   const [accountId, setAccountId] = useState('')
   const [provider, setProvider] = useState<AiProvider>('openai')
+  const [credentialType, setCredentialType] = useState<CredentialType>('chat')
   const [apiKey, setApiKey] = useState('')
   const [data, setData] = useState<CredentialData | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === accountId),
-    [accounts, accountId]
-  )
+  const selectedAccount = useMemo(() => accounts.find((account) => account.id === accountId), [accounts, accountId])
 
   const load = useCallback(async () => {
     if (!accountId) {
@@ -56,10 +52,9 @@ export function AiProviderCredentialsPanel({
     }
     setLoading(true)
     try {
-      const response = await fetch(
-        `/api/platform/ai-credentials?account_id=${encodeURIComponent(accountId)}`,
-        { cache: 'no-store' }
-      )
+      const response = await fetch(`/api/platform/ai-credentials?account_id=${encodeURIComponent(accountId)}`, {
+        cache: 'no-store',
+      })
       const json = await response.json().catch(() => null)
       if (!response.ok) throw new Error(json?.error ?? t('loadError'))
       setData(json as CredentialData)
@@ -77,11 +72,7 @@ export function AiProviderCredentialsPanel({
       setData(null)
       return
     }
-    setAccountId((current) =>
-      accounts.some((account) => account.id === current)
-        ? current
-        : accounts[0].id
-    )
+    setAccountId((current) => (accounts.some((account) => account.id === current) ? current : accounts[0].id))
   }, [accounts])
 
   useEffect(() => {
@@ -99,12 +90,28 @@ export function AiProviderCredentialsPanel({
         body: JSON.stringify({
           account_id: accountId,
           provider,
+          credential_type: credentialType,
           api_key: apiKey.trim(),
         }),
       })
       const json = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(json?.error ?? t('saveError'))
-      toast.success(t('saveSuccess', { provider: PROVIDERS.find((item) => item.id === provider)?.label ?? provider }))
+      if (!response.ok) {
+        const errorMessage =
+          json?.error === 'AI_CREDENTIAL_TYPE_INVALID'
+            ? t('credentialTypeInvalid')
+            : json?.error === 'AI_EMBEDDINGS_OPENAI_ONLY'
+              ? t('embeddingsOpenAiOnly')
+              : (json?.error ?? t('saveError'))
+        throw new Error(errorMessage)
+      }
+      toast.success(
+        t('saveSuccess', {
+          provider:
+            credentialType === 'embeddings'
+              ? t('embeddingsCredential')
+              : (PROVIDERS.find((item) => item.id === provider)?.label ?? provider),
+        })
+      )
       setApiKey('')
       await load()
     } catch (error) {
@@ -115,7 +122,12 @@ export function AiProviderCredentialsPanel({
   }
 
   const credentialByProvider = new Map(
-    (data?.credentials ?? []).map((credential) => [credential.provider, credential])
+    (data?.credentials ?? [])
+      .filter((credential) => credential.credential_type === 'chat')
+      .map((credential) => [credential.provider, credential])
+  )
+  const embeddingsCredential = data?.credentials.find(
+    (credential) => credential.provider === 'openai' && credential.credential_type === 'embeddings'
   )
 
   return (
@@ -149,23 +161,21 @@ export function AiProviderCredentialsPanel({
         </div>
 
         {accounts.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-5 text-center text-sm text-muted-foreground">
+          <p className="text-muted-foreground rounded-md border border-dashed px-3 py-5 text-center text-sm">
             {t('noAccounts')}
           </p>
         ) : (
           <>
             <div className="rounded-md border px-3 py-3 text-sm">
               <p className="font-medium">{t('activeProvider')}</p>
-              <p className="mt-1 text-muted-foreground">
+              <p className="text-muted-foreground mt-1">
                 {loading
                   ? t('loading')
                   : data?.active_provider
                     ? `${PROVIDERS.find((item) => item.id === data.active_provider)?.label ?? data.active_provider} · ${data.active_model ?? ''}`
                     : t('notConfigured')}
               </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {t('routingDisabled')}
-              </p>
+              <p className="text-muted-foreground mt-2 text-xs">{t('routingDisabled')}</p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -175,7 +185,7 @@ export function AiProviderCredentialsPanel({
                   <div key={item.id} className="rounded-md border p-3">
                     <p className="font-medium">{item.label}</p>
                     {credential ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="text-muted-foreground mt-1 text-sm">
                         {credential.readable
                           ? t('keyStored', {
                               lastFour: credential.last_four ?? '—',
@@ -184,31 +194,58 @@ export function AiProviderCredentialsPanel({
                         {credential.active ? ` · ${t('currentlyActive')}` : ''}
                       </p>
                     ) : (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {t('keyMissing')}
-                      </p>
+                      <p className="text-muted-foreground mt-1 text-sm">{t('keyMissing')}</p>
                     )}
                   </div>
                 )
               })}
             </div>
 
+            <div className="rounded-md border p-3">
+              <p className="font-medium">{t('embeddingsCredential')}</p>
+              {embeddingsCredential ? (
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {embeddingsCredential.readable
+                    ? t('keyStored', {
+                        lastFour: embeddingsCredential.last_four ?? '—',
+                      })
+                    : t('keyUnreadable')}
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-1 text-sm">{t('keyMissing')}</p>
+              )}
+            </div>
+
             <form
               onSubmit={saveCredential}
-              className="grid gap-3 rounded-lg border p-4 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end"
+              className="grid gap-3 rounded-lg border p-4 md:grid-cols-[180px_180px_minmax(0,1fr)_auto] md:items-end"
             >
               <div className="space-y-2">
-                <Label htmlFor="platform-ai-credential-provider">
-                  {t('provider')}
-                </Label>
+                <Label htmlFor="platform-ai-credential-type">{t('credentialType')}</Label>
+                <select
+                  id="platform-ai-credential-type"
+                  className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+                  value={credentialType}
+                  onChange={(event) => {
+                    const value = event.target.value as CredentialType
+                    setCredentialType(value)
+                    if (value === 'embeddings') setProvider('openai')
+                    setApiKey('')
+                  }}
+                  disabled={saving}
+                >
+                  <option value="chat">{t('chatCredential')}</option>
+                  <option value="embeddings">{t('embeddingsCredential')}</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="platform-ai-credential-provider">{t('provider')}</Label>
                 <select
                   id="platform-ai-credential-provider"
                   className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
                   value={provider}
-                  onChange={(event) =>
-                    setProvider(event.target.value as AiProvider)
-                  }
-                  disabled={saving}
+                  onChange={(event) => setProvider(event.target.value as AiProvider)}
+                  disabled={saving || credentialType === 'embeddings'}
                 >
                   {PROVIDERS.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -230,20 +267,11 @@ export function AiProviderCredentialsPanel({
                   disabled={saving || loading || !selectedAccount}
                 />
               </div>
-              <Button
-                type="submit"
-                disabled={saving || loading || !selectedAccount || !apiKey.trim()}
-              >
-                {saving ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <Save />
-                )}
+              <Button type="submit" disabled={saving || loading || !selectedAccount || !apiKey.trim()}>
+                {saving ? <LoaderCircle className="animate-spin" /> : <Save />}
                 {t('verifyAndSave')}
               </Button>
-              <p className="text-xs text-muted-foreground md:col-span-3">
-                {t('verificationCost')}
-              </p>
+              <p className="text-muted-foreground text-xs md:col-span-4">{t('verificationCost')}</p>
             </form>
           </>
         )}
