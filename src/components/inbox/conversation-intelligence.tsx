@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { BrainCircuit, ChevronDown, ChevronUp, ClipboardCheck, RefreshCw, Smile, Frown, Meh, MessageCircleQuestion } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,11 @@ type Analysis = {
   analyzed_at: string | null
 }
 
+type AnalysisJob = {
+  id: string
+  status: 'queued' | 'processing' | 'completed' | 'skipped_limit' | 'failed'
+}
+
 const urgencyMeta: Record<string, { label: string; className: string }> = {
   low: { label: 'Urgencia baja', className: 'text-muted-foreground' },
   medium: { label: 'Urgencia media', className: 'text-sky-500' },
@@ -58,19 +64,23 @@ const sentimentMeta = {
   mixed: { label: 'Mixto', icon: MessageCircleQuestion, className: 'text-amber-500' },
 } as const
 
-async function readApiResponse(response: Response) {
+async function readApiResponse(
+  response: Response,
+  errors: { unexpectedPage: string; invalidResponse: string },
+) {
   const body = await response.text()
   if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error(`El servidor devolvió una página inesperada (HTTP ${response.status}). Revisa el registro del servidor.`)
+    throw new Error(errors.unexpectedPage)
   }
   try {
-    return JSON.parse(body) as { analysis?: Analysis | null; error?: string }
+    return JSON.parse(body) as { analysis?: Analysis | null; error?: string; job?: AnalysisJob | null }
   } catch {
-    throw new Error(`El servidor devolvió una respuesta inválida (HTTP ${response.status}).`)
+    throw new Error(errors.invalidResponse)
   }
 }
 
 export function ConversationIntelligence({ conversationId }: { conversationId: string }) {
+  const t = useTranslations('Inbox.conversationIntelligence')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -80,26 +90,51 @@ export function ConversationIntelligence({ conversationId }: { conversationId: s
     setLoading(true)
     try {
       const response = await fetch(`/api/ai/conversation-analysis/${conversationId}`)
-      const data = await readApiResponse(response)
-      if (response.ok) setAnalysis(data.analysis ?? null)
+      const data = await readApiResponse(response, { unexpectedPage: t('serverError'), invalidResponse: t('invalidResponse') })
+      if (!response.ok) throw new Error(data.error ?? t('loadFailed'))
+      setAnalysis(data.analysis ?? null)
+      return data
     } finally {
       setLoading(false)
     }
-  }, [conversationId])
+  }, [conversationId, t])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load().catch(() => toast.error(t('loadFailed')))
+  }, [load, t])
 
   const analyze = async () => {
     setRunning(true)
     try {
       const response = await fetch(`/api/ai/conversation-analysis/${conversationId}`, { method: 'POST' })
-      const data = await readApiResponse(response)
-      if (!response.ok) throw new Error(data.error ?? 'No se pudo analizar la conversación.')
-      setAnalysis(data.analysis ?? null)
-      setExpanded(true)
-      toast.success('Análisis actualizado')
+      const data = await readApiResponse(response, { unexpectedPage: t('serverError'), invalidResponse: t('invalidResponse') })
+      if (!response.ok) throw new Error(data.error ?? t('failed'))
+      if (!data.job) throw new Error(t('failed'))
+
+      const jobId = data.job.id
+      const deadline = Date.now() + 5 * 60_000
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 4_000))
+        const statusResponse = await fetch(`/api/ai/conversation-analysis/${conversationId}`, { cache: 'no-store' })
+        const statusData = await readApiResponse(statusResponse, { unexpectedPage: t('serverError'), invalidResponse: t('invalidResponse') })
+        if (!statusResponse.ok) throw new Error(statusData.error ?? t('failed'))
+        if (statusData.job?.id !== jobId) throw new Error(t('failed'))
+        if (statusData.job.status === 'failed' || statusData.job.status === 'skipped_limit') {
+          throw new Error(statusData.job.status === 'skipped_limit' ? t('limitReached') : t('failed'))
+        }
+        if (statusData.job.status === 'completed') {
+          setAnalysis(statusData.analysis ?? null)
+          setExpanded(true)
+          toast.success(t('success'))
+          return
+        }
+      }
+
+      const latest = await load()
+      setAnalysis(latest.analysis ?? null)
+      toast.info(t('stillProcessing'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo analizar la conversación.')
+      toast.error(error instanceof Error ? error.message : t('failed'))
     } finally {
       setRunning(false)
     }
@@ -119,9 +154,9 @@ export function ConversationIntelligence({ conversationId }: { conversationId: s
           {qaScore != null ? <span className={cn('inline-flex items-center gap-1 text-xs font-medium', qaScore < 50 ? 'text-red-500' : qaScore < 75 ? 'text-amber-500' : 'text-emerald-500')}><ClipboardCheck className="size-3" />QA {qaScore}/100</span> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => void analyze()} disabled={running || loading}>
+          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => void analyze()} disabled={running || loading} aria-label={running ? t('analyzing') : analysis ? t('refresh') : t('analyze')} title={running ? t('analyzing') : undefined}>
             <RefreshCw className={cn('size-3.5', running && 'animate-spin')} />
-            <span className="hidden sm:inline">{analysis ? 'Actualizar' : 'Analizar'}</span>
+            <span className="hidden sm:inline">{running ? t('analyzing') : analysis ? t('refresh') : t('analyze')}</span>
           </Button>
           <Button size="icon" variant="ghost" onClick={() => setExpanded((value) => !value)} aria-label={expanded ? 'Ocultar análisis' : 'Mostrar análisis'} title={expanded ? 'Ocultar análisis' : 'Mostrar análisis'}>
             {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}

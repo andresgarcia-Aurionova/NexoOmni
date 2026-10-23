@@ -951,6 +951,18 @@
       "updateError": "No se pudo actualizar el asistente de IA.",
       "networkError": "No se pudo conectar con el servidor."
     },
+    "conversationIntelligence": {
+      "analyze": "Analizar conversación",
+      "refresh": "Actualizar análisis",
+      "analyzing": "Analizando…",
+      "success": "Análisis actualizado",
+      "failed": "No se pudo completar el análisis.",
+      "serverError": "El servidor no pudo responder. Espera unos segundos y vuelve a revisar el análisis.",
+      "invalidResponse": "El servidor devolvió una respuesta inválida.",
+      "loadFailed": "No se pudo cargar el análisis de la conversación.",
+      "limitReached": "Se alcanzó un límite de análisis para esta cuenta o conversación. Revisa la configuración de IA.",
+      "stillProcessing": "El análisis sigue en proceso. Puedes continuar atendiendo la conversación y actualizarla en un momento."
+    },
     "adReferralBanner": {
       "title": "Esto es una respuesta a un anuncio",
       "viewDetails": "Ver detalles",

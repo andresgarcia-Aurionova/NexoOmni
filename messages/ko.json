@@ -951,6 +951,18 @@
       "updateError": "AI 어시스턴트를 업데이트하지 못했습니다.",
       "networkError": "서버에 연결할 수 없습니다."
     },
+    "conversationIntelligence": {
+      "analyze": "대화 분석",
+      "refresh": "분석 새로고침",
+      "analyzing": "분석 중…",
+      "success": "분석이 업데이트되었습니다",
+      "failed": "분석을 완료할 수 없습니다.",
+      "serverError": "서버가 응답하지 못했습니다. 잠시 기다린 후 분석을 다시 확인하세요.",
+      "invalidResponse": "서버가 올바르지 않은 응답을 반환했습니다.",
+      "loadFailed": "대화 분석을 불러올 수 없습니다.",
+      "limitReached": "계정 또는 대화의 분석 한도에 도달했습니다. AI 설정을 확인하세요.",
+      "stillProcessing": "분석이 아직 진행 중입니다. 계속 작업하고 잠시 후 대화를 새로고침하세요."
+    },
     "adReferralBanner": {
       "title": "광고에 대한 답변입니다",
       "viewDetails": "세부정보 보기",

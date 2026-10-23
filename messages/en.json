@@ -951,6 +951,18 @@
       "updateError": "Couldn’t update the AI assistant.",
       "networkError": "Couldn’t reach the server."
     },
+    "conversationIntelligence": {
+      "analyze": "Analyze conversation",
+      "refresh": "Refresh analysis",
+      "analyzing": "Analyzing…",
+      "success": "Analysis updated",
+      "failed": "The analysis could not be completed.",
+      "serverError": "The server could not respond. Wait a few seconds and check the analysis again.",
+      "invalidResponse": "The server returned an invalid response.",
+      "loadFailed": "Could not load the conversation analysis.",
+      "limitReached": "The analysis limit for this account or conversation was reached. Check the AI settings.",
+      "stillProcessing": "The analysis is still processing. You can keep working and refresh this conversation in a moment."
+    },
     "adReferralBanner": {
       "title": "This is a reply to an ad",
       "viewDetails": "View details",
