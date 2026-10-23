@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nexoomni": {
+      "type": "http",
+      "url": "https://nexoomni.aurionova.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${NEXOOMNI_API_KEY}"
+      }
+    }
+  }
+}

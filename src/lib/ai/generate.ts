@@ -7,7 +7,11 @@ import {
   type ProviderResult,
 } from './types';
 import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults';
-import { resolveAiTaskConfig, type AiTask } from './model-routing';
+import {
+  resolveAiTaskConfig,
+  resolveAiTaskFallbackConfig,
+  type AiTask,
+} from './model-routing';
 import { generateOpenAi } from './providers/openai';
 import { generateAnthropic } from './providers/anthropic';
 import { supabaseAdmin } from './admin-client';
@@ -40,42 +44,69 @@ export interface GenerateReplyResult extends GenerateResult {
   latencyMs: number;
 }
 
-/** Generate arbitrary structured assistance with the configured provider. */
-export async function generateText(
+const FAILOVER_CODES = new Set([
+  'timeout',
+  'network_error',
+  'rate_limited',
+  'provider_error',
+  'invalid_key',
+]);
+
+async function callProvider(
+  config: AiConfig,
   args: GenerateArgs
-): Promise<GenerateTextResult> {
-  const { systemPrompt, messages } = args;
-  const config = resolveAiTaskConfig(args.config, args.task ?? 'reply');
+): Promise<ProviderResult> {
   await assertAiBillingReady(
     supabaseAdmin(),
     config.provider,
     config.model,
     config.accountId
   );
-  const timeoutMs = args.timeoutMs ?? aiRequestTimeoutMs();
-  const startedAt = Date.now();
   const providerArgs = {
     apiKey: config.apiKey,
     model: config.model,
-    systemPrompt,
-    messages,
-    timeoutMs,
+    systemPrompt: args.systemPrompt,
+    messages: args.messages,
+    timeoutMs: args.timeoutMs ?? aiRequestTimeoutMs(),
     maxOutputTokens: args.maxOutputTokens,
   };
-
-  let result: ProviderResult;
   switch (config.provider) {
     case 'openai':
-      result = await generateOpenAi(providerArgs);
-      break;
+      return generateOpenAi(providerArgs);
     case 'anthropic':
-      result = await generateAnthropic(providerArgs);
-      break;
+      return generateAnthropic(providerArgs);
     default:
       throw new AiError(`Unsupported AI provider: ${config.provider}`, {
         code: 'unsupported_provider',
         status: 400,
       });
+  }
+}
+
+/** Generate arbitrary structured assistance with the configured provider. */
+export async function generateText(
+  args: GenerateArgs
+): Promise<GenerateTextResult> {
+  const task = args.task ?? 'reply';
+  const primary = resolveAiTaskConfig(args.config, task);
+  const startedAt = Date.now();
+  let config = primary;
+  let result: ProviderResult;
+  try {
+    result = await callProvider(primary, args);
+  } catch (error) {
+    // Only an outage-type failure (no response, so nothing was billed) moves
+    // to the other provider; billing errors and bad requests never do.
+    const fallback =
+      error instanceof AiError && FAILOVER_CODES.has(error.code)
+        ? resolveAiTaskFallbackConfig(args.config, task, primary)
+        : null;
+    if (!fallback) throw error;
+    console.warn(
+      `[ai] ${primary.provider}/${primary.model} failed (${(error as AiError).code}); retrying with ${fallback.provider}/${fallback.model}.`
+    );
+    config = fallback;
+    result = await callProvider(fallback, args);
   }
   if (!result.usage) {
     throw new AiBillingError(

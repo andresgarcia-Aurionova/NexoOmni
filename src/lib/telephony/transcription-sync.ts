@@ -11,13 +11,21 @@ type SyncRow = {
   id: string; account_id: string; call_id: string; contact_id: string | null
   customer_phone: string | null; transcript: string | null; summary: string | null
   started_at: string | null; created_at: string; yeastar_payload: JsonRecord | null
+  analysis_attempts: number | null
+}
+
+const MAX_ANALYSIS_ATTEMPTS = 5
+
+/** 10, 20, 40, 80 minutes after the 1st..4th failed attempt. */
+export function analysisRetryDelayMs(attempts: number) {
+  return 5 * 60_000 * 2 ** Math.max(1, attempts)
 }
 
 export async function processCallTranscriptions(db: SupabaseClient) {
   const now = new Date().toISOString()
   const leaseExpired = new Date(Date.now() - 10 * 60_000).toISOString()
   const { data: rows, error } = await db.from('yeastar_call_transcriptions')
-    .select('id, account_id, call_id, contact_id, customer_phone, transcript, summary, started_at, created_at, yeastar_payload')
+    .select('id, account_id, call_id, contact_id, customer_phone, transcript, summary, started_at, created_at, yeastar_payload, analysis_attempts')
     .or('transcription_status.in.(pending,failed),and(transcription_status.eq.completed,analysis_status.in.(pending,failed))')
     .or(`sync_claimed_at.is.null,sync_claimed_at.lt.${leaseExpired}`)
     .lte('next_sync_at', now).order('next_sync_at').limit(3)
@@ -29,10 +37,10 @@ export async function processCallTranscriptions(db: SupabaseClient) {
       .or(`sync_claimed_at.is.null,sync_claimed_at.lt.${leaseExpired}`).select('id').maybeSingle()
     if (claimError) throw claimError
     if (!claim) return
-    const update = async (patch: JsonRecord) => {
+    const update = async (patch: JsonRecord, retryDelayMs = 5 * 60_000) => {
       const { error: writeError } = await db.from('yeastar_call_transcriptions').update({
         ...patch, sync_claimed_at: null, updated_at: new Date().toISOString(),
-        next_sync_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+        next_sync_at: new Date(Date.now() + retryDelayMs).toISOString(),
       }).eq('id', row.id).eq('account_id', row.account_id)
       if (writeError) throw writeError
     }
@@ -129,10 +137,21 @@ export async function processCallTranscriptions(db: SupabaseClient) {
       counts.completed++
     } catch (reason) {
       console.error('[yeastar] transcription/memory sync failed:', reason)
-      await update({
-        ...(transcript ? { analysis_status: 'failed', analysis_error: reason instanceof Error ? reason.message.slice(0, 500) : 'No se pudo actualizar el contexto de la llamada.' }
-          : { transcription_status: 'failed', error_message: reason instanceof Error ? reason.message.slice(0, 500) : 'No se pudo recuperar la transcripción.' }),
-      })
+      const message = reason instanceof Error ? reason.message.slice(0, 500) : null
+      if (transcript) {
+        const attempts = (row.analysis_attempts ?? 0) + 1
+        const gaveUp = attempts >= MAX_ANALYSIS_ATTEMPTS
+        await update({
+          analysis_attempts: attempts,
+          analysis_status: gaveUp ? 'unavailable' : 'failed',
+          analysis_error: message ?? 'No se pudo actualizar el contexto de la llamada.',
+        }, analysisRetryDelayMs(attempts))
+      } else {
+        await update({
+          transcription_status: 'failed',
+          error_message: message ?? 'No se pudo recuperar la transcripción.',
+        })
+      }
       counts.failed++
     }
   }))

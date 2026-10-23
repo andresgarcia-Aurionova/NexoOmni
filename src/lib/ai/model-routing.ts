@@ -19,21 +19,25 @@ export type TaskCandidate = { provider: AiProvider; model: string };
  * only matters as a fallback when one key is missing.
  */
 export const AI_TASK_POLICY: Record<AiTask, TaskCandidate[]> = {
+  // Customer-facing text and call summaries (which feed Nexo Memory) use the
+  // premium tier: wrong output here is visible to end customers or persisted
+  // as business facts. High-volume internal classification stays on the
+  // economy tier.
   reply: [
-    { provider: 'openai', model: 'gpt-6-luna' },
-    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    { provider: 'openai', model: 'gpt-5.6-terra' },
   ],
   agent: [
-    { provider: 'openai', model: 'gpt-6-luna' },
-    { provider: 'anthropic', model: 'claude-haiku-5-5' },
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    { provider: 'openai', model: 'gpt-5.6-terra' },
   ],
   analysis: [
     { provider: 'anthropic', model: 'claude-haiku-5-5' },
     { provider: 'openai', model: 'gpt-6-luna' },
   ],
   call_summary: [
-    { provider: 'anthropic', model: 'claude-haiku-5-5' },
-    { provider: 'openai', model: 'gpt-6-luna' },
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    { provider: 'openai', model: 'gpt-5.6-terra' },
   ],
   report: [
     { provider: 'anthropic', model: 'claude-sonnet-5-5' },
@@ -83,6 +87,33 @@ export function resolveProviderKey(
   const key = config.providerKeys?.[provider];
   if (key) return key;
   return provider === config.provider && config.apiKey ? config.apiKey : null;
+}
+
+/**
+ * Config for the other provider, used only when the primary provider call
+ * failed before returning billable usage. Null when routing is off, the task
+ * has an explicit model override, or the tenant has no key for another provider.
+ */
+export function resolveAiTaskFallbackConfig(
+  config: AiConfig,
+  task: AiTask,
+  primary: AiConfig,
+  routingEnabled = isAiTaskRoutingEnabled()
+): AiConfig | null {
+  if (!routingEnabled || configuredModel(config, task)?.trim()) return null;
+  for (const candidate of AI_TASK_POLICY[task]) {
+    if (candidate.provider === primary.provider) continue;
+    const apiKey = resolveProviderKey(config, candidate.provider);
+    if (apiKey) {
+      return {
+        ...config,
+        provider: candidate.provider,
+        apiKey,
+        model: candidate.model,
+      };
+    }
+  }
+  return null;
 }
 
 export function resolveAiTaskConfig(

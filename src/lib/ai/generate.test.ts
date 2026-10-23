@@ -142,10 +142,61 @@ describe('generateReply — OpenAI', () => {
       messages: [{ role: 'user', content: 'Hi' }],
     });
 
-    expect(result.model).toBe('gpt-6-luna');
+    expect(result.model).toBe('gpt-5.6-terra');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe(
-      'gpt-6-luna'
+      'gpt-5.6-terra'
     );
+  });
+
+  it('fails over to the other provider when the primary one is down', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errResponse(500, { error: { message: 'down' } }))
+      .mockResolvedValueOnce(
+        okResponse({
+          choices: [{ message: { content: 'Respaldo' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+        })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('AI_TASK_ROUTING_ENABLED', 'true');
+
+    const result = await generateReply({
+      config: config({
+        providerKeys: { anthropic: 'a-key', openai: 'o-key' },
+      }),
+      task: 'reply',
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('anthropic');
+    expect(result).toMatchObject({
+      text: 'Respaldo',
+      provider: 'openai',
+      model: 'gpt-5.6-terra',
+    });
+  });
+
+  it('does not fail over on an empty response (it may have been billed)', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      okResponse({ content: [], usage: { input_tokens: 5, output_tokens: 0 } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('AI_TASK_ROUTING_ENABLED', 'true');
+
+    await expect(
+      generateReply({
+        config: config({
+          providerKeys: { anthropic: 'a-key', openai: 'o-key' },
+        }),
+        task: 'reply',
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      })
+    ).rejects.toBeInstanceOf(AiError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('maps a 401 to an invalid_key AiError', async () => {

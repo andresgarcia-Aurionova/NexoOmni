@@ -11,11 +11,10 @@ import type { AiProvider } from './types'
  * starting point, never a hard allow-list.
  */
 export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
-  // Keep the proven account default. Task-specific media models are routed
-  // separately, while conversation analysis can still be changed by an
-  // administrator without silently changing existing accounts.
-  openai: 'gpt-5.4-mini',
-  anthropic: 'claude-haiku-4-5-20251001',
+  // Platform standard (22-oct-2026): the premium tier is the per-provider
+  // default; per-task routing in model-routing.ts decides the actual model.
+  openai: 'gpt-5.6-terra',
+  anthropic: 'claude-sonnet-5-5',
 }
 
 /**

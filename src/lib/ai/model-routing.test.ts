@@ -35,6 +35,9 @@ describe('resolveAiTaskConfig', () => {
 
   it('selects task candidates for the configured provider when enabled', () => {
     expect(resolveAiTaskConfig(config(), 'reply', true).model).toBe(
+      'gpt-5.6-terra'
+    );
+    expect(resolveAiTaskConfig(config(), 'analysis', true).model).toBe(
       'gpt-6-luna'
     );
   });
@@ -52,7 +55,15 @@ describe('resolveAiTaskConfig', () => {
       'reply',
       true
     );
-    expect(reply).toMatchObject({ provider: 'openai', model: 'gpt-6-luna', apiKey: 'o-key' });
+    expect(reply).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-5-5', apiKey: 'a-key' });
+    expect(resolveAiTaskConfig(both, 'call_summary', true)).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+    });
+    expect(resolveAiTaskConfig(both, 'analysis', true)).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-haiku-5-5',
+    });
   });
 
   it('falls back to the provider that has a key', () => {
@@ -63,7 +74,7 @@ describe('resolveAiTaskConfig', () => {
     });
     expect(resolveAiTaskConfig(anthropicOnly, 'reply', true)).toMatchObject({
       provider: 'anthropic',
-      model: 'claude-haiku-5-5',
+      model: 'claude-sonnet-5-5',
     });
   });
 
