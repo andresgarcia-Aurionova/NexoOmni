@@ -4,14 +4,15 @@ description: "Consulta cómo usar NexoOmni y revisa datos de tu cuenta desde una
 section: "agentes-ia"
 role: ["supervisor", "admin", "owner"]
 plan: ["ai", "yeastar_voice", "whatsapp_voice"]
-updated: "2026-10-21"
+updated: "2026-10-22"
 ---
 
 ## ¿Qué es?
 
-Nexo Asistente responde preguntas sobre las funciones de NexoOmni y permite
-consultar información de la cuenta. Sus respuestas se basan en los manuales de
-la plataforma, la base de conocimiento de la cuenta o consultas de solo lectura.
+Nexo Asistente responde preguntas sobre las funciones de NexoOmni, consulta
+información de la cuenta y prepara reportes personalizados. También puede
+proponer tareas, citas, cambios de contacto y mensajes de WhatsApp. Ninguna
+acción se ejecuta sin que la persona revise la vista previa y la confirme.
 
 ## ¿Para quién es?
 
@@ -26,7 +27,9 @@ facturable.
 2. Selecciona el botón de Nexo Asistente en la esquina inferior derecha.
 3. Escribe una pregunta, por ejemplo, cómo consultar citas o cuántas
    oportunidades tiene la cuenta.
-4. Revisa la respuesta y sus fuentes cuando estén disponibles.
+4. Revisa la respuesta y sus fuentes cuando estén disponibles. Para una acción,
+   confirma que el contacto y todos los detalles sean correctos antes de elegir
+   **Confirmar y ejecutar**.
 5. Usa **Nueva conversación** para empezar otro tema. El historial se conserva
    hasta que elimines una conversación desde la lista.
 
@@ -59,9 +62,34 @@ etiqueta anónima. La facturación de recargas y el detalle de uso de IA solo
 están disponibles para administradores y propietarios. Nexo Memory muestra el
 estado actual y no un historial del periodo seleccionado.
 
-Nexo Asistente es de solo lectura: no envía mensajes, no modifica registros,
-no programa citas, no crea tareas y no elimina datos. Tampoco transfiere la
-conversación a soporte humano.
+## Proponer una acción
+
+Puedes pedir que cree un seguimiento, agende una cita, actualice el nombre,
+correo o empresa de un contacto, o prepare un mensaje de texto para una
+conversación existente de WhatsApp. Las citas requieren que el módulo Agenda
+esté habilitado. No se pueden cambiar teléfonos ni enviar mensajes masivos,
+multimedia o plantillas desde el asistente.
+
+Antes de ejecutar, el asistente muestra una vista previa con el contacto y los
+detalles. Revisa el texto del mensaje, las fechas y los cambios de contacto.
+**Confirmar y ejecutar** aplica exactamente esa propuesta; **Cancelar** la
+descarta. La propuesta vence en cinco minutos, solo la puede confirmar la misma
+persona que la solicitó y no se puede volver a ejecutar después de procesarse.
+Si el horario de una cita ya no está libre o el canal no está disponible, se
+rechaza y puedes pedir una propuesta nueva.
+
+El historial muestra si la acción quedó completada, cancelada, vencida o no se
+pudo completar. Si el resultado de un envío no puede confirmarse, revisa la
+conversación de WhatsApp antes de solicitar otro envío. Los eventos de auditoría
+no guardan el texto del mensaje; la propuesta se conserva junto al historial
+hasta que elimines la conversación.
+
+Nexo Asistente consulta y modifica únicamente datos permitidos de la cuenta
+actual. Puede ayudar con el uso técnico de NexoOmni desde sus manuales para
+clientes, pero no revela información de otros tenants, costos reales o
+ganancias internas de la plataforma, secretos, seguridad interna ni datos
+corporativos o de desarrollo. Los reportes personalizados son de solo lectura
+y contienen únicamente información agregada permitida de la cuenta.
 
 ## Preguntas frecuentes
 

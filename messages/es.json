@@ -14,7 +14,41 @@
     "placeholder": "Escribe una pregunta…",
     "send": "Enviar",
     "creditNotice": "Las respuestas consumen créditos de IA.",
-    "readOnlyNotice": "Solo consulta; no realiza cambios.",
+    "readOnlyNotice": "Consulta datos y propone acciones; solo se ejecutan con tu confirmación.",
+    "actions": {
+      "previewTitle": "Vista previa de la acción",
+      "confirm": "Confirmar y ejecutar",
+      "cancel": "Cancelar",
+      "working": "Procesando…",
+      "error": "No se pudo ejecutar la acción. Revisa el estado antes de intentarlo de nuevo.",
+      "contact": "Contacto",
+      "dueAt": "Fecha de seguimiento",
+      "startsAt": "Inicio",
+      "endsAt": "Fin",
+      "title": "Título",
+      "description": "Descripción",
+      "message": "Mensaje exacto",
+      "status": {
+        "pending": "Pendiente de confirmación",
+        "executing": "En proceso",
+        "completed": "Completada",
+        "failed": "No completada",
+        "cancelled": "Cancelada",
+        "expired": "Propuesta vencida",
+        "needs_review": "Requiere revisión; no la repitas"
+      },
+      "types": {
+        "create_follow_up_task": "Crear seguimiento",
+        "schedule_appointment": "Agendar cita",
+        "update_contact": "Actualizar contacto",
+        "send_whatsapp_text": "Enviar mensaje de WhatsApp"
+      },
+      "fields": {
+        "name": "Nombre",
+        "email": "Correo",
+        "company": "Empresa"
+      }
+    },
     "sourceKinds": {
       "account_data": "Datos de la cuenta",
       "account_knowledge": "Base de conocimiento"
@@ -165,7 +199,9 @@
       "rateLimit": "Se alcanzó el límite de consultas. Espera un momento e inténtalo de nuevo.",
       "pending": "Esta pregunta ya está en proceso. Espera un momento antes de enviar otra.",
       "generic": "No se pudo completar la consulta. Inténtalo de nuevo.",
-      "invalidReport": "El periodo del reporte no es válido. Indica fechas entre 1 y 365 días."
+      "invalidReport": "El periodo del reporte no es válido. Indica fechas entre 1 y 365 días.",
+      "actionNeedsReview": "La acción pudo haberse realizado, pero no se pudo confirmar su resultado. No la repitas; revisa el estado primero.",
+      "actionResultUnconfirmed": "La acción pudo haberse realizado, pero no se pudo guardar su estado. No la repitas; revisa el estado primero."
     }
   },
   "AiUsageCard": {

@@ -156,4 +156,9 @@ describe('SendMessageError', () => {
     expect(e.status).toBe(502);
     expect(e).toBeInstanceOf(Error);
   });
+
+  it('supports an unconfirmed delivery outcome', () => {
+    const e = new SendMessageError('delivery_unconfirmed', 'timeout', 502);
+    expect(e.code).toBe('delivery_unconfirmed');
+  });
 });

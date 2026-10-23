@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { BookOpen, ChevronDown, Download, LoaderCircle, MessageCircle, Plus, Printer, Send, Trash2, X } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { hasMinRole } from '@/lib/auth/roles'
+import { AssistantActionProposalSchema, type AssistantActionRequest } from '@/lib/assistant/action-types'
 import {
   AssistantReportDataSchema,
   type AssistantReportChannel,
@@ -41,6 +42,7 @@ interface Message {
   sources: unknown
   report_data: unknown
   created_at: string
+  action_request?: AssistantActionRequest | null
 }
 
 const SOURCE_KINDS = new Set<Source['kind']>([
@@ -90,6 +92,7 @@ export function AssistantWidget() {
   const [loadingThreads, setLoadingThreads] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [sending, setSending] = useState(false)
+  const [workingActionId, setWorkingActionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const selectedThreadIdRef = useRef<string | null>(null)
@@ -290,6 +293,10 @@ export function AssistantWidget() {
         return t('errors.pending')
       case 'invalid_report_request':
         return t('errors.invalidReport')
+      case 'action_needs_review':
+        return t('errors.actionNeedsReview')
+      case 'action_result_unconfirmed':
+        return t('errors.actionResultUnconfirmed')
       default:
         return t('errors.generic')
     }
@@ -362,6 +369,32 @@ export function AssistantWidget() {
     }
   }, [open, loadMessages, loadThreads, errorMessage])
 
+  async function decideAction(actionId: string, decision: 'confirm' | 'cancel') {
+    if (workingActionId) return
+    setWorkingActionId(actionId)
+    setError(null)
+    try {
+      const response = await fetch('/api/ai/assistant/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_id: actionId, decision }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(responseErrorCode(body))
+      if (threadId) await loadMessages(threadId)
+    } catch (actionError) {
+      setError(errorMessage(actionError))
+      if (threadId) await loadMessages(threadId).catch(() => undefined)
+    } finally {
+      setWorkingActionId(null)
+    }
+  }
+
+  function readActionProposal(value: unknown) {
+    const parsed = AssistantActionProposalSchema.safeParse(value)
+    return parsed.success ? parsed.data : null
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const content = input.trim()
@@ -375,6 +408,7 @@ export function AssistantWidget() {
       report_data: null,
       created_at: new Date().toISOString(),
     }
+
     setMessages((current) => [...current, optimistic])
     setInput('')
     setError(null)
@@ -517,6 +551,55 @@ export function AssistantWidget() {
                   key={message.id}
                 >
                   <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  {message.role === 'assistant' && message.action_request && (() => {
+                    const request = message.action_request
+                    const proposal = readActionProposal(request.payload)
+                    if (!proposal) return null
+                    const action = proposal.action
+                    const expired = request.status === 'pending' && Date.parse(request.expires_at) <= Date.now()
+                    const contactLabel = proposal.contact.name || proposal.contact.phone || t('actions.contact')
+                    const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+                    return (
+                      <section className="mt-3 rounded-md border border-current/15 p-3" aria-label={t('actions.previewTitle')}>
+                        <h3 className="font-semibold">{t('actions.previewTitle')}: {t(`actions.types.${request.action_type}`)}</h3>
+                        <p className="mt-1 text-xs">{t('actions.contact')}: {contactLabel}</p>
+                        {action.action_type === 'create_follow_up_task' ? (
+                          <>
+                            <p className="mt-1">{t('actions.description')}: {action.description}</p>
+                            <p>{t('actions.dueAt')}: {date(action.due_at)}</p>
+                          </>
+                        ) : null}
+                        {action.action_type === 'schedule_appointment' ? (
+                          <>
+                            <p className="mt-1">{t('actions.title')}: {action.title}</p>
+                            <p>{t('actions.startsAt')}: {date(action.starts_at)}</p>
+                            <p>{t('actions.endsAt')}: {date(action.ends_at)}</p>
+                            {action.notes ? <p>{action.notes}</p> : null}
+                          </>
+                        ) : null}
+                        {action.action_type === 'update_contact' ? Object.entries(action.changes).map(([field, value]) => (
+                          <p className="mt-1" key={field}>{t(`actions.fields.${field}`)}: {String(value ?? '—')}</p>
+                        )) : null}
+                        {action.action_type === 'send_whatsapp_text' ? (
+                          <p className="mt-1 whitespace-pre-wrap break-words">{t('actions.message')}: {action.message_text}</p>
+                        ) : null}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {t(`actions.status.${expired ? 'expired' : request.status}`)}
+                        </p>
+                        {request.status === 'pending' && !expired ? (
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" disabled={workingActionId === request.id} onClick={() => void decideAction(request.id, 'confirm')}>
+                              {workingActionId === request.id ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                              {workingActionId === request.id ? t('actions.working') : t('actions.confirm')}
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={workingActionId === request.id} onClick={() => void decideAction(request.id, 'cancel')}>
+                              {t('actions.cancel')}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </section>
+                    )
+                  })()}
                   {message.role === 'assistant' && (() => {
                     const report = readReportData(message.report_data)
                     if (!report) return null

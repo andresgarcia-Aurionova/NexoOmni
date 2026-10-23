@@ -14,7 +14,41 @@
     "placeholder": "Ask a question…",
     "send": "Send",
     "creditNotice": "Responses use AI credits.",
-    "readOnlyNotice": "Read-only; no changes are made.",
+    "readOnlyNotice": "Ask questions and prepare actions; actions run only after your confirmation.",
+    "actions": {
+      "previewTitle": "Action preview",
+      "confirm": "Confirm and execute",
+      "cancel": "Cancel",
+      "working": "Processing…",
+      "error": "The action could not be completed. Check its status before trying again.",
+      "contact": "Contact",
+      "dueAt": "Follow-up time",
+      "startsAt": "Starts",
+      "endsAt": "Ends",
+      "title": "Title",
+      "description": "Description",
+      "message": "Exact message",
+      "status": {
+        "pending": "Awaiting confirmation",
+        "executing": "In progress",
+        "completed": "Completed",
+        "failed": "Not completed",
+        "cancelled": "Cancelled",
+        "expired": "Proposal expired",
+        "needs_review": "Needs review; do not repeat"
+      },
+      "types": {
+        "create_follow_up_task": "Create follow-up",
+        "schedule_appointment": "Schedule appointment",
+        "update_contact": "Update contact",
+        "send_whatsapp_text": "Send WhatsApp message"
+      },
+      "fields": {
+        "name": "Name",
+        "email": "Email",
+        "company": "Company"
+      }
+    },
     "sourceKinds": {
       "account_data": "Account data",
       "account_knowledge": "Knowledge base"
@@ -165,7 +199,9 @@
       "rateLimit": "The request limit was reached. Wait a moment and try again.",
       "pending": "This question is already being processed. Wait before sending another.",
       "generic": "The request could not be completed. Please try again.",
-      "invalidReport": "The report period is invalid. Choose dates within a 1–365 day range."
+      "invalidReport": "The report period is invalid. Choose dates within a 1–365 day range.",
+      "actionNeedsReview": "The action may have completed, but its result could not be confirmed. Do not repeat it; check its status first.",
+      "actionResultUnconfirmed": "The action may have completed, but its status could not be saved. Do not repeat it; check its status first."
     }
   },
   "AiUsageCard": {

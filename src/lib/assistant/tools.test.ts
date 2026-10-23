@@ -23,6 +23,8 @@ describe('parseAssistantDecision', () => {
       '{"type":"tool_call","tool":{"name":"run_sql","query":"select *"}}',
       '{"type":"tool_call","tool":{"name":"get_account_overview","account_id":"other"}}',
       '{"type":"tool_call","tool":{"name":"get_recent_call_transcriptions","limit":100}}',
+      '{"type":"tool_call","tool":{"name":"update_contact","contact_id":"4f6f90a3-9e73-4c59-b0b5-15ee4f7bc17e","changes":{"phone":"+525500000000"}}}',
+      '{"type":"tool_call","tool":{"name":"send_whatsapp_text","contact_id":"4f6f90a3-9e73-4c59-b0b5-15ee4f7bc17e","message_text":"Hola","account_id":"other-tenant"}}',
     ]
     for (const decision of invalid) {
       expect(() => parseAssistantDecision(decision)).toThrow(InvalidAssistantDecisionError)

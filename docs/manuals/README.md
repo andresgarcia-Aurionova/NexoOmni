@@ -109,7 +109,7 @@ al día.
 | Flujos (editor visual multi-paso) | [automatizaciones-y-flujos/flujos.md](./automatizaciones-y-flujos/flujos.md) | ✅ |
 | Respuesta automática con IA | [agentes-ia/respuesta-automatica.md](./agentes-ia/respuesta-automatica.md) | ✅ |
 | Base de conocimiento de la IA | [agentes-ia/base-de-conocimiento.md](./agentes-ia/base-de-conocimiento.md) | ✅ |
-| Nexo Asistente (consultas de solo lectura) | [agentes-ia/asistente.md](./agentes-ia/asistente.md) | ✅ |
+| Nexo Asistente (consultas, reportes y acciones con confirmación) | [agentes-ia/asistente.md](./agentes-ia/asistente.md) | ✅ |
 | Chat web (Yeastar Live Chat) — conexión del widget | [canales/chat-web.md](./canales/chat-web.md) | ✅ |
 | Claves de API | [integraciones/claves-api.md](./integraciones/claves-api.md) | ✅ |
 | Webhooks salientes + integración n8n | [integraciones/webhooks-y-automatizacion-externa.md](./integraciones/webhooks-y-automatizacion-externa.md) | ✅ |

@@ -1,6 +1,6 @@
 # Plan: IA multi-proveedor, bolsa de créditos y Asistente por tenant
 
-Estado: **Fases 0–5 están implementadas; el usuario confirmó que Nexo Asistente, los reportes, las migraciones 168–169 y el portal de créditos ya se desplegaron en producción. Este cambio local añade el plan `basic`, el ruteo multiproveedor por tarea y la estimación de transcripciones Yeastar con reporte financiero; las migraciones 170–171 aún requieren validación en desarrollo y revisión humana antes de producción.**
+Estado: **Fases 0–5 están implementadas; el usuario confirmó que Nexo Asistente, los reportes, las migraciones 168–169 y el portal de créditos ya se desplegaron en producción. La Fase 6 se implementa localmente con propuestas de acciones confirmadas; las migraciones 170–172 aún requieren validación en desarrollo y revisión humana antes de producción.**
 Fecha de la investigación de precios y modelos: 19-oct-2026.
 
 ### Estado de ejecución
@@ -182,7 +182,7 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 - Nuevo entitlement `ai_assistant` en `entitlements.ts` (el mapa `PLAN_FEATURES` es exhaustivo: `tsc` marcará cada lugar).
 - Aislamiento por tenant: **todas las herramientas usan el cliente Supabase con RLS del usuario**, nunca service role, y `account_id` jamás viene de la entrada del modelo. Aunque el modelo se equivoque o sea manipulado, RLS bloquea datos de otra cuenta.
 - Decisiones confirmadas por el dueño del producto: sin escalamiento a soporte humano; incluir ayuda de manuales y datos propios; conservar el historial hasta que el usuario elimine la conversación; posponer streaming y mostrar la respuesta solo después de confirmar el débito.
-- Fuera de esta v1: reportes personalizados, acciones con confirmación, envío de mensajes y cambios de datos. Se evaluarán en fases posteriores.
+- Fuera de esta v1 de solo lectura: reportes personalizados y acciones con confirmación, que se incorporan en las fases 5 y 6.
 
 ### 6.2 Herramientas de solo lectura (el modelo no escribe SQL)
 
@@ -204,6 +204,14 @@ Ejemplo: una auto-respuesta de 4,000 tokens de entrada y 600 de salida en Luna c
 - Widget flotante del dashboard; visible para supervisor+ y protegido en servidor por `ai_assistant`. La UI permite consultar y borrar el historial propio.
 - Textos en `messages/{es,en,ko}.json`; manual nuevo `docs/manuals/agentes-ia/asistente.md` y entrada en `docs/manuals/changelog/2026-10.md`.
 - Sin streaming real en v1. El usuario confirmó el despliegue de la aplicación y la migración 168 en producción el 2026-10-21. Completar pruebas operativas de roles/aislamiento y revisión humana de privacidad y retención.
+
+### 6.5 Acciones con confirmación (Fase 6, implementación local)
+
+- Supervisores o roles superiores pueden proponer seguimientos, citas, cambios limitados a nombre/correo/empresa y mensajes de texto individuales en conversaciones de WhatsApp existentes.
+- Cada propuesta muestra una vista previa, vence en cinco minutos y solo la puede confirmar la persona que la creó. La ejecución se reclama atómicamente y no se permite repetirla; las citas vuelven a validar disponibilidad y las fechas.
+- Las operaciones usan el cliente autenticado y sus políticas RLS, con filtros del tenant actual. Las solicitudes y la auditoría se mantienen en tablas sin acceso directo de clientes; los eventos son inmutables y sobreviven al borrado del hilo, sin guardar el texto completo del mensaje en la bitácora.
+- Si un envío queda sin confirmación o no se puede guardar su resultado, la acción requiere revisión y la interfaz advierte que no se repita hasta revisar WhatsApp.
+- La migración 172, los permisos/RLS y los flujos completos aún requieren validación en una base de desarrollo y revisión humana antes de producción.
 
 ## 6bis. Tarificador de consumo (créditos vs costo en pesos, con conciliación)
 
@@ -267,7 +275,7 @@ Fuentes oficiales revisadas el 21-oct-2026: [modelo GPT-4o Transcribe y tarifas 
 | 3b   | Uso exclusivo de credenciales administradas por el operador desde `ai_provider_credentials`; copias históricas de `ai_configs` conservadas cifradas, sin fallback runtime ni borrado automático. Sin saldo de cortesía ni aviso previo para el corte inmediato confirmado por el usuario. | Pruebas de no-fallback, credenciales rotables desde el panel, `tsc`, `lint`, `npm test` y actualización de manual/changelog. |
 | 4    | Asistente v1 solo lectura + ayuda de plataforma, historial eliminable, control de rol/entitlement y débito antes de entregar la respuesta. Desplegado en producción según confirmación del usuario (2026-10-21). | Pruebas automatizadas aprobadas; completar smoke tests de roles/aislamiento y revisión humana de privacidad y retención. |
 | 5    | Reportes agregados desde Nexo Asistente: operación, ventas, citas, AgendaPro, difusiones, llamadas, inteligencia, Nexo Memory, contactos, créditos, recargas y uso de IA; filtros por fecha/canal/agente y exportación CSV/Excel/impresión PDF. Implementado localmente; no desplegado. | Cotejar cifras con consultas conocidas; validar 169, RLS por rol/tenant, privacidad y exportaciones en desarrollo. Requiere revisión humana antes de producción. |
-| 6    | Acciones con confirmación + auditoría.                                                                                                                                                                                                               | Pruebas de inyección de prompt.                                                         |
+| 6    | Propuestas de seguimiento, cita, actualización limitada de contacto y mensaje de WhatsApp; vista previa, confirmación del mismo usuario, vencimiento a 5 minutos, ejecución de un solo uso y auditoría. Implementación local; no desplegada. | Pruebas de acciones duplicadas/vencidas, aislamiento RLS, inyección de prompt, errores de envío y validación manual de la migración 172 en desarrollo. |
 
 Cada fase cierra con `npx tsc --noEmit`, `npm run lint`, `npm test`, manual y changelog. Las fases 2, 3 y 6 requieren **revisión humana** (RLS, facturación, datos de producción), según la guía de desarrollo §5.5.
 

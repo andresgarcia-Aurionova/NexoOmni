@@ -492,7 +492,7 @@ export async function sendMessageToConversation(
         : 'Revisa que el token guardado pertenezca al número configurado y tenga el permiso whatsapp_business_messaging.';
     const userMessage = `Meta rechazó el envío: ${message}. ${guidance}`;
     throw new SendMessageError(
-      'meta_error',
+      timeoutError ? 'delivery_unconfirmed' : 'meta_error',
       userMessage,
       502
     );
@@ -502,10 +502,15 @@ export async function sendMessageToConversation(
     console.log(
       `[send-message] Auto-corrected contact phone: ${sanitizedPhone} → ${workingPhone}`
     );
-    await db
-      .from('contacts')
-      .update({ phone: workingPhone })
-      .eq('id', contact.id);
+    try {
+      const { error } = await db
+        .from('contacts')
+        .update({ phone: workingPhone })
+        .eq('id', contact.id);
+      if (error) console.error('[send-message] contact phone update failed:', error);
+    } catch (error) {
+      console.error('[send-message] contact phone update failed:', error);
+    }
   }
 
   // Persist the sent message. Field names MUST match the messages
@@ -516,29 +521,42 @@ export async function sendMessageToConversation(
   const interactiveBody =
     messageType === 'interactive' ? interactivePayload!.body : null;
 
-  const { data: messageRecord, error: msgError } = await db
-    .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_type: 'agent',
-      content_type: messageType,
-      content_text: interactiveBody ?? contentText ?? null,
-      media_url: mediaUrl || null,
-      template_name: templateName || null,
-      interactive_payload:
-        messageType === 'interactive' ? interactivePayload : null,
-      message_id: waMessageId,
-      status: 'sent',
-      reply_to_message_id: replyToMessageId || null,
-    })
-    .select()
-    .single();
+  let messageRecord: { id: string } | null = null;
+  let msgError: { message: string } | null = null;
+  try {
+    const result = await db
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_type: 'agent',
+        content_type: messageType,
+        content_text: interactiveBody ?? contentText ?? null,
+        media_url: mediaUrl || null,
+        template_name: templateName || null,
+        interactive_payload:
+          messageType === 'interactive' ? interactivePayload : null,
+        message_id: waMessageId,
+        status: 'sent',
+        reply_to_message_id: replyToMessageId || null,
+      })
+      .select()
+      .single();
+    messageRecord = result.data;
+    msgError = result.error;
+  } catch (error) {
+    console.error('[send-message] error inserting sent message:', error);
+    throw new SendMessageError(
+      'db_error',
+      'Message was sent to WhatsApp but could not be recorded. Check the conversation before retrying.',
+      500
+    );
+  }
 
-  if (msgError) {
+  if (msgError || !messageRecord) {
     console.error('[send-message] error inserting sent message:', msgError);
     throw new SendMessageError(
       'db_error',
-      `Message sent to Meta but failed to save to DB: ${msgError.message}`,
+      'Message was sent to WhatsApp but could not be recorded. Check the conversation before retrying.',
       500
     );
   }
@@ -548,14 +566,19 @@ export async function sendMessageToConversation(
       ? interactivePayloadPreviewText(interactivePayload!)
       : contentText || `[${messageType}]`;
 
-  await db
-    .from('conversations')
-    .update({
-      last_message_text: lastMessageText,
-      last_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', conversationId);
+  try {
+    const { error } = await db
+      .from('conversations')
+      .update({
+        last_message_text: lastMessageText,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId);
+    if (error) console.error('[send-message] conversation preview update failed:', error);
+  } catch (error) {
+    console.error('[send-message] conversation preview update failed:', error);
+  }
 
   // Pause any active Flow run for this contact — the agent stepping in
   // is the strongest "yield, human is here" signal. Best-effort.

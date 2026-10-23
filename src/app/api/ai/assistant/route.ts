@@ -17,6 +17,7 @@ import {
 import { parseAssistantDecision, runAssistantTool } from '@/lib/assistant/tools'
 import { AssistantReportValidationError } from '@/lib/assistant/build-report'
 import type { AssistantReportData } from '@/lib/assistant/report-types'
+import type { AssistantActionRequest, AssistantActionProposal } from '@/lib/assistant/action-types'
 
 const ThreadIdSchema = z.string().uuid()
 const TurnSchema = z.object({
@@ -41,6 +42,7 @@ type AssistantMessage = {
   sources: unknown
   report_data: AssistantReportData | null
   created_at: string
+  action_request?: AssistantActionRequest | null
 }
 
 function rateLimit(userId: string, accountId: string) {
@@ -73,7 +75,7 @@ async function getAssistantResponse(
 ): Promise<AssistantMessage | null> {
   const { data, error } = await db
     .from('assistant_messages')
-    .select('id, role, content, sources, report_data, created_at')
+    .select('id, account_id, user_id, role, content, sources, report_data, created_at')
     .eq('reply_to_message_id', messageId)
     .eq('role', 'assistant')
     .maybeSingle()
@@ -81,7 +83,20 @@ async function getAssistantResponse(
     console.error('[ai/assistant] stored response lookup failed:', error)
     throw new Error('Assistant response could not be loaded.')
   }
-  return data as AssistantMessage | null
+  if (!data) return null
+  const { data: action, error: actionError } = await db
+    .from('assistant_action_requests')
+    .select('id, action_type, payload, status, expires_at, result')
+    .eq('account_id', data.account_id)
+    .eq('user_id', data.user_id)
+    .eq('source_message_id', messageId)
+    .maybeSingle()
+  if (actionError) {
+    console.error('[ai/assistant] action proposal lookup failed:', actionError)
+    throw new Error('Assistant action proposal could not be loaded.')
+  }
+  const { account_id: _accountId, user_id: _userId, ...message } = data
+  return { ...message, action_request: action as AssistantActionRequest | null } as AssistantMessage
 }
 
 async function fetchThreads(
@@ -122,7 +137,7 @@ export async function GET(request: Request) {
     }
     const { data, error } = await supabase
       .from('assistant_messages')
-      .select('id, role, content, sources, report_data, created_at')
+      .select('id, role, content, sources, report_data, created_at, reply_to_message_id')
       .eq('thread_id', threadId)
       .eq('account_id', accountId)
       .eq('user_id', userId)
@@ -132,10 +147,33 @@ export async function GET(request: Request) {
       throw new Error('Assistant messages could not be loaded.')
     }
 
+    const sourceIds = (data ?? [])
+      .filter((message) => message.role === 'assistant' && message.reply_to_message_id)
+      .map((message) => message.reply_to_message_id as string)
+    const actionBySource = new Map<string, AssistantActionRequest>()
+    if (sourceIds.length) {
+      const admin = supabaseAdmin()
+      const { data: actions, error: actionError } = await admin.from('assistant_action_requests')
+        .select('id, source_message_id, action_type, payload, status, expires_at, result')
+        .eq('account_id', accountId).eq('user_id', userId).in('source_message_id', sourceIds)
+      if (actionError) {
+        console.error('[ai/assistant GET] action proposal lookup failed:', actionError)
+        throw new Error('Assistant action proposals could not be loaded.')
+      }
+      for (const action of actions ?? []) {
+        actionBySource.set(action.source_message_id, action as AssistantActionRequest)
+      }
+    }
+
     return NextResponse.json({
       threads,
       thread,
-      messages: (data ?? []) as AssistantMessage[],
+      messages: (data ?? []).map((message) => ({
+        ...message,
+        action_request: message.reply_to_message_id
+          ? actionBySource.get(message.reply_to_message_id) ?? null
+          : null,
+      })) as AssistantMessage[],
     })
   } catch (err) {
     return toErrorResponse(err)
@@ -303,6 +341,7 @@ export async function POST(request: Request) {
     let answer: string
     let sources: Awaited<ReturnType<typeof runAssistantTool>>['sources'] = []
     let reportData: AssistantReportData | null = null
+    let actionProposal: AssistantActionProposal | null = null
     let billableUsage: AiUsage
     let provider = plan.provider
     let model = plan.model
@@ -353,6 +392,7 @@ export async function POST(request: Request) {
       answer = final.text.trim()
       sources = toolResult.sources
       reportData = toolResult.reportData ?? null
+      actionProposal = toolResult.actionProposal ?? null
       if (!final.usage || !answer) {
         throw new AiError('Assistant usage was not reported.', {
           code: 'usage_missing',
@@ -371,7 +411,7 @@ export async function POST(request: Request) {
       usage: billableUsage,
     })
     const { data: recorded, error: billingError } = await admin.rpc(
-      'record_ai_assistant_turn_with_report',
+      'record_ai_assistant_turn_with_action',
       {
         p_account_id: accountId,
         p_user_id: userId,
@@ -390,6 +430,8 @@ export async function POST(request: Request) {
         p_credits: billing.creditsCharged.toString(),
         p_idempotency_key: `assistant:response:${userMessage.id}`,
         p_report_data: reportData,
+        p_action_type: actionProposal?.action.action_type ?? null,
+        p_action_payload: actionProposal,
       }
     )
     if (billingError) {
@@ -425,9 +467,25 @@ export async function POST(request: Request) {
       throw new Error('Assistant response could not be loaded.')
     }
 
+    let actionRequest: AssistantActionRequest | null = null
+    if (result.action_request_id) {
+      const { data: action, error: actionError } = await admin.from('assistant_action_requests')
+        .select('id, action_type, payload, status, expires_at, result')
+        .eq('id', result.action_request_id).eq('account_id', accountId).eq('user_id', userId)
+        .maybeSingle()
+      if (actionError || !action) {
+        console.error('[ai/assistant POST] action proposal lookup failed:', actionError)
+        throw new Error('Assistant action proposal could not be loaded.')
+      }
+      actionRequest = action as AssistantActionRequest
+    }
+
     return NextResponse.json({
       thread_id: threadId,
-      message: response.data,
+      message: {
+        ...response.data,
+        action_request: actionRequest,
+      },
       available_credits: String(result.available_credits),
     })
   } catch (err) {
