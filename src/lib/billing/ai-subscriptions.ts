@@ -72,6 +72,46 @@ export async function recordSubscriptionCheckout(
   if (error) throw error;
 }
 
+/**
+ * Package prices are USD-based: each renewal draft invoice is adjusted to the
+ * price at today's FX with an invoice item (positive or negative) so the
+ * customer is charged the current MXN amount instead of the signup amount.
+ * Stripe keeps renewal invoices in draft for about an hour, which is the window
+ * this relies on.
+ */
+export async function adjustRenewalInvoiceForFx(
+  invoice: Stripe.Invoice,
+  stripe: Stripe,
+  expectedTotalCentavos: number | string,
+  packageId: string
+): Promise<number> {
+  if (
+    invoice.billing_reason !== 'subscription_cycle' ||
+    invoice.status !== 'draft' ||
+    !invoice.id ||
+    invoice.currency !== 'mxn'
+  ) {
+    return 0;
+  }
+  const customerId = stripeId(invoice.customer);
+  if (!customerId) return 0;
+
+  const difference = Number(expectedTotalCentavos) - invoice.total;
+  if (difference === 0) return 0;
+
+  await stripe.invoiceItems.create(
+    {
+      customer: customerId,
+      invoice: invoice.id,
+      currency: 'mxn',
+      amount: difference,
+      description: `Ajuste por tipo de cambio (${packageId})`,
+    },
+    { idempotencyKey: `nexo:fx-adjust:${invoice.id}` }
+  );
+  return difference;
+}
+
 /** Grants one month of package credits for a paid subscription invoice. */
 export async function fulfillSubscriptionInvoice(
   invoice: Stripe.Invoice,

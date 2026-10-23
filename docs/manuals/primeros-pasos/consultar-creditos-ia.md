@@ -52,8 +52,9 @@ Los paquetes mensuales son Inicio (25,000 créditos, US$25), Emprendedor
 (50,000, US$50), Comercial Pro (150,000, US$150) y Corporativo (300,000,
 US$300). Los créditos del mes que no uses **no se acumulan**. Los créditos
 extra son de 10,000 (US$12) y 25,000 (US$30) y vencen 30 días después de
-acreditarse. El monto en MXN se fija al contratar con el FIX de Banxico del
-día. Las tarjetas internacionales también se aceptan.
+acreditarse. El monto en MXN se calcula con el FIX de Banxico del día de cada
+cobro: el paquete siempre vale lo mismo en dólares y el monto en pesos se
+ajusta cada mes. Las tarjetas internacionales también se aceptan.
 La pantalla no muestra nombres de proveedores ni modelos de IA.
 
 Las llamadas de WhatsApp descuentan créditos: una conexión por llamada

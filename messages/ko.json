@@ -345,6 +345,7 @@
     "saveManual": "환율 설정",
     "manualHint": "수동 환율은 24시간 동안 유지되며 이후 Banxico를 다시 조회합니다.",
     "minutePrice": "통화 분당 가격 (MXN)",
+    "connectionPrice": "통화당 최소 연결 가격 (USD)",
     "margin": "목표 마진 (%)",
     "ratesInvalid": "분당 가격과 마진을 확인한 후 다시 시도하세요.",
     "saveRates": "요금 저장",

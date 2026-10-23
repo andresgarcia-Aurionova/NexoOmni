@@ -3,13 +3,23 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
 import { toErrorResponse } from '@/lib/auth/account';
-import { getAiCreditPackage } from '@/lib/billing/stripe-credit-pricing';
+import { loadBanxicoFix } from '@/lib/billing/banxico-fx';
 import {
+  calculateAiCreditCheckoutPrice,
+  getAiCreditPackage,
+  getAiSubscriptionPackage,
+} from '@/lib/billing/stripe-credit-pricing';
+import {
+  adjustRenewalInvoiceForFx,
   fulfillSubscriptionInvoice,
   recordSubscriptionCheckout,
   syncSubscriptionState,
 } from '@/lib/billing/ai-subscriptions';
-import { getStripeWebhookSecrets } from '@/lib/stripe/server';
+import {
+  createStripeServerClient,
+  getStripeCheckoutConfiguration,
+  getStripeWebhookSecrets,
+} from '@/lib/stripe/server';
 import {
   StripeSettingsMigrationPendingError,
   type StripeMode,
@@ -251,6 +261,29 @@ export async function POST(request: Request) {
         }
       } else if (session.payment_status === 'paid') {
         await fulfillPaidCheckout(session, adminClient(), hintedMode);
+      }
+    } else if (event.type === 'invoice.created') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const packageId = invoice.parent?.subscription_details?.metadata?.package_id;
+      const creditPackage = packageId
+        ? getAiSubscriptionPackage(packageId)
+        : null;
+      if (creditPackage && invoice.billing_reason === 'subscription_cycle') {
+        const stripeConfiguration = await getStripeCheckoutConfiguration();
+        if (stripeConfiguration) {
+          const fx = await loadBanxicoFix(adminClient());
+          const price = calculateAiCreditCheckoutPrice(
+            creditPackage.id,
+            fx.mxnPerUsdMicro,
+            'subscription'
+          );
+          await adjustRenewalInvoiceForFx(
+            invoice,
+            createStripeServerClient(stripeConfiguration.secretKey),
+            price.totalCentavos,
+            creditPackage.id
+          );
+        }
       }
     } else if (event.type === 'invoice.paid') {
       await fulfillSubscriptionInvoice(

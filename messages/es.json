@@ -345,6 +345,7 @@
     "saveManual": "Fijar tipo de cambio",
     "manualHint": "Un tipo de cambio manual se respeta 24 horas; después se vuelve a consultar Banxico.",
     "minutePrice": "Precio por minuto de llamada (MXN)",
+    "connectionPrice": "Precio mínimo de conexión por llamada (USD)",
     "margin": "Margen objetivo (%)",
     "ratesInvalid": "Revisa el precio por minuto y el margen e inténtalo de nuevo.",
     "saveRates": "Guardar tarifas",

@@ -345,6 +345,7 @@
     "saveManual": "Set exchange rate",
     "manualHint": "A manual rate is honored for 24 hours; after that Banxico is queried again.",
     "minutePrice": "Call price per minute (MXN)",
+    "connectionPrice": "Minimum connection price per call (USD)",
     "margin": "Target margin (%)",
     "ratesInvalid": "Check the per-minute price and margin, then try again.",
     "saveRates": "Save rates",

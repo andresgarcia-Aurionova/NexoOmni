@@ -64,11 +64,11 @@ Tipo de cambio de referencia: **MXN 18.43 por USD** (valor de ejemplo; el sistem
 
 ## Reglas vigentes (23-oct-2026)
 
-- **Paquetes mensuales** (Stripe suscripción en MXN, FIX del día de contratación): Inicio US$25 / 25,000 créditos, Emprendedor US$50 / 50,000, Comercial Pro US$150 / 150,000, Corporativo US$300 / 300,000. Los créditos vencen al terminar el mes pagado (+2 días de gracia) y no se acumulan; en cada renovación los créditos sobrantes del paquete anterior caducan.
+- **Paquetes mensuales** (Stripe suscripción en MXN; en cada renovación el monto se recalcula con el FIX del día mediante un ajuste en la factura borrador, evento `invoice.created`): Inicio US$25 / 25,000 créditos, Emprendedor US$50 / 50,000, Comercial Pro US$150 / 150,000, Corporativo US$300 / 300,000. Los créditos vencen al terminar el mes pagado (+2 días de gracia) y no se acumulan; en cada renovación los créditos sobrantes del paquete anterior caducan.
 - **Créditos extra** (pago único, vencen a 30 días): 10,000 por US$12 y 25,000 por US$30 = 20 % más caro por crédito que cualquier paquete. La pantalla recomienda subir de paquete.
 - **Subir de paquete:** cobro prorrateado inmediato y nuevo ciclo mensual; **bajar:** aplica en la siguiente renovación. Cancelar: al final del mes pagado.
 - **Llamadas WhatsApp:** la conexión (mín. US$0.10) y los minutos (MXN 0.50 por minuto iniciado) se debitan de los créditos de IA.
-- Pendiente de validar en Stripe modo prueba: que el cambio de paquete con `billing_cycle_anchor: now` genere de inmediato la factura prorrateada y dispare `invoice.paid`. Eventos de webhook requeridos: `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`.
+- Pendiente de validar en Stripe modo prueba: que el cambio de paquete con `billing_cycle_anchor: now` genere de inmediato la factura prorrateada y dispare `invoice.paid`. Eventos de webhook requeridos: `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`, más `invoice.created` (ajuste por tipo de cambio).
 
 Por qué 15 y no 12 créditos de transcripción: 12 deja exactamente 50 % si el costo es US$0.006, y cualquier desviación de tokens de audio lo vuelve pérdida. Hoy Yeastar cobra costo × 1.5 (33 % de margen), por debajo de tu regla.
 

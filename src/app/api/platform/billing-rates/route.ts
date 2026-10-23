@@ -29,7 +29,7 @@ function adminClient() {
 }
 
 class MigrationPendingError extends Error {
-  constructor(readonly migration: 159 | 171) {
+  constructor(readonly migration: 159 | 171 | 174) {
     super(`Migration ${migration} is pending.`);
   }
 }
@@ -45,16 +45,18 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
   const { data, error } = await admin
     .from('ai_billing_settings')
     .select(
-      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points, banxico_token_encrypted, yeastar_transcription_cost_nano_usd_per_minute'
+      'mxn_per_usd_micro, mxn_fx_date, mxn_fx_fetched_at, mxn_fx_source, call_minute_price_mxn_centavos, target_margin_basis_points, banxico_token_encrypted, yeastar_transcription_cost_nano_usd_per_minute, call_connection_price_nano_usd'
     )
     .eq('id', true)
     .maybeSingle();
   // 42703 = columna inexistente: la migración 159 aún no se aplica.
   if (error?.code === '42703') {
     throw new MigrationPendingError(
-      error.message.includes('yeastar_transcription_cost_nano_usd_per_minute')
-        ? 171
-        : 159
+      error.message.includes('call_connection_price_nano_usd')
+        ? 174
+        : error.message.includes('yeastar_transcription_cost_nano_usd_per_minute')
+          ? 171
+          : 159
     );
   }
   if (error || !data) throw error ?? new Error('Billing settings not found');
@@ -67,6 +69,8 @@ async function readSettings(admin: ReturnType<typeof adminClient>) {
     fx_source: data.mxn_fx_source as string | null,
     call_minute_price_mxn_centavos: Number(data.call_minute_price_mxn_centavos),
     target_margin_basis_points: Number(data.target_margin_basis_points),
+    call_connection_price_usd:
+      Number(data.call_connection_price_nano_usd ?? 0) / 1_000_000_000,
     yeastar_transcription_cost_usd_per_minute:
       data.yeastar_transcription_cost_nano_usd_per_minute == null
         ? null
@@ -179,7 +183,12 @@ export async function POST(request: Request) {
     } else if (action === 'set_rates') {
       const centavos = body?.call_minute_price_mxn_centavos;
       const margin = body?.target_margin_basis_points;
+      const connectionUsd = body?.call_connection_price_usd;
       if (
+        typeof connectionUsd !== 'number' ||
+        !Number.isFinite(connectionUsd) ||
+        connectionUsd < 0 ||
+        connectionUsd > 10 ||
         typeof centavos !== 'number' ||
         !Number.isInteger(centavos) ||
         centavos < 0 ||
@@ -199,6 +208,7 @@ export async function POST(request: Request) {
         .update({
           call_minute_price_mxn_centavos: centavos,
           target_margin_basis_points: margin,
+          call_connection_price_nano_usd: Math.round(connectionUsd * 1_000_000_000),
           updated_at: new Date().toISOString(),
         })
         .eq('id', true);

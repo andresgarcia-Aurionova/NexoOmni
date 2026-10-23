@@ -23,6 +23,7 @@ type Rates = {
   fx_source: string | null;
   call_minute_price_mxn_centavos: number;
   target_margin_basis_points: number;
+  call_connection_price_usd: number;
   yeastar_transcription_cost_usd_per_minute: number | null;
   banxico_token_configured: boolean;
   banxico_token_source: 'panel' | 'env' | null;
@@ -32,6 +33,7 @@ const API_ERROR_KEYS = {
   BILLING_MIGRATION_PENDING: 'migrationPending',
   BILLING_MIGRATION_159_PENDING: 'migrationPending',
   BILLING_MIGRATION_171_PENDING: 'yeastarMigrationPending',
+  BILLING_MIGRATION_174_PENDING: 'migrationPending',
   BANXICO_TOKEN_INVALID: 'tokenInvalid',
   BANXICO_TOKEN_MISSING: 'tokenMissing',
   BANXICO_TOKEN_UNREADABLE: 'tokenUnreadable',
@@ -50,6 +52,7 @@ export function BillingRatesPanel() {
   const [manualFx, setManualFx] = useState('');
   const [minutePrice, setMinutePrice] = useState('');
   const [margin, setMargin] = useState('');
+  const [connectionPrice, setConnectionPrice] = useState('');
   const [yeastarRate, setYeastarRate] = useState('');
   const [token, setToken] = useState('');
 
@@ -57,6 +60,7 @@ export function BillingRatesPanel() {
     setRates(json);
     setMinutePrice((json.call_minute_price_mxn_centavos / 100).toFixed(2));
     setMargin(String(json.target_margin_basis_points / 100));
+    setConnectionPrice(String(json.call_connection_price_usd));
     setYeastarRate(
       json.yeastar_transcription_cost_usd_per_minute == null
         ? ''
@@ -235,6 +239,7 @@ export function BillingRatesPanel() {
                 Number(minutePrice) * 100
               ),
               target_margin_basis_points: Math.round(Number(margin) * 100),
+              call_connection_price_usd: Number(connectionPrice),
             });
           }}
         >
@@ -260,6 +265,19 @@ export function BillingRatesPanel() {
               step="0.01"
               value={margin}
               onChange={(event) => setMargin(event.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="connection-price">{t('connectionPrice')}</Label>
+            <Input
+              id="connection-price"
+              type="number"
+              min={0}
+              max={10}
+              step="0.01"
+              value={connectionPrice}
+              onChange={(event) => setConnectionPrice(event.target.value)}
               required
             />
           </div>
