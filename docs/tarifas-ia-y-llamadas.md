@@ -60,7 +60,15 @@ Tipo de cambio de referencia: **MXN 18.43 por USD** (valor de ejemplo; el sistem
 | Resumen de llamada (medido: 678 in / 289 out; Haiku 5.5 ≈ US$0.0002, 5 min ≈ US$0.0005) | US$0.0002–0.0005 | **2 créditos** por llamada (el sistema cobra costo × 2 redondeado a 1 crédito mínimo) | 0.037 | ≈ 75–90 % |
 | Minuto de llamada WhatsApp (Zernio) | **≈ US$0 medido** (destino SIP, sin grabación); ≈ US$0.004/min con grabación | **MXN 0.50 por minuto iniciado** (ya configurado) | 0.50 | ≈ 100 % (es cargo de servicio) |
 | Cuenta/canal conectado (Zernio) | US$3/mes marginal (US$6 entre las cuentas 3 y 10) | Incluir en la renta mensual del plan, ×2 | ≈ MXN 110/mes por canal | 50 % |
-| Conexión Zernio | Costo real facturado por Zernio | **Costo × 2** (ya implementado) | Variable | 50 % |
+| Conexión Zernio | Zernio factura ≤ US$0.03 por llamada (a veces US$0) | **Precio fijo mínimo US$0.10 = 100 créditos** (columna `call_connection_price_nano_usd`); si Zernio cobra más, se aplica costo ÷ (1 − margen) | MXN 1.84 | ≥ 70 % |
+
+## Reglas vigentes (23-oct-2026)
+
+- **Paquetes mensuales** (Stripe suscripción en MXN, FIX del día de contratación): Inicio US$25 / 25,000 créditos, Emprendedor US$50 / 50,000, Comercial Pro US$150 / 150,000, Corporativo US$300 / 300,000. Los créditos vencen al terminar el mes pagado (+2 días de gracia) y no se acumulan; en cada renovación los créditos sobrantes del paquete anterior caducan.
+- **Créditos extra** (pago único, vencen a 30 días): 10,000 por US$12 y 25,000 por US$30 = 20 % más caro por crédito que cualquier paquete. La pantalla recomienda subir de paquete.
+- **Subir de paquete:** cobro prorrateado inmediato y nuevo ciclo mensual; **bajar:** aplica en la siguiente renovación. Cancelar: al final del mes pagado.
+- **Llamadas WhatsApp:** la conexión (mín. US$0.10) y los minutos (MXN 0.50 por minuto iniciado) se debitan de los créditos de IA.
+- Pendiente de validar en Stripe modo prueba: que el cambio de paquete con `billing_cycle_anchor: now` genere de inmediato la factura prorrateada y dispare `invoice.paid`. Eventos de webhook requeridos: `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
 Por qué 15 y no 12 créditos de transcripción: 12 deja exactamente 50 % si el costo es US$0.006, y cualquier desviación de tokens de audio lo vuelve pérdida. Hoy Yeastar cobra costo × 1.5 (33 % de margen), por debajo de tu regla.
 

@@ -20,7 +20,11 @@ import {
 import type { AiCreditUsageActivity } from '@/lib/ai/credit-usage-activities';
 import {
   AI_CREDIT_PACKAGES,
+  AI_EXTRA_CREDIT_PACKAGE_IDS,
+  AI_SUBSCRIPTION_PACKAGES,
+  aiSubscriptionPackageRank,
   type AiCreditPackageId,
+  type AiSubscriptionPackageId,
 } from '@/lib/billing/stripe-credit-pricing';
 
 const PACKAGE_NAME_KEYS: Record<
@@ -28,11 +32,39 @@ const PACKAGE_NAME_KEYS: Record<
   | 'packageNames.entrepreneur'
   | 'packageNames.commercial_pro'
   | 'packageNames.corporate'
+  | 'packageNames.extra_10k'
+  | 'packageNames.extra_25k'
 > = {
   entrepreneur: 'packageNames.entrepreneur',
   commercial_pro: 'packageNames.commercial_pro',
   corporate: 'packageNames.corporate',
+  extra_10k: 'packageNames.extra_10k',
+  extra_25k: 'packageNames.extra_25k',
 };
+
+const SUBSCRIPTION_NAME_KEYS: Record<
+  AiSubscriptionPackageId,
+  | 'subscription.names.starter'
+  | 'subscription.names.entrepreneur'
+  | 'subscription.names.commercial_pro'
+  | 'subscription.names.corporate'
+> = {
+  starter: 'subscription.names.starter',
+  entrepreneur: 'subscription.names.entrepreneur',
+  commercial_pro: 'subscription.names.commercial_pro',
+  corporate: 'subscription.names.corporate',
+};
+
+const EXTRA_PACKAGES = AI_CREDIT_PACKAGES.filter((item) =>
+  (AI_EXTRA_CREDIT_PACKAGE_IDS as readonly string[]).includes(item.id)
+);
+
+type SubscriptionState = {
+  package_id: AiSubscriptionPackageId;
+  status: 'active' | 'past_due' | 'canceled';
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+} | null;
 
 type CreditMovement = {
   id: string;
@@ -52,6 +84,7 @@ type CreditData = {
   balance: string;
   updated_at: string | null;
   checkout_available: boolean;
+  subscription: SubscriptionState;
   movements: CreditMovement[];
   monthly_usage: {
     month_start: string;
@@ -216,6 +249,50 @@ export function AiCreditBalance() {
     [t]
   );
 
+  const subscriptionAction = useCallback(
+    async (method: 'POST' | 'DELETE', packageId?: AiSubscriptionPackageId) => {
+      setPurchasing(true);
+      setCheckoutError(null);
+      try {
+        const isNew = method === 'POST' && !data?.subscription;
+        const response = await fetch(
+          isNew
+            ? '/api/account/credits/subscription/checkout'
+            : '/api/account/credits/subscription',
+          {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: packageId ? JSON.stringify({ package_id: packageId }) : undefined,
+          }
+        );
+        const payload = (await response.json().catch(() => null)) as
+          | { checkout_url?: unknown; error?: unknown }
+          | null;
+        if (!response.ok) throw new Error(t('subscription.error'));
+        if (isNew) {
+          if (
+            !payload ||
+            typeof payload.checkout_url !== 'string' ||
+            !/^https:\/\/checkout\.stripe\.com\//.test(payload.checkout_url)
+          ) {
+            throw new Error(t('subscription.error'));
+          }
+          window.location.assign(payload.checkout_url);
+          return;
+        }
+        setCheckoutMessage('success');
+        await load();
+        window.setTimeout(() => void load(), 3_000);
+      } catch (reason) {
+        setCheckoutError(
+          reason instanceof Error ? reason.message : t('subscription.error')
+        );
+      }
+      setPurchasing(false);
+    },
+    [data?.subscription, load, t]
+  );
+
   const formatUsd = (value: number) =>
     new Intl.NumberFormat(locale, {
       style: 'currency',
@@ -307,11 +384,119 @@ export function AiCreditBalance() {
 
       <Card>
         <CardHeader>
+          <CardTitle>{t('subscription.title')}</CardTitle>
+          <CardDescription>{t('subscription.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data?.subscription && data.subscription.status !== 'canceled' ? (
+            <p role="status" className="rounded-md border px-3 py-2 text-sm">
+              {t(
+                data.subscription.cancel_at_period_end
+                  ? 'subscription.cancelScheduled'
+                  : data.subscription.status === 'past_due'
+                    ? 'subscription.pastDue'
+                    : 'subscription.current',
+                {
+                  name: t(SUBSCRIPTION_NAME_KEYS[data.subscription.package_id]),
+                  date: data.subscription.current_period_end
+                    ? formatDate(data.subscription.current_period_end, locale)
+                    : '—',
+                }
+              )}
+            </p>
+          ) : null}
+          {!data?.checkout_available ? (
+            <p className="text-sm text-muted-foreground">
+              {t('checkout.unavailable')}
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {AI_SUBSCRIPTION_PACKAGES.map((item) => {
+                const current =
+                  data.subscription && data.subscription.status !== 'canceled'
+                    ? data.subscription.package_id
+                    : null;
+                const isCurrent = current === item.id;
+                const label = !current
+                  ? 'subscription.subscribe'
+                  : isCurrent
+                    ? data.subscription?.cancel_at_period_end
+                      ? 'subscription.resume'
+                      : 'subscription.currentPlan'
+                    : aiSubscriptionPackageRank(item.id) >
+                        aiSubscriptionPackageRank(current)
+                      ? 'subscription.upgrade'
+                      : 'subscription.downgrade';
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-col gap-3 rounded-lg border p-4"
+                  >
+                    <div>
+                      <h3 className="font-medium">
+                        {t(SUBSCRIPTION_NAME_KEYS[item.id])}
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t('subscription.creditsPerMonth', {
+                          credits: formatCredits(String(item.credits), locale),
+                        })}
+                      </p>
+                      <p className="mt-2 text-sm font-medium">
+                        {t('subscription.pricePerMonth', {
+                          price: formatUsd(item.usdAmount),
+                        })}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={isCurrent ? 'secondary' : 'outline'}
+                      onClick={() => void subscriptionAction('POST', item.id)}
+                      disabled={
+                        purchasing ||
+                        loading ||
+                        (isCurrent && !data.subscription?.cancel_at_period_end)
+                      }
+                    >
+                      {purchasing ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <CreditCard />
+                      )}
+                      {t(label)}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {data?.subscription &&
+          data.subscription.status !== 'canceled' &&
+          !data.subscription.cancel_at_period_end ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void subscriptionAction('DELETE')}
+              disabled={purchasing}
+            >
+              {t('subscription.cancel')}
+            </Button>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            {t('subscription.notice')}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>{t('rechargeTitle')}</CardTitle>
           <CardDescription>{t('rechargeDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {checkoutMessage ? (
+          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {t('extraCreditsAdvice')}
+          </p>          {checkoutMessage ? (
             <p
               role="status"
               className="rounded-md border px-3 py-2 text-sm"
@@ -333,8 +518,8 @@ export function AiCreditBalance() {
               {t('checkout.unavailable')}
             </p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-3">
-              {AI_CREDIT_PACKAGES.map((creditPackage) => (
+            <div className="grid gap-3 md:grid-cols-2">
+              {EXTRA_PACKAGES.map((creditPackage) => (
                 <div
                   key={creditPackage.id}
                   className="flex flex-col gap-3 rounded-lg border p-4"

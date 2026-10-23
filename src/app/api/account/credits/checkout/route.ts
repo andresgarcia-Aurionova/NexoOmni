@@ -9,6 +9,7 @@ import { loadBanxicoFix } from '@/lib/billing/banxico-fx';
 import {
   calculateAiCreditCheckoutPrice,
   getAiCreditPackage,
+  isExtraCreditPackageId,
   type AiCreditPackageId,
 } from '@/lib/billing/stripe-credit-pricing';
 import { toErrorResponse } from '@/lib/auth/account';
@@ -28,10 +29,14 @@ const PACKAGE_NAME_KEYS: Record<
   | 'packageNames.entrepreneur'
   | 'packageNames.commercial_pro'
   | 'packageNames.corporate'
+  | 'packageNames.extra_10k'
+  | 'packageNames.extra_25k'
 > = {
   entrepreneur: 'packageNames.entrepreneur',
   commercial_pro: 'packageNames.commercial_pro',
   corporate: 'packageNames.corporate',
+  extra_10k: 'packageNames.extra_10k',
+  extra_25k: 'packageNames.extra_25k',
 };
 
 export const runtime = 'nodejs';
@@ -88,7 +93,9 @@ export async function POST(request: Request) {
     > | null;
     const packageId =
       typeof body?.package_id === 'string' ? body.package_id : '';
-    const creditPackage = getAiCreditPackage(packageId);
+    const creditPackage = isExtraCreditPackageId(packageId)
+      ? getAiCreditPackage(packageId)
+      : null;
     if (!creditPackage) {
       return NextResponse.json(
         { error: 'AI_CREDIT_PACKAGE_INVALID' },

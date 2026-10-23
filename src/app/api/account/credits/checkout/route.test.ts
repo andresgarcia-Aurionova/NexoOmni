@@ -104,14 +104,14 @@ afterEach(() => {
 
 describe('POST /api/account/credits/checkout', () => {
   it('creates a MXN card checkout using the current FIX and approved package', async () => {
-    const response = await POST(request('entrepreneur'));
+    const response = await POST(request('extra_10k'));
     const payload = await response.json();
 
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
       checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_123',
-      package_id: 'entrepreneur',
-      credits: 50_000,
+      package_id: 'extra_10k',
+      credits: 10_000,
       fx_date: '2026-10-21',
     });
     expect(mocks.requireEntitlement).toHaveBeenCalledWith(
@@ -140,7 +140,7 @@ describe('POST /api/account/credits/checkout', () => {
         (item: { price_data: { unit_amount: number } }) =>
           item.price_data.unit_amount
       )
-    ).toEqual([97_847, 15_656]);
+    ).toEqual([23_764, 3_802]);
     expect(options).toEqual({
       idempotencyKey: `ai-credit-checkout:${params.client_reference_id}`,
     });
@@ -151,11 +151,11 @@ describe('POST /api/account/credits/checkout', () => {
     };
     expect(insertedRows[0]).toMatchObject({
       account_id: 'account-1',
-      package_id: 'entrepreneur',
+      package_id: 'extra_10k',
       stripe_mode: 'test',
-      credits: 50_000,
-      package_base_mxn_centavos: '92100',
-      processing_cost_included_mxn_centavos: '5747',
+      credits: 10_000,
+      package_base_mxn_centavos: '22104',
+      processing_cost_included_mxn_centavos: '1660',
       fx_rate_micro: '18420000',
     });
     expect(updates).toContainEqual({
@@ -163,7 +163,8 @@ describe('POST /api/account/credits/checkout', () => {
     });
   });
 
-  it('rejects unknown packages without creating a session', async () => {
+  it('rejects legacy and unknown packages without creating a session', async () => {
+    expect((await POST(request('entrepreneur'))).status).toBe(400);
     const response = await POST(request('made-up-package'));
     expect(response.status).toBe(400);
     expect(mocks.createStripeServerClient).not.toHaveBeenCalled();
@@ -172,7 +173,7 @@ describe('POST /api/account/credits/checkout', () => {
   it('does not create a session until checkout is explicitly enabled', async () => {
     mocks.getStripeCheckoutConfiguration.mockResolvedValue(null);
 
-    const response = await POST(request('entrepreneur'));
+    const response = await POST(request('extra_10k'));
 
     expect(response.status).toBe(503);
     expect(mocks.createStripeServerClient).not.toHaveBeenCalled();

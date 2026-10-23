@@ -222,7 +222,35 @@
     "packageNames": {
       "entrepreneur": "Emprendedor",
       "commercial_pro": "Comercial Pro",
-      "corporate": "Corporativo"
+      "corporate": "Corporativo",
+      "extra_10k": "Créditos extra 10,000",
+      "extra_25k": "Créditos extra 25,000"
+    },
+    "extraCreditsAdvice": "Los créditos extra cuestan 20 % más por crédito que tu paquete mensual. Si te quedas sin créditos con frecuencia, conviene más cambiar a un paquete superior que comprar créditos extra.",
+    "subscription": {
+      "title": "Paquete mensual de créditos de IA",
+      "description": "Paga cada mes tu paquete y recibe sus créditos automáticamente. Puedes subir o bajar de paquete cuando quieras.",
+      "names": {
+        "starter": "Inicio",
+        "entrepreneur": "Emprendedor",
+        "commercial_pro": "Comercial Pro",
+        "corporate": "Corporativo"
+      },
+      "creditsPerMonth": "{credits} créditos al mes",
+      "pricePerMonth": "{price} al mes",
+      "subscribe": "Contratar paquete",
+      "upgrade": "Subir a este paquete",
+      "downgrade": "Bajar a este paquete",
+      "currentPlan": "Paquete actual",
+      "resume": "Reactivar paquete",
+      "cancel": "Cancelar renovación",
+      "current": "Tu paquete actual es {name}. Se renueva el {date}.",
+      "cancelScheduled": "Tu paquete {name} no se renovará. Puedes usar tus créditos hasta el {date}.",
+      "pastDue": "No se pudo cobrar la renovación de tu paquete {name}. Actualiza tu método de pago en Stripe.",
+      "notice": "Los créditos del paquete se renuevan cada mes y los que no uses no se acumulan. Al subir de paquete se cobra la diferencia de inmediato y inicia un nuevo mes; al bajar, el cambio aplica en tu próxima renovación. El monto en MXN se fija al contratar según el FIX de Banxico del día e incluye IVA.",
+      "lineItem": "Paquete mensual de créditos de IA — {packageName}",
+      "lineItemDescription": "Renovación mensual; incluye el costo de procesamiento y el IVA (16 %).",
+      "error": "No se pudo completar la operación. Inténtalo de nuevo o contacta al equipo de NexoOmni."
     },
     "packageCredits": "{credits} créditos",
     "checkout": {

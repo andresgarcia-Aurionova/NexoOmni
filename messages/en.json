@@ -222,7 +222,35 @@
     "packageNames": {
       "entrepreneur": "Entrepreneur",
       "commercial_pro": "Commercial Pro",
-      "corporate": "Corporate"
+      "corporate": "Corporate",
+      "extra_10k": "Extra credits 10,000",
+      "extra_25k": "Extra credits 25,000"
+    },
+    "extraCreditsAdvice": "Extra credits cost 20% more per credit than your monthly package. If you often run out, upgrading to a higher package is a better deal than buying extra credits.",
+    "subscription": {
+      "title": "Monthly AI credit package",
+      "description": "Pay for your package each month and receive its credits automatically. You can upgrade or downgrade at any time.",
+      "names": {
+        "starter": "Starter",
+        "entrepreneur": "Entrepreneur",
+        "commercial_pro": "Commercial Pro",
+        "corporate": "Corporate"
+      },
+      "creditsPerMonth": "{credits} credits per month",
+      "pricePerMonth": "{price} per month",
+      "subscribe": "Subscribe",
+      "upgrade": "Upgrade to this package",
+      "downgrade": "Downgrade to this package",
+      "currentPlan": "Current package",
+      "resume": "Resume package",
+      "cancel": "Cancel renewal",
+      "current": "Your current package is {name}. It renews on {date}.",
+      "cancelScheduled": "Your {name} package will not renew. You can use your credits until {date}.",
+      "pastDue": "Your {name} package renewal could not be charged. Update your payment method in Stripe.",
+      "notice": "Package credits renew every month and unused credits do not carry over. Upgrading charges the difference right away and starts a new month; downgrading applies at your next renewal. The MXN amount is fixed at sign-up using that day's Banxico FIX and includes VAT.",
+      "lineItem": "Monthly AI credit package — {packageName}",
+      "lineItemDescription": "Monthly renewal; includes processing cost and VAT (16%).",
+      "error": "The operation could not be completed. Try again or contact the NexoOmni team."
     },
     "packageCredits": "{credits} credits",
     "checkout": {

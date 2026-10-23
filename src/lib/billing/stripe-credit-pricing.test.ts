@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AI_CREDIT_PACKAGES,
+  AI_EXTRA_CREDIT_PACKAGE_IDS,
+  AI_SUBSCRIPTION_PACKAGES,
+  aiSubscriptionPackageRank,
   calculateAiCreditCheckoutPrice,
   getAiCreditPackage,
 } from './stripe-credit-pricing';
@@ -17,6 +20,32 @@ function estimatedStripeFee(totalCentavos: bigint): bigint {
     ceilRatio(totalCentavos * BigInt(410), BigInt(10_000)) + BigInt(300);
   return feeBase + ceilRatio(feeBase * BigInt(1_600), BigInt(10_000));
 }
+
+describe('monthly packages and extra credits', () => {
+  it('prices extra credits 20% above the cheapest monthly package rate', () => {
+    const rate = (usd: number, credits: number) => usd / credits;
+    const monthly = AI_SUBSCRIPTION_PACKAGES.map((p) =>
+      rate(p.usdAmount, p.credits)
+    );
+    for (const id of AI_EXTRA_CREDIT_PACKAGE_IDS) {
+      const extra = getAiCreditPackage(id)!;
+      expect(rate(extra.usdAmount, extra.credits)).toBeCloseTo(0.0012, 6);
+      expect(rate(extra.usdAmount, extra.credits)).toBeGreaterThan(
+        Math.max(...monthly)
+      );
+    }
+  });
+
+  it('prices subscriptions from the subscription catalog only', () => {
+    const price = calculateAiCreditCheckoutPrice('starter', FIX, 'subscription');
+    expect(price.credits).toBe(25_000);
+    expect(price.packageBaseCentavos).toBe('46050');
+    expect(() => calculateAiCreditCheckoutPrice('starter', FIX)).toThrow();
+    expect(aiSubscriptionPackageRank('corporate')).toBeGreaterThan(
+      aiSubscriptionPackageRank('starter')
+    );
+  });
+});
 
 describe('AI credit Stripe pricing', () => {
   it('calculates the package base using the supplied Banxico FIX', () => {

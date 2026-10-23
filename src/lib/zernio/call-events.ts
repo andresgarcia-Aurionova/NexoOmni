@@ -13,7 +13,7 @@ async function loadSettings(
   const { data, error } = await db
     .from('ai_billing_settings')
     .select(
-      'billing_mode,target_margin_basis_points,nano_usd_per_credit,call_minute_price_mxn_centavos'
+      'billing_mode,target_margin_basis_points,nano_usd_per_credit,call_minute_price_mxn_centavos,call_connection_price_nano_usd'
     )
     .eq('id', true)
     .maybeSingle();
@@ -26,6 +26,9 @@ async function loadSettings(
     nanoUsdPerCredit: BigInt(String(data.nano_usd_per_credit)),
     minutePriceMxnCentavos: BigInt(String(data.call_minute_price_mxn_centavos)),
     mxnPerUsdMicro: null,
+    connectionPriceFloorNanoUsd: BigInt(
+      String(data.call_connection_price_nano_usd ?? 0)
+    ),
   };
 }
 

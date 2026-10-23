@@ -92,6 +92,9 @@ function adminDatabase() {
       if (url.pathname.endsWith('/ai_billing_settings')) {
         return Response.json([{ nano_usd_per_credit: '1000000' }]);
       }
+      if (url.pathname.endsWith('/ai_credit_subscriptions')) {
+        return Response.json([]);
+      }
       throw new Error(`Unexpected admin database request: ${url.pathname}`);
     });
   vi.stubGlobal('fetch', fetch);
@@ -133,6 +136,7 @@ describe('GET /api/account/credits', () => {
     expect(await response.json()).toEqual({
       balance: '95',
       updated_at: '2026-10-21T10:00:00.000Z',
+      subscription: null,
       checkout_available: false,
       monthly_usage: {
         month_start: expect.any(String),

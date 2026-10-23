@@ -4,6 +4,11 @@ import Stripe from 'stripe';
 
 import { toErrorResponse } from '@/lib/auth/account';
 import { getAiCreditPackage } from '@/lib/billing/stripe-credit-pricing';
+import {
+  fulfillSubscriptionInvoice,
+  recordSubscriptionCheckout,
+  syncSubscriptionState,
+} from '@/lib/billing/ai-subscriptions';
 import { getStripeWebhookSecrets } from '@/lib/stripe/server';
 import {
   StripeSettingsMigrationPendingError,
@@ -240,9 +245,28 @@ export async function POST(request: Request) {
       event.type === 'checkout.session.async_payment_succeeded'
     ) {
       const session = event.data.object as Stripe.Checkout.Session;
-      if (session.payment_status === 'paid') {
+      if (session.mode === 'subscription') {
+        if (session.payment_status === 'paid') {
+          await recordSubscriptionCheckout(session, adminClient(), hintedMode);
+        }
+      } else if (session.payment_status === 'paid') {
         await fulfillPaidCheckout(session, adminClient(), hintedMode);
       }
+    } else if (event.type === 'invoice.paid') {
+      await fulfillSubscriptionInvoice(
+        event.data.object as Stripe.Invoice,
+        adminClient(),
+        hintedMode
+      );
+    } else if (
+      event.type === 'customer.subscription.updated' ||
+      event.type === 'customer.subscription.deleted'
+    ) {
+      await syncSubscriptionState(
+        event.data.object as Stripe.Subscription,
+        adminClient(),
+        hintedMode
+      );
     }
     return NextResponse.json({ received: true });
   } catch (error) {

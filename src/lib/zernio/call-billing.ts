@@ -19,6 +19,8 @@ export interface CallBillingSettings {
   nanoUsdPerCredit: bigint;
   minutePriceMxnCentavos: bigint;
   mxnPerUsdMicro: bigint | null;
+  /** Minimum connection price, applied even when Zernio bills zero. */
+  connectionPriceFloorNanoUsd?: bigint;
 }
 
 export interface CallCharge {
@@ -96,7 +98,8 @@ export function parseCallEnded(event: unknown): ParsedCallEnded | null {
 }
 
 /**
- * Connection = what Zernio billed for the call plus the target margin.
+ * Connection = the greater of the fixed connection price and what Zernio
+ * billed for the call plus the target margin.
  * Minutes = a flat MXN price per started minute, only for answered calls
  * (`hangup`), converted to credits with the configured exchange rate.
  * Meta's per-minute cost is billed to the WABA directly and is never charged.
@@ -115,10 +118,12 @@ export function calculateCallCharge(
     throw new RangeError('nanoUsdPerCredit must be positive');
   }
 
-  const connectionPriceNanoUsd = ceilDiv(
+  const costPlusMargin = ceilDiv(
     call.zernioCostNanoUsd * BASIS_POINTS,
     BASIS_POINTS - settings.targetMarginBasisPoints
   );
+  const floor = settings.connectionPriceFloorNanoUsd ?? BigInt(0);
+  const connectionPriceNanoUsd = costPlusMargin > floor ? costPlusMargin : floor;
   const connectionCredits = ceilDiv(
     connectionPriceNanoUsd,
     settings.nanoUsdPerCredit

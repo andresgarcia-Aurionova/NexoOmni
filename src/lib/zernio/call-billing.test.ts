@@ -65,6 +65,19 @@ describe('calculateCallCharge', () => {
     expect(charge.minuteCredits).toBe(BigInt(75));
   });
 
+  it('applies the connection price floor when Zernio bills less', () => {
+    const parsed = {
+      ...parseCallEnded(event)!,
+      zernioCostNanoUsd: BigInt(0),
+    };
+    const charge = calculateCallCharge(parsed, {
+      ...settings,
+      connectionPriceFloorNanoUsd: BigInt(100_000_000),
+    });
+    expect(charge.connectionPriceNanoUsd).toBe(BigInt(100_000_000));
+    expect(charge.connectionCredits).toBe(BigInt(100));
+  });
+
   it('does not charge minutes for unanswered calls', () => {
     const parsed = { ...parseCallEnded(event)!, endReason: 'no_answer' };
     expect(calculateCallCharge(parsed, settings).billableMinutes).toBe(0);

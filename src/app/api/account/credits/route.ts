@@ -172,10 +172,28 @@ export async function GET() {
       );
     }
 
+    let subscription: {
+      package_id: string;
+      status: string;
+      current_period_end: string | null;
+      cancel_at_period_end: boolean;
+    } | null = null;
+    try {
+      const { data } = await adminClient()
+        .from('ai_credit_subscriptions')
+        .select('package_id,status,current_period_end,cancel_at_period_end')
+        .eq('account_id', accountId)
+        .maybeSingle();
+      subscription = data ?? null;
+    } catch (error) {
+      console.error('[account credits] subscription lookup failed:', error);
+    }
+
     return NextResponse.json(
       {
         balance: String(wallet.available_credits),
         updated_at: wallet.updated_at,
+        subscription,
         checkout_available: await isStripeCheckoutConfigured(),
         monthly_usage: monthlyUsageError
           ? null

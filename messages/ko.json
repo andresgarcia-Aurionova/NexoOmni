@@ -222,7 +222,35 @@
     "packageNames": {
       "entrepreneur": "Entrepreneur",
       "commercial_pro": "Commercial Pro",
-      "corporate": "Corporate"
+      "corporate": "Corporate",
+      "extra_10k": "추가 크레딧 10,000",
+      "extra_25k": "추가 크레딧 25,000"
+    },
+    "extraCreditsAdvice": "추가 크레딧은 월간 패키지보다 크레딧당 20% 더 비쌉니다. 크레딧이 자주 부족하다면 추가 크레딧을 구매하는 것보다 상위 패키지로 변경하는 것이 더 유리합니다.",
+    "subscription": {
+      "title": "월간 AI 크레딧 패키지",
+      "description": "매월 패키지 요금을 결제하면 크레딧이 자동으로 지급됩니다. 언제든지 패키지를 올리거나 내릴 수 있습니다.",
+      "names": {
+        "starter": "Starter",
+        "entrepreneur": "Entrepreneur",
+        "commercial_pro": "Commercial Pro",
+        "corporate": "Corporate"
+      },
+      "creditsPerMonth": "월 {credits} 크레딧",
+      "pricePerMonth": "월 {price}",
+      "subscribe": "패키지 구독",
+      "upgrade": "이 패키지로 업그레이드",
+      "downgrade": "이 패키지로 다운그레이드",
+      "currentPlan": "현재 패키지",
+      "resume": "패키지 재개",
+      "cancel": "갱신 취소",
+      "current": "현재 패키지는 {name}입니다. {date}에 갱신됩니다.",
+      "cancelScheduled": "{name} 패키지는 갱신되지 않습니다. {date}까지 크레딧을 사용할 수 있습니다.",
+      "pastDue": "{name} 패키지 갱신 결제에 실패했습니다. Stripe에서 결제 수단을 업데이트하세요.",
+      "notice": "패키지 크레딧은 매월 갱신되며 사용하지 않은 크레딧은 이월되지 않습니다. 업그레이드하면 차액이 즉시 청구되고 새 한 달이 시작되며, 다운그레이드는 다음 갱신부터 적용됩니다. MXN 금액은 가입 당일 Banxico FIX 기준으로 고정되며 VAT가 포함됩니다.",
+      "lineItem": "월간 AI 크레딧 패키지 — {packageName}",
+      "lineItemDescription": "월간 갱신; 결제 처리 비용과 VAT(16%) 포함.",
+      "error": "작업을 완료할 수 없습니다. 다시 시도하거나 NexoOmni 팀에 문의하세요."
     },
     "packageCredits": "{credits} 크레딧",
     "checkout": {
