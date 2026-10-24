@@ -240,7 +240,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
     return NextResponse.json({ analysis: data })
   } catch (error) {
     if (error instanceof AiError) console.error(`[ai] conversation analysis failed (${error.code}): ${error.message}`)
-    if (error instanceof AiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    // A 5xx from here is replaced by the reverse proxy's HTML page; use 424 so the real reason reaches the UI.
+    if (error instanceof AiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status >= 500 ? 424 : error.status })
     return toErrorResponse(error)
   }
 }
