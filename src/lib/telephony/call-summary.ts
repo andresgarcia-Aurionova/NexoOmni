@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadAiConfig } from '@/lib/ai/config';
 import { generateForTask } from '@/lib/ai/generate';
+import { ANALYSIS_MAX_OUTPUT_TOKENS } from '@/lib/ai/defaults';
 import { logAiUsage } from '@/lib/ai/usage';
 import { parseMemoryExtraction, type MemoryExtraction } from '@/lib/ai/memory';
 
@@ -129,7 +130,8 @@ export async function analyzeCall(
     task: 'call_summary',
     systemPrompt: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: referenceLine + transcript }],
-    timeoutMs: 20_000,
+    maxOutputTokens: ANALYSIS_MAX_OUTPUT_TOKENS,
+    timeoutMs: 30_000,
   });
   await logAiUsage(db, {
     accountId,

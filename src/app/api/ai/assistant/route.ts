@@ -313,7 +313,7 @@ export async function POST(request: Request) {
       task: 'assistant_router',
       systemPrompt: buildAssistantPlannerPrompt(),
       messages: history,
-      maxOutputTokens: 600,
+      maxOutputTokens: 1200,
     })
     let decision: ReturnType<typeof parseAssistantDecision>
     try {
@@ -387,7 +387,7 @@ export async function POST(request: Request) {
         task: 'assistant_data',
         systemPrompt: buildAssistantFinalPrompt(),
         messages: buildFinalMessages(history, toolResult),
-        maxOutputTokens: 800,
+        maxOutputTokens: 1500,
       })
       answer = final.text.trim()
       sources = toolResult.sources
