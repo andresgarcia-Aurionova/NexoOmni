@@ -19,7 +19,7 @@ import {
   loadAccountQueues,
   routeConversationToQueue,
 } from '@/lib/ai/insights-apply'
-import { MIN_DAILY_ANALYSES_PER_CONVERSATION } from '@/lib/ai/defaults'
+import { MIN_DAILY_ANALYSES_PER_CONVERSATION, ANALYSIS_MAX_OUTPUT_TOKENS } from '@/lib/ai/defaults'
 
 const ANALYSIS_COLUMNS =
   'summary, sentiment, sentiment_score, next_best_action, reasons, qa_score, qa_empathy_score, qa_objection_handling_score, qa_script_adherence_score, qa_summary, qa_findings, insights, intent, urgency, lead_temperature, handoff_required, recommended_department, status, analyzed_message_count, analyzed_at'
@@ -192,6 +192,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       task: 'analysis',
       systemPrompt,
       messages,
+      maxOutputTokens: ANALYSIS_MAX_OUTPUT_TOKENS,
       // Primary + fallback must finish before the reverse proxy cuts the request with an HTML 502.
       timeoutMs: 20_000,
     })

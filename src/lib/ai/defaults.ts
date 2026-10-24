@@ -28,6 +28,9 @@ export const HANDOFF_SENTINEL = '[[HANDOFF]]'
  *  bounds token spend on the account's provider credential. */
 export const MAX_OUTPUT_TOKENS = 1024
 
+/** Conversation analysis returns a large JSON (QA, memory, insights); the reply-sized cap can leave no room for the text. */
+export const ANALYSIS_MAX_OUTPUT_TOKENS = 4096
+
 /** Minimum cost-control allowance before a conversation is paused for the day. */
 export const MIN_DAILY_ANALYSES_PER_CONVERSATION = 8
 

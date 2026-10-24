@@ -10,7 +10,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { downloadZernioInboundMedia, type ZernioChannel } from '@/lib/zernio/server'
 import { describeImageWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
-import { MIN_DAILY_ANALYSES_PER_CONVERSATION, aiRequestTimeoutMs } from '@/lib/ai/defaults'
+import { MIN_DAILY_ANALYSES_PER_CONVERSATION, ANALYSIS_MAX_OUTPUT_TOKENS, aiRequestTimeoutMs } from '@/lib/ai/defaults'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { syncGoogleCalendarChanges } from '@/lib/appointments/google-calendar'
 import { flowChannel, flowSendText } from '@/lib/flows/channel-send'
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
         : ''
       const memoryPrompt = ' Incluye también memoria del cliente (Nexo Memory): "customer_stage":"..." (p.ej. prospecto, cotización, propuesta, cliente), "risk_level":"low|medium|high", "opportunity_score":0-100, "interests":[{"text":"...","confidence":0-1}], "objections":[{"text":"...","confidence":0-1}], "commitments":[{"description":"...","owner":"agent|customer","due_date":"YYYY-MM-DD|null","due_time":"HH:MM|null"}], "important_facts":["..."] (hechos nuevos y relevantes, no saludos ni trivialidades). Para "commitments", resuelve fechas relativas ("mañana", "el viernes") a una fecha absoluta usando como referencia de "hoy" la fecha/hora actual: ' + new Date().toISOString() + '. "due_time" solo si el cliente o agente mencionó una hora concreta (p.ej. "a las 3pm" -> "15:00"), si no la mencionó usa null — no inventes una hora. Omite cualquier campo del que no tengas evidencia clara en la conversación.'
       const queues = await loadAccountQueues(db, job.account_id)
-      const result = await generateForTask({ config, task: 'analysis', messages, systemPrompt: 'Analiza la conversación. Responde únicamente JSON: {"summary":"...","sentiment":"positive|neutral|negative|mixed","sentiment_score":0,"next_best_action":"...","reasons":["..."]}. Usa español y no inventes datos.' + qaPrompt + memoryPrompt + INSIGHTS_PROMPT + departmentsPrompt(queues.map((q) => q.name)) })
+      const result = await generateForTask({ config, task: 'analysis', messages, maxOutputTokens: ANALYSIS_MAX_OUTPUT_TOKENS, systemPrompt: 'Analiza la conversación. Responde únicamente JSON: {"summary":"...","sentiment":"positive|neutral|negative|mixed","sentiment_score":0,"next_best_action":"...","reasons":["..."]}. Usa español y no inventes datos.' + qaPrompt + memoryPrompt + INSIGHTS_PROMPT + departmentsPrompt(queues.map((q) => q.name)) })
       const match = result.text.match(/\{[\s\S]*\}/)
       if (!match) throw new Error('La IA no devolvió JSON válido.')
       const rawValue = JSON.parse(match[0]) as Record<string, unknown>

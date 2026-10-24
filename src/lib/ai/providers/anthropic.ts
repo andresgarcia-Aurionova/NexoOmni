@@ -13,6 +13,7 @@ const ANTHROPIC_VERSION = '2023-06-01'
 
 interface AnthropicResponse {
   content?: { type?: string; text?: string }[]
+  stop_reason?: string
   usage?: { input_tokens?: number; output_tokens?: number }
 }
 
@@ -74,9 +75,10 @@ export async function generateAnthropic(args: ProviderArgs): Promise<ProviderRes
     .join('')
     .trim()
   if (!text) {
-    throw new AiError('Anthropic returned an empty response.', {
-      code: 'empty_response',
-    })
+    throw new AiError(
+      `Anthropic returned an empty response (stop_reason: ${data?.stop_reason ?? 'unknown'}).`,
+      { code: 'empty_response' },
+    )
   }
   // Anthropic reports input/output but no total — normalizeUsage sums.
   const usage = normalizeUsage({
