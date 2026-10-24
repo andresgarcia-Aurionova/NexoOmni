@@ -192,6 +192,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
       task: 'analysis',
       systemPrompt,
       messages,
+      // Primary + fallback must finish before the reverse proxy cuts the request with an HTML 502.
+      timeoutMs: 20_000,
     })
     const match = result.text.match(/\{[\s\S]*\}/)
     if (!match) throw new AiError('The AI did not return a valid analysis.', { code: 'invalid_analysis' })
@@ -237,6 +239,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ conversat
     }
     return NextResponse.json({ analysis: data })
   } catch (error) {
+    if (error instanceof AiError) console.error(`[ai] conversation analysis failed (${error.code}): ${error.message}`)
     if (error instanceof AiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     return toErrorResponse(error)
   }
