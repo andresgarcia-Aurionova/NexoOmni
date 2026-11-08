@@ -123,25 +123,29 @@ npm audit --omit=dev
 npm audit
 ```
 
-As of 2026-10-05, the patched lockfile passes the production audit with
-**zero vulnerabilities**. The full audit still reports **nine high
-alerts in development tools**, all rooted in
-[`braces` GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
-The affected chain runs through `micromatch`/`fast-glob` into Next.js
-linting and the shadcn CLI. `braces` has no patched npm release at the
-time of this check. shadcn is now explicitly a development dependency;
-existing application components do not import its CLI package.
+As of 2026-11-08, the application and MCP server production lockfiles
+pass `npm audit --omit=dev` with **zero vulnerabilities**. The full
+application audit reports 13 development dependency findings: 2 low and
+11 moderate, involving `deepmerge` and `minimatch` through tooling such
+as shadcn and ESLint. Audit results can change as new advisories are
+published. Build containers install development tools too, so treat
+development dependency findings as relevant to the build environment.
 
 Do not use `npm audit fix --force` to silence these remaining alerts:
 the proposed downgrades change the lint/scaffolding stack and are not a
 compatible security patch. Run those tools only on trusted projects and
-patterns, and recheck for an upstream patch. Build containers still
-install development tools, so a clean production audit does not make
-the build environment vulnerability-free.
+patterns, and recheck for an upstream patch.
 
 The Next.js and ESLint config versions are kept aligned. Nodemailer 10
 bundles its TypeScript definitions; `@types/nodemailer` must not be
 installed alongside it.
+
+Next 16.4's updated React Hooks lint configuration enables additional React
+Compiler checks. The existing codebase has outstanding findings for
+`set-state-in-effect`, `preserve-manual-memoization` and `immutability`;
+these three checks are warnings during the transition and should be
+addressed before making them errors. Other existing lint rules remain in
+effect.
 
 ### Runtime operations
 
