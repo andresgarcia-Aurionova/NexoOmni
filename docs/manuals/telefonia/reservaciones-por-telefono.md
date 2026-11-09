@@ -72,10 +72,24 @@ cuando recibe `saved = true`.
    ocasión) y hora.
 4. Pide hablar con una persona y comprueba la transferencia.
 
+## Aviso al equipo por WhatsApp
+
+Al registrar una reservación, NexoOmni envía una plantilla de WhatsApp a un
+número del equipo. La plantilla (categoría **Utilidad**, sin variables con
+saltos de línea) se llama `aviso_reservacion_restaurante` y tiene 3 variables:
+restaurante, fecha y hora, y detalle (nombre, personas, zona, ocasión y
+teléfono). El número y la plantilla los define quien administra el servidor,
+no la IA:
+
+- `RESERVATION_ALERT_PHONE`: número de destino con lada internacional.
+- `RESERVATION_ALERT_TEMPLATE`: opcional, por defecto `aviso_reservacion_restaurante`.
+- `RESERVATION_ALERT_LANGUAGE`: opcional, por defecto `es_MX`.
+
+La respuesta de la herramienta incluye `notified`. Si el aviso falla, la
+reservación queda guardada igualmente (`notified: false`).
+
 ## Pendiente
 
-- Aviso a otro número telefónico: no incluido todavía. Requiere definir el
-  canal (SMS de Yeastar o plantilla de WhatsApp aprobada) y el número.
 - Control de mesas, cupo y *layout*: fase posterior.
 
 ## Ver también

@@ -4,6 +4,7 @@ import { getAccountEntitlements } from '@/lib/account/entitlements'
 import { findOrCreateContact, resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { findLiveCallerCall } from '@/lib/telephony/call-context'
 import { recordAppointmentMemoryEvent } from '@/lib/appointments/memory'
+import { reservationAlertParams, sendReservationAlert } from '@/lib/telephony/reservation-alert'
 import {
   ReservationError, ZONE_LABELS, cleanText, parsePartySize, parseReservationWindow, parseRestaurant, resolveZone,
 } from '@/lib/telephony/reservations'
@@ -78,6 +79,10 @@ export async function POST(request: Request) {
         summary: `Reservación en Restaurante ${parsed.restaurant} (${zone}) para ${parsed.partySize} personas.`,
       }).catch((memoryError) => console.error('[telephony/reservations] memory error:', memoryError))
     }
-    return ok({ saved: true, duplicate: false, appointment_id: created.id })
+    const alerted = await sendReservationAlert(ctx.supabase, ctx.accountId, reservationAlertParams({
+      restaurant: parsed.restaurant, startsAt: parsed.window.startsAt, name: parsed.name, partySize: parsed.partySize,
+      zone, occasion: parsed.occasion, phone: call?.phone ?? null,
+    }))
+    return ok({ saved: true, duplicate: false, appointment_id: created.id, notified: alerted })
   } catch (error) { return toApiErrorResponse(error) }
 }
