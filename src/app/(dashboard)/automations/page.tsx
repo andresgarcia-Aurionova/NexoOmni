@@ -43,6 +43,7 @@ import {
 import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
 import { triggerMeta, formatRelative } from "@/lib/automations/trigger-meta"
 import { cn } from "@/lib/utils"
+import { BusinessHoursSettings } from "@/components/automations/business-hours-settings"
 
 const TEMPLATE_ORDER: TemplateSlug[] = [
   "welcome_message",
@@ -61,6 +62,7 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
 export default function AutomationsPage() {
   const router = useRouter()
   const canCreate = useCan("send-messages")
+  const canEditSettings = useCan("edit-settings")
   const t = useTranslations("Automations.list")
   const [automations, setAutomations] = useState<Automation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -177,6 +179,8 @@ export default function AutomationsPage() {
           {t("create")}
         </GatedButton>
       </div>
+
+      {canEditSettings && <BusinessHoursSettings />}
 
       {showTemplates && (
         <section>

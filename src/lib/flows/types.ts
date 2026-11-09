@@ -134,6 +134,10 @@ export interface CollectInputNodeConfig {
   validation?: "any" | "email" | "phone" | "regex";
   /** Used only when `validation === 'regex'`. */
   regex?: string;
+  /** Opt-in to copying this answer into ordinary contact notes. */
+  save_contact_note?: boolean;
+  /** Identifies the automatic note to the team. */
+  contact_note_label?: string;
   /** Node to advance to after capture. */
   next_node_key: string;
 }

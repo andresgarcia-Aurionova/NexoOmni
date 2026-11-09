@@ -30,6 +30,23 @@ describe("validateFlowForActivation — happy path", () => {
   });
 });
 
+describe("contact note capture validation", () => {
+  const nodes = (label: string) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "reason" } },
+    { node_key: "reason", node_type: "collect_input", config: {
+      prompt_text: "Reason?", var_key: "motivo", next_node_key: "end",
+      save_contact_note: true, contact_note_label: label,
+    } },
+    { node_key: "end", node_type: "end", config: {} },
+  ]
+  it("requires a descriptive label for automatic notes", () => {
+    expect(validateFlowForActivation(validFlow, nodes(" "))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "contact_note_label" })]),
+    )
+    expect(validateFlowForActivation(validFlow, nodes("Motivo (flujo automático)"))).toEqual([])
+  })
+})
+
 describe("validateFlowForActivation — flow-level", () => {
   it("flags empty name", () => {
     expect(

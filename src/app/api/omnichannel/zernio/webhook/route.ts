@@ -5,6 +5,8 @@ import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { deferredFirstInbound, getClosure, sendClosureNotice } from '@/lib/business-hours/inbound'
+import { dispatchWithBusinessHours } from '@/lib/business-hours/dispatch'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { extractZernioMedia, extractZernioReaction, firstZernioContactName, isZernioPlaceholderName, normalizeMetaText, safeZernioContactName } from '@/lib/omnichannel/webhook-normalizer'
@@ -992,35 +994,64 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       await db.rpc('auto_assign_inbound_conversation', { p_account_id: typed.account_id, p_conversation_id: conversationRow.id })
       // Flows run before automations and the AI: a customer navigating a bot
       // menu is not sending a fresh trigger word.
-      const { consumed: flowConsumed } = await dispatchInboundToFlows({
-        accountId: typed.account_id,
-        userId: auditUserId,
-        contactId,
-        conversationId: conversationRow.id,
-        channelType: typed.provider as ChannelType,
-        message: { kind: 'text', text: content, meta_message_id: messageId },
-        isFirstInboundMessage,
+      const closure = typed.provider === 'zernio_whatsapp'
+        ? await getClosure(db, typed.account_id, typed.id, new Date(now))
+        : null
+      const deferred = typed.provider === 'zernio_whatsapp' && !closure
+        ? await deferredFirstInbound(db, typed.account_id, conversationRow.id, false)
+        : false
+      await dispatchWithBusinessHours({
+        closed: closure !== null,
+        runFlow: async (allowNewRuns) => {
+          const result = await dispatchInboundToFlows({
+            accountId: typed.account_id,
+            userId: auditUserId,
+            contactId,
+            conversationId: conversationRow.id,
+            channelType: typed.provider as ChannelType,
+            message: { kind: 'text', text: content, meta_message_id: messageId },
+            isFirstInboundMessage: isFirstInboundMessage || deferred,
+            allowNewRuns,
+          })
+          if (deferred && result.consumed) {
+            await deferredFirstInbound(db, typed.account_id, conversationRow.id, true)
+          }
+          return result.consumed
+        },
+        sendNotice: async () => {
+          if (!closure) throw new Error('Missing closure configuration')
+          await sendClosureNotice(db, {
+            accountId: typed.account_id,
+            connectorId: typed.id,
+            conversationId: conversationRow.id,
+            periodStart: closure.periodStart,
+            message: closure.message,
+            isFirstInboundMessage,
+          })
+        },
+        runOtherResponders: async (flowConsumed) => {
+          const { contentAutomationRan } = await dispatchInboundAutomations({
+            accountId: typed.account_id,
+            contactId,
+            conversationId: conversationRow.id,
+            channelType: typed.provider as ChannelType,
+            messageText: content,
+            contactCreated,
+            isFirstInboundMessage,
+            flowConsumed,
+          })
+          if (!flowConsumed && content.trim()) {
+            await dispatchInboundToAiReply({
+              accountId: typed.account_id,
+              conversationId: conversationRow.id,
+              contactId,
+              configOwnerUserId: auditUserId,
+              channelType: typed.provider as ChannelType,
+              automationReplied: contentAutomationRan,
+            })
+          }
+        },
       })
-      const { contentAutomationRan } = await dispatchInboundAutomations({
-        accountId: typed.account_id,
-        contactId,
-        conversationId: conversationRow.id,
-        channelType: typed.provider as ChannelType,
-        messageText: content,
-        contactCreated,
-        isFirstInboundMessage,
-        flowConsumed,
-      })
-      if (!flowConsumed && content.trim()) {
-        await dispatchInboundToAiReply({
-          accountId: typed.account_id,
-          conversationId: conversationRow.id,
-          contactId,
-          configOwnerUserId: auditUserId,
-          channelType: typed.provider as ChannelType,
-          automationReplied: contentAutomationRan,
-        })
-      }
       await db.from('omnichannel_connectors').update({ status: 'active', last_event_at: now, last_error: null, updated_at: now }).eq('id', typed.id)
       if (created) await dispatchWebhookEvent(db, typed.account_id, 'conversation.created', { conversation_id: conversationRow.id, contact_id: contactId, channel_type: typed.provider, connector_id: typed.id })
       await dispatchWebhookEvent(db, typed.account_id, 'message.received', { conversation_id: conversationRow.id, contact_id: contactId, message_id: messageId, channel_type: typed.provider, content_type: contentType, text: content, media_url: mediaUrl })

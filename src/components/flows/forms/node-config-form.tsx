@@ -38,6 +38,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -162,6 +163,25 @@ export function NodeConfigForm({
               </code>
               .
             </p>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                checked={cfg.save_contact_note === true}
+                onCheckedChange={(checked) => onUpdateConfig({ save_contact_note: checked })}
+              />
+              {t("saveContactNote")}
+            </label>
+            {cfg.save_contact_note === true && (
+              <>
+                <TextRow
+                  label={t("contactNoteLabel")}
+                  value={typeof cfg.contact_note_label === "string" ? cfg.contact_note_label : ""}
+                  onChange={(v) => onUpdateConfig({ contact_note_label: v.slice(0, 100) })}
+                />
+                <p className="text-[10px] text-muted-foreground">{t("contactNoteHelp")}</p>
+              </>
+            )}
           </div>
           <NextNodeRow
             value={(cfg as { next_node_key?: string }).next_node_key ?? ""}

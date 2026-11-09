@@ -1539,6 +1539,29 @@
       }
     }
   },
+  "BusinessHours": {
+    "title": "연결된 WhatsApp 운영 시간",
+    "description": "번호별 운영 시간, 휴무일과 자동 안내를 설정합니다.",
+    "loading": "운영 시간을 불러오는 중…",
+    "noConnectors": "먼저 안내 연결로 WhatsApp 번호를 연결하세요.",
+    "connector": "연결된 번호",
+    "enabled": "운영 시간 외 안내 사용",
+    "timezone": "시간대 (IANA)",
+    "weekly": "주간 운영 시간",
+    "opens": "시작 시간",
+    "closes": "종료 시간",
+    "days": {"0": "일요일", "1": "월요일", "2": "화요일", "3": "수요일", "4": "목요일", "5": "금요일", "6": "토요일"},
+    "holidays": "휴무일",
+    "holidaysHelp": "한 줄에 날짜 하나를 YYYY-MM-DD 형식으로 입력하세요. 휴무일은 자동으로 추가되지 않습니다.",
+    "message": "고객 안내",
+    "behavior": "운영 시간 외에는 휴무 기간마다 대화별로 안내를 한 번 보내고 새 흐름을 시작하지 않습니다. 이미 시작한 흐름은 마칠 수 있습니다. 전송이 실패하면 대화를 확인하고 직접 답변하세요.",
+    "deliveryWarning": "일부 안내가 실패했거나 확인되지 않았습니다. 직접 답변하기 전에 고객의 수신 여부를 확인하세요. 자동 재전송은 하지 않습니다.",
+    "reviewConversation": "대화 확인",
+    "save": "시간 저장",
+    "saving": "저장 중…",
+    "saved": "운영 시간을 저장했습니다.",
+    "error": "운영 시간을 불러오거나 저장하지 못했습니다. 내용을 확인하고 다시 시도하세요."
+  },
   "Automations": {
     "list": {
       "title": "자동화",
@@ -1877,6 +1900,9 @@
         "varKeyPlaceholder": "예: name, email, company",
         "varKeyHelp": "다음과 같이 이후 프롬프트와 인계 메모에서 참조할 수 있습니다",
         "advanceAfterCapture": "수집 후 다음 진행",
+        "saveContactNote": "응답을 연락처 메모에 저장",
+        "contactNoteLabel": "자동 메모 이름",
+        "contactNoteHelp": "응답은 연락처 프로필에서 볼 수 있습니다. 자동 흐름임을 식별할 수 있는 이름을 사용하세요. 민감한 정보는 요청하지 마세요.",
         "internalNote": "내부 메모 (인계받는 상담원용)",
         "endNodeHelp": "종료 노드입니다. 러너가 이 노드에 도달하면 실행이 완료로 표시됩니다. 추가 설정이 필요 없습니다.",
         "bodyText": "본문 텍스트",

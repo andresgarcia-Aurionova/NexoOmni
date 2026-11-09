@@ -1539,6 +1539,29 @@
       }
     }
   },
+  "BusinessHours": {
+    "title": "Connected WhatsApp business hours",
+    "description": "Configure opening times, closed dates and the automatic notice per number.",
+    "loading": "Loading hours…",
+    "noConnectors": "First connect a WhatsApp number using guided connection.",
+    "connector": "Connected number",
+    "enabled": "Enable out-of-hours notice",
+    "timezone": "Time zone (IANA)",
+    "weekly": "Weekly hours",
+    "opens": "Opening time",
+    "closes": "Closing time",
+    "days": {"0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday"},
+    "holidays": "Closed holidays",
+    "holidaysHelp": "One date per line, YYYY-MM-DD. Enter each holiday: dates are not added automatically.",
+    "message": "Customer notice",
+    "behavior": "Outside opening hours, one notice is sent per conversation in each closed period and new flows do not start. Existing flows may finish. If delivery fails, review the conversation and reply manually.",
+    "deliveryWarning": "Some notices failed or were not confirmed. Check whether the customer received them before replying manually; they are not retried automatically.",
+    "reviewConversation": "Review conversation",
+    "save": "Save hours",
+    "saving": "Saving…",
+    "saved": "Hours saved.",
+    "error": "Could not load or save business hours. Check the details and try again."
+  },
   "Automations": {
     "list": {
       "title": "Automations",
@@ -1877,6 +1900,9 @@
         "varKeyPlaceholder": "e.g. name, email, company",
         "varKeyHelp": "Interpolate in downstream prompts and handoff notes with",
         "advanceAfterCapture": "After capturing, advance to",
+        "saveContactNote": "Save the answer in contact notes",
+        "contactNoteLabel": "Automatic note label",
+        "contactNoteHelp": "The answer is visible on the contact profile. Use a label identifying the flow, for example “Reason (automatic flow)”. Do not request sensitive data.",
         "internalNote": "Internal note (for the agent picking up)",
         "endNodeHelp": "Terminal node. When the runner reaches this node the run is marked complete. No config needed.",
         "bodyText": "Body text",

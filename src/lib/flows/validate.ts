@@ -537,6 +537,8 @@ function validateNode(
         prompt_text?: string;
         var_key?: string;
         next_node_key?: string;
+        save_contact_note?: boolean;
+        contact_note_label?: string;
       };
       if (!cfg.prompt_text?.trim()) {
         issues.push({
@@ -562,6 +564,15 @@ function validateNode(
           node_key: node.node_key,
           field: "var_key",
           message: `La clave "${cfg.var_key}" debe usar letras, números o guion bajo y comenzar con una letra o guion bajo.`,
+        });
+      }
+      if (cfg.save_contact_note && (!cfg.contact_note_label?.trim() || cfg.contact_note_label.trim().length > 100)) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "contact_note_label",
+          message: "La nota automática necesita una etiqueta de hasta 100 caracteres.",
         });
       }
       if (!cfg.next_node_key) {

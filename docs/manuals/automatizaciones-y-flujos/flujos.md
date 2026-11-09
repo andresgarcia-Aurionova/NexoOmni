@@ -28,6 +28,20 @@ Un administrador diseña y publica los flujos.
 4. Pruébalo antes de publicar.
 5. Publica — solo entonces empieza a correr con clientes reales.
 
+### Guardar una respuesta en las notas del contacto
+
+En un paso **Recopilar datos**, activa **Guardar la respuesta en Notas del
+contacto** y escribe una etiqueta descriptiva, por ejemplo `Motivo (flujo
+automático)`. La respuesta se guarda junto a la etiqueta como nota ordinaria
+de la ficha, no como nota interna de supervisión ni como mensaje al cliente.
+El registro usa el autor del flujo como referencia técnica; la etiqueta debe
+dejar claro que el texto fue generado por el flujo. No solicites datos
+sensibles. Prueba el flujo y confirma la nota en la ficha antes de publicarlo.
+
+Si no se puede guardar la nota, la ejecución se detiene y la conversación
+queda pendiente de revisión; comprueba el historial y registra el motivo
+manualmente. No se crean notas retroactivamente para respuestas anteriores.
+
 ## Preguntas frecuentes
 
 **¿Un flujo puede reemplazar completamente a un agente humano?**

@@ -1539,6 +1539,29 @@
       }
     }
   },
+  "BusinessHours": {
+    "title": "Horario de atención de WhatsApp conectado",
+    "description": "Configura por número el horario, las fechas cerradas y el aviso automático.",
+    "loading": "Cargando horario…",
+    "noConnectors": "Conecta primero un número de WhatsApp mediante la conexión guiada.",
+    "connector": "Número conectado",
+    "enabled": "Activar aviso fuera de horario",
+    "timezone": "Zona horaria (IANA)",
+    "weekly": "Horario semanal",
+    "opens": "Hora de apertura",
+    "closes": "Hora de cierre",
+    "days": {"0": "Domingo", "1": "Lunes", "2": "Martes", "3": "Miércoles", "4": "Jueves", "5": "Viernes", "6": "Sábado"},
+    "holidays": "Festivos cerrados",
+    "holidaysHelp": "Una fecha por línea en formato AAAA-MM-DD. Registra aquí cada festivo: no se agregan automáticamente.",
+    "message": "Aviso al cliente",
+    "behavior": "Fuera de horario se envía un aviso por conversación en cada periodo cerrado y no se inician nuevos flujos. Los flujos ya iniciados pueden terminar. Si falla el envío, revisa la conversación y responde manualmente.",
+    "deliveryWarning": "Hay avisos fallidos o sin confirmación. Verifica si el cliente los recibió antes de responder manualmente; no se reenvían automáticamente.",
+    "reviewConversation": "Revisar conversación",
+    "save": "Guardar horario",
+    "saving": "Guardando…",
+    "saved": "Horario guardado.",
+    "error": "No se pudo cargar o guardar el horario. Revisa los datos e inténtalo de nuevo."
+  },
   "Automations": {
     "list": {
       "title": "Automatizaciones",
@@ -1877,6 +1900,9 @@
         "varKeyPlaceholder": "ej. nombre, correo, empresa",
         "varKeyHelp": "Interpola en prompts subsiguientes y notas de transferencia con",
         "advanceAfterCapture": "Después de capturar, avanzar hacia",
+        "saveContactNote": "Guardar la respuesta en Notas del contacto",
+        "contactNoteLabel": "Etiqueta de la nota automática",
+        "contactNoteHelp": "La respuesta queda visible en la ficha del contacto. Usa una etiqueta que identifique el flujo, por ejemplo «Motivo (flujo automático)». No solicites datos sensibles.",
         "internalNote": "Nota interna (para el agente que atiende)",
         "endNodeHelp": "Nodo terminal. Cuando la ejecución llega a este nodo se marca como completada. No requiere configuración.",
         "bodyText": "Texto del cuerpo",

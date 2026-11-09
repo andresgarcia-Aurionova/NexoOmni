@@ -222,6 +222,7 @@ async function loadActiveRunForContact(
   db: AdminClient,
   accountId: string,
   contactId: string,
+  strict = false,
 ): Promise<FlowRunRow | null> {
   // The partial unique index `idx_one_active_run_per_contact` was
   // rebuilt in migration 017 over `(account_id, contact_id)` — so
@@ -241,6 +242,7 @@ async function loadActiveRunForContact(
     .limit(1);
   if (error) {
     console.error("[flows] loadActiveRunForContact error:", error.message);
+    if (strict) throw error;
     return null;
   }
   const rows = (data as FlowRunRow[] | null) ?? [];
@@ -971,7 +973,7 @@ async function advanceCurrentNodeKey(
 // ============================================================
 
 export async function dispatchInboundToFlows(
-  input: DispatchInboundInput & { isFirstInboundMessage: boolean },
+  input: DispatchInboundInput & { isFirstInboundMessage: boolean; allowNewRuns?: boolean },
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
   try {
@@ -979,6 +981,7 @@ export async function dispatchInboundToFlows(
       db,
       input.accountId,
       input.contactId,
+      input.allowNewRuns === false,
     );
 
     // Idempotency — only matters if there's already a run for this
@@ -1004,6 +1007,12 @@ export async function dispatchInboundToFlows(
       return handleReplyForActiveRun(db, activeRun, input.message, nodes);
     }
 
+    // Outside configured business hours, existing runs may finish, but no
+    // new run should start before the closure notice is dispatched.
+    if (input.allowNewRuns === false) {
+      return { consumed: false, outcome: "no_match" };
+    }
+
     // No active run → look for a flow whose entry trigger matches.
     const flow = await findEntryFlow(
       db,
@@ -1022,6 +1031,7 @@ export async function dispatchInboundToFlows(
       "[flows] dispatchInboundToFlows threw:",
       err instanceof Error ? err.message : err,
     );
+    if (input.allowNewRuns === false) throw err;
     return { consumed: false, outcome: "no_match" };
   }
 }
@@ -1115,13 +1125,40 @@ async function handleReplyForActiveRun(
     if (captured.length > 0 && cfg.var_key) {
       // Persist captured value + reset reprompt count atomically.
       const newVars = { ...run.vars, [cfg.var_key]: captured };
-      const { error: capErr } = await db
-        .from("flow_runs")
-        .update({
-          vars: newVars,
-          reprompt_count: 0,
-        })
-        .eq("id", run.id);
+      let capErr: { message: string } | null = null;
+      if (cfg.save_contact_note === true) {
+        const result = await db.rpc("capture_flow_input_with_contact_note", {
+          p_account_id: run.account_id,
+          p_run_id: run.id,
+          p_node_key: currentNode.node_key,
+          p_message_id: message.meta_message_id,
+          p_value: captured,
+        });
+        capErr = result.error;
+        if (!capErr && result.data === false) {
+          return { consumed: true, flow_run_id: run.id, outcome: "duplicate_inbound_ignored" };
+        }
+      } else {
+        const result = await db
+          .from("flow_runs")
+          .update({ vars: newVars, reprompt_count: 0 })
+          .eq("id", run.id);
+        capErr = result.error;
+      }
+      if (capErr && cfg.save_contact_note === true) {
+        console.error("[flows] contact note capture failed:", capErr.message);
+        await logEvent(db, run.id, "error", currentNode.node_key, {
+          reason: "contact_note_capture_failed",
+        });
+        await endRun(db, run.id, "failed", "contact_note_capture_failed");
+        if (run.conversation_id) {
+          const { error } = await db.from("conversations")
+            .update({ status: "pending", updated_at: new Date().toISOString() })
+            .eq("account_id", run.account_id).eq("id", run.conversation_id);
+          if (error) console.error("[flows] contact note handoff failed:", error.message);
+        }
+        return { consumed: true, flow_run_id: run.id, outcome: "completed" };
+      }
       if (!capErr) {
         // Mirror the UPDATE in-memory so downstream interpolation in
         // the advance loop sees the captured var without us having to
