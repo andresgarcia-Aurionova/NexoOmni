@@ -18,6 +18,7 @@ import { YeastarLiveChatConfig } from '@/components/settings/yeastar-live-chat-c
 import { ConversationAssignmentConfig } from '@/components/settings/conversation-assignment-config';
 import { ConversationQueuesConfig } from '@/components/settings/conversation-queues-config';
 import { TelephonyConfig } from '@/components/settings/telephony-config';
+import { ReservationAlertSettings } from '@/components/settings/reservation-alert-settings';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { QuickRepliesManager } from '@/components/settings/quick-replies-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
@@ -89,7 +90,7 @@ function SettingsPageInner() {
     'social-messaging': <div className="space-y-6"><ZernioConnectConfig channels={['facebook', 'instagram']} /></div>,
     'live-chat': <YeastarLiveChatConfig />,
     assignment: <div><ConversationAssignmentConfig /><ConversationQueuesConfig /></div>,
-    telephony: <TelephonyConfig />,
+    telephony: <div className="space-y-6"><TelephonyConfig /><ReservationAlertSettings /></div>,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,

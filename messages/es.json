@@ -2408,6 +2408,19 @@
       "title": "Inicio de sesión y seguridad",
       "description": "Cambia tu contraseña y cierra la sesión en tus dispositivos. Esto mantendrá tu cuenta segura."
     },
+    "reservationAlert": {
+      "title": "Aviso de reservaciones",
+      "description": "Cuando la recepcionista de IA registra una reservación, se envía una plantilla de WhatsApp a estos números.",
+      "enabled": "Enviar avisos",
+      "phones": "Números que reciben el aviso",
+      "phonesHint": "Separa los números con comas, con lada de país (máximo 5). Ejemplo: +52 55 1234 5678",
+      "templateName": "Nombre de la plantilla",
+      "templateLanguage": "Idioma de la plantilla",
+      "save": "Guardar",
+      "saved": "Aviso de reservaciones guardado",
+      "saveError": "No se pudo guardar el aviso",
+      "loadError": "No se pudo cargar el aviso"
+    },
     "apiKeys": {
       "callContextScope": "Guardar el contexto de la recepcionista IA antes de transferir una llamada",
       "title": "Claves API",

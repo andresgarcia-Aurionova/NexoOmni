@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { reservationAlertConfig, reservationAlertParams } from './reservation-alert'
+import { AlertSettingsError, parseAlertSettings, parseRecipientPhones, reservationAlertParams } from './reservation-alert'
 
-describe('reservation staff alert', () => {
-  it('reads the destination only from server settings and validates it', () => {
-    expect(reservationAlertConfig({})).toBeNull()
-    expect(reservationAlertConfig({ RESERVATION_ALERT_PHONE: 'abc' })).toBeNull()
-    expect(reservationAlertConfig({ RESERVATION_ALERT_PHONE: '+52 55 1234 5678' })).toEqual({
-      phone: '525512345678', templateName: 'aviso_reservacion_restaurante', language: 'es_MX',
+describe('reservation staff alert settings', () => {
+  it('normalizes, de-duplicates and validates recipient phones', () => {
+    expect(parseRecipientPhones('+52 55 1234 5678, 525512345678\n+52 33 1111 2222')).toEqual(['525512345678', '523311112222'])
+    expect(() => parseRecipientPhones(['abc'])).toThrow(AlertSettingsError)
+    expect(() => parseRecipientPhones(['5211111111111', '5222222222222', '5233333333333', '5244444444444', '5255555555555', '5266666666666'])).toThrow(AlertSettingsError)
+  })
+  it('requires a number before enabling and validates the template', () => {
+    const base = { templateName: 'aviso_reservacion_restaurante', templateLanguage: 'es_MX' }
+    expect(parseAlertSettings({ ...base, enabled: true, recipientPhones: ['+525512345678'] })).toEqual({
+      ...base, enabled: true, recipientPhones: ['525512345678'],
     })
+    expect(() => parseAlertSettings({ ...base, enabled: true, recipientPhones: [] })).toThrow(AlertSettingsError)
+    expect(() => parseAlertSettings({ ...base, templateName: 'Bad Name', recipientPhones: [] })).toThrow(AlertSettingsError)
+    expect(() => parseAlertSettings({ ...base, templateLanguage: 'spanish', recipientPhones: [] })).toThrow(AlertSettingsError)
   })
   it('builds three single-line template variables in Mexico City time', () => {
     const [restaurant, when, detail] = reservationAlertParams({

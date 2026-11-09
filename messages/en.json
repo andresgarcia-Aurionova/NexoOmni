@@ -2420,6 +2420,19 @@
       "title": "Login & security",
       "description": "Change your password and sign out of your devices. These keep your account safe."
     },
+    "reservationAlert": {
+      "title": "Reservation alert",
+      "description": "When the AI receptionist registers a reservation, a WhatsApp template is sent to these numbers.",
+      "enabled": "Send alerts",
+      "phones": "Numbers that receive the alert",
+      "phonesHint": "Separate numbers with commas, including country code (max 5). Example: +52 55 1234 5678",
+      "templateName": "Template name",
+      "templateLanguage": "Template language",
+      "save": "Save",
+      "saved": "Reservation alert saved",
+      "saveError": "Could not save the reservation alert",
+      "loadError": "Could not load the reservation alert"
+    },
     "apiKeys": {
       "callContextScope": "Save AI receptionist context before transferring a call",
       "title": "API keys",

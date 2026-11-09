@@ -79,10 +79,10 @@ export async function POST(request: Request) {
         summary: `Reservación en Restaurante ${parsed.restaurant} (${zone}) para ${parsed.partySize} personas.`,
       }).catch((memoryError) => console.error('[telephony/reservations] memory error:', memoryError))
     }
-    const alerted = await sendReservationAlert(ctx.supabase, ctx.accountId, reservationAlertParams({
+    const alertedCount = await sendReservationAlert(ctx.supabase, ctx.accountId, reservationAlertParams({
       restaurant: parsed.restaurant, startsAt: parsed.window.startsAt, name: parsed.name, partySize: parsed.partySize,
       zone, occasion: parsed.occasion, phone: call?.phone ?? null,
     }))
-    return ok({ saved: true, duplicate: false, appointment_id: created.id, notified: alerted })
+    return ok({ saved: true, duplicate: false, appointment_id: created.id, notified: alertedCount > 0, notified_count: alertedCount })
   } catch (error) { return toApiErrorResponse(error) }
 }

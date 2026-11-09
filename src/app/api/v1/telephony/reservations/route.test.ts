@@ -32,7 +32,7 @@ beforeEach(() => {
   mocks.live.mockResolvedValue({ callId: 'pbx-call', phone: '525512345678' })
   mocks.contact.mockResolvedValue({ id: 'contact-1', created: true })
   mocks.memory.mockResolvedValue(undefined)
-  mocks.alert.mockResolvedValue(true)
+  mocks.alert.mockResolvedValue(2)
 })
 
 const valid = { restaurant: 'B', zone: 'terraza', party_size: 4, date: '2999-01-10', time: '20:00', customer_name: 'Ana', ai_extension: '7001' }
@@ -49,13 +49,13 @@ describe('AI receptionist reservations API', () => {
     expect(insert).toMatchObject({ account_id: 'account-from-key', status: 'confirmed', contact_id: 'contact-1' })
     expect(String(insert.notes)).toContain('Zona: Terraza')
     expect(mocks.contact).toHaveBeenCalledWith(expect.anything(), 'account-from-key', 'owner-1', { phone: '525512345678', name: 'Ana' })
-    expect(await response.json()).toMatchObject({ data: { saved: true, appointment_id: 'appt-1', notified: true } })
+    expect(await response.json()).toMatchObject({ data: { saved: true, appointment_id: 'appt-1', notified: true, notified_count: 2 } })
     expect(mocks.alert.mock.calls[0][2]).toEqual([
       'Restaurante B', expect.stringContaining('2999'), 'Ana, 4 personas, Terraza, tel. +525512345678',
     ])
   })
   it('keeps the reservation saved and reports notified=false when the staff alert fails', async () => {
-    mocks.alert.mockResolvedValue(false)
+    mocks.alert.mockResolvedValue(0)
     const response = await POST(request(valid))
     expect(await response.json()).toMatchObject({ data: { saved: true, notified: false } })
   })
