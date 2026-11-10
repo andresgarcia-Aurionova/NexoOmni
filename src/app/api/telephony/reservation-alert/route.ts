@@ -22,7 +22,9 @@ export async function PUT(request: Request) {
     const { accountId, userId } = await requireEntitlement('yeastar_telephony', 'admin')
     let settings
     try {
-      settings = parseAlertSettings(await request.json().catch(() => null))
+      const body = await request.json().catch(() => null)
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AlertSettingsError('Expected a JSON object')
+      settings = parseAlertSettings({ ...await loadAlertSettings(admin(), accountId), ...body })
     } catch (error) {
       if (error instanceof AlertSettingsError) return NextResponse.json({ error: error.message }, { status: 400 })
       throw error
@@ -33,6 +35,9 @@ export async function PUT(request: Request) {
       template_name: settings.templateName,
       template_language: settings.templateLanguage,
       recipient_phones: settings.recipientPhones,
+      confirmation_enabled: settings.confirmationEnabled,
+      confirmation_template_name: settings.confirmationTemplateName,
+      confirmation_template_language: settings.confirmationTemplateLanguage,
       updated_by: userId,
       updated_at: new Date().toISOString(),
     })

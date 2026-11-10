@@ -8,16 +8,21 @@ import { sendZernioTemplateMessage } from '@/lib/zernio/server'
 export const MAX_ALERT_RECIPIENTS = 5
 export const DEFAULT_ALERT_TEMPLATE = 'aviso_reservacion_restaurante'
 export const DEFAULT_ALERT_LANGUAGE = 'es_MX'
+export const DEFAULT_CONFIRMATION_TEMPLATE = 'confirmacion_reservacion'
 
 export type ReservationAlertSettings = {
   enabled: boolean
   templateName: string
   templateLanguage: string
   recipientPhones: string[]
+  confirmationEnabled: boolean
+  confirmationTemplateName: string
+  confirmationTemplateLanguage: string
 }
 
 export const EMPTY_ALERT_SETTINGS: ReservationAlertSettings = {
   enabled: false, templateName: DEFAULT_ALERT_TEMPLATE, templateLanguage: DEFAULT_ALERT_LANGUAGE, recipientPhones: [],
+  confirmationEnabled: false, confirmationTemplateName: DEFAULT_CONFIRMATION_TEMPLATE, confirmationTemplateLanguage: DEFAULT_ALERT_LANGUAGE,
 }
 
 export class AlertSettingsError extends Error {}
@@ -47,34 +52,51 @@ export function parseAlertSettings(body: unknown): ReservationAlertSettings {
   const recipientPhones = parseRecipientPhones(raw.recipientPhones ?? [])
   const enabled = raw.enabled === true
   if (enabled && recipientPhones.length === 0) throw new AlertSettingsError('Add at least one number before enabling the alert')
-  return { enabled, templateName, templateLanguage, recipientPhones }
+  const confirmationEnabled = raw.confirmationEnabled === true
+  const confirmationTemplateName = typeof raw.confirmationTemplateName === 'string'
+    ? raw.confirmationTemplateName.trim() : DEFAULT_CONFIRMATION_TEMPLATE
+  const confirmationTemplateLanguage = typeof raw.confirmationTemplateLanguage === 'string'
+    ? raw.confirmationTemplateLanguage.trim() : DEFAULT_ALERT_LANGUAGE
+  if (!/^[a-z0-9_]{1,512}$/.test(confirmationTemplateName)) throw new AlertSettingsError('Invalid confirmation template name')
+  if (!/^[a-z]{2}(_[A-Z]{2})?$/.test(confirmationTemplateLanguage)) throw new AlertSettingsError('Invalid confirmation template language')
+  return { enabled, templateName, templateLanguage, recipientPhones, confirmationEnabled, confirmationTemplateName, confirmationTemplateLanguage }
 }
 
 export async function loadAlertSettings(db: SupabaseClient, accountId: string): Promise<ReservationAlertSettings> {
   const { data, error } = await db.from('reservation_alert_settings')
-    .select('enabled, template_name, template_language, recipient_phones').eq('account_id', accountId).maybeSingle()
+    .select('enabled, template_name, template_language, recipient_phones, confirmation_enabled, confirmation_template_name, confirmation_template_language').eq('account_id', accountId).maybeSingle()
   if (error) throw error
   if (!data) return EMPTY_ALERT_SETTINGS
   return {
     enabled: data.enabled, templateName: data.template_name, templateLanguage: data.template_language,
     recipientPhones: data.recipient_phones ?? [],
+    confirmationEnabled: data.confirmation_enabled ?? false,
+    confirmationTemplateName: data.confirmation_template_name ?? DEFAULT_CONFIRMATION_TEMPLATE,
+    confirmationTemplateLanguage: data.confirmation_template_language ?? DEFAULT_ALERT_LANGUAGE,
   }
 }
 
 const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim()
 
+export function reservationDateLabel(startsAt: string): string {
+  const date = new Date(startsAt)
+  if (!Number.isFinite(date.getTime())) throw new Error('Invalid reservation date')
+  return oneLine(new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'full', timeStyle: 'short', hour12: false, timeZone: 'America/Mexico_City',
+  }).format(date))
+}
+
 /** Template variables cannot contain line breaks. */
 export function reservationAlertParams(args: {
   restaurant: string; startsAt: string; name: string; partySize: number; zone: string; occasion: string | null; phone: string | null
 }): [string, string, string] {
-  const when = new Intl.DateTimeFormat('es-MX', {
-    dateStyle: 'full', timeStyle: 'short', hour12: false, timeZone: 'America/Mexico_City',
-  }).format(new Date(args.startsAt))
+  const when = reservationDateLabel(args.startsAt)
   const detail = [
     args.name, `${args.partySize} ${args.partySize === 1 ? 'persona' : 'personas'}`, args.zone,
-    args.occasion ? `ocasión: ${args.occasion}` : null, args.phone ? `tel. +${args.phone.replace(/^\+/, '')}` : null,
+    args.occasion ? `ocasión: ${args.occasion}` : null,
+    args.phone ? `tel. +${args.phone.replace(/^\+/, '')}` : 'teléfono no verificado; completar contacto',
   ].filter(Boolean).join(', ')
-  return [`Restaurante ${args.restaurant}`, oneLine(when), oneLine(detail)]
+  return [`Restaurante ${args.restaurant}`, when, oneLine(detail)]
 }
 
 type AlertSender =

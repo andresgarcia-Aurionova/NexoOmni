@@ -10,7 +10,7 @@ function admin() {
  *  writes are meant to come from trusted server-side code, not directly from
  *  the client. */
 export async function recordAppointmentMemoryEvent(args: { accountId: string; contactId: string; appointmentId: string; summary: string; importance?: 'low' | 'normal' | 'high' }) {
-  await admin().from('contact_memory_events').insert({
+  const { error } = await admin().from('contact_memory_events').insert({
     account_id: args.accountId,
     contact_id: args.contactId,
     event_type: 'manual',
@@ -20,6 +20,7 @@ export async function recordAppointmentMemoryEvent(args: { accountId: string; co
     source_type: 'manual',
     source_id: args.appointmentId,
   })
+  if (error) throw error
 }
 
 /** A missed/cancelled appointment should turn into a concrete pending

@@ -3,10 +3,10 @@ import { badRequest, forbidden, ok, toApiErrorResponse } from '@/lib/api/v1/resp
 import { getAccountEntitlements } from '@/lib/account/entitlements'
 import { findOrCreateContact, resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { findLiveCallerCall } from '@/lib/telephony/call-context'
-import { recordAppointmentMemoryEvent } from '@/lib/appointments/memory'
 import { reservationAlertParams, sendReservationAlert } from '@/lib/telephony/reservation-alert'
+import { recordReservationMemory } from '@/lib/telephony/reservation-memory'
 import {
-  ReservationError, ZONE_LABELS, cleanText, parsePartySize, parseReservationWindow, parseRestaurant, resolveZone,
+  ReservationError, ZONE_LABELS, cleanText, parsePartySize, parseReservationWindow, parseRestaurant, reservationMemorySummary, resolveZone,
 } from '@/lib/telephony/reservations'
 
 export async function POST(request: Request) {
@@ -39,7 +39,10 @@ export async function POST(request: Request) {
 
     // The caller's number comes only from the PBX, never from model-supplied text.
     const call = parsed.callId || parsed.aiExtension
-      ? await findLiveCallerCall(ctx.supabase, ctx.accountId, undefined, parsed.callId ?? undefined, parsed.aiExtension ?? undefined).catch(() => null)
+      ? await findLiveCallerCall(ctx.supabase, ctx.accountId, undefined, parsed.callId ?? undefined, parsed.aiExtension ?? undefined).catch((error) => {
+        console.error('[telephony/reservations] caller verification failed:', error)
+        return null
+      })
       : null
 
     const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId)
@@ -65,7 +68,7 @@ export async function POST(request: Request) {
     const { data: created, error } = await ctx.supabase.from('appointments').insert({
       account_id: ctx.accountId, created_by: auditUserId, assigned_agent_id: auditUserId, title,
       starts_at: parsed.window.startsAt, ends_at: parsed.window.endsAt, contact_id: contact?.id ?? null,
-      status: 'confirmed', notes, timezone: 'America/Mexico_City',
+      status: 'confirmed', notes, timezone: 'America/Mexico_City', reservation_restaurant: parsed.restaurant,
     }).select('id').single()
     if (error || !created) throw error ?? new Error('Reservation insert failed')
 
@@ -74,9 +77,12 @@ export async function POST(request: Request) {
       after_data: { title, starts_at: parsed.window.startsAt, ends_at: parsed.window.endsAt, status: 'confirmed', channel: 'voice_ai' },
     })
     if (contact) {
-      await recordAppointmentMemoryEvent({
+      await recordReservationMemory(ctx.supabase, {
         accountId: ctx.accountId, contactId: contact.id, appointmentId: created.id,
-        summary: `Reservación en Restaurante ${parsed.restaurant} (${zone}) para ${parsed.partySize} personas.`,
+        summary: reservationMemorySummary({
+          restaurant: parsed.restaurant, zone: parsed.zone, partySize: parsed.partySize,
+          startsAt: parsed.window.startsAt, name: parsed.name, occasion: parsed.occasion,
+        }),
       }).catch((memoryError) => console.error('[telephony/reservations] memory error:', memoryError))
     }
     const alertedCount = await sendReservationAlert(ctx.supabase, ctx.accountId, reservationAlertParams({

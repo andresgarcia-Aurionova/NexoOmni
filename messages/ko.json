@@ -2033,6 +2033,25 @@
       "tagNone": "태그 {mode} (선택된 태그 없음)"
     }
   },
+  "ReservationConfirmations": {
+    "title": "예약 확인",
+    "reviewTitle": "예약 확인 검토 필요",
+    "ambiguousTitle": "예약 응답 검토 필요",
+    "declinedTitle": "확인되지 않은 예약",
+    "failed": "발송 결과를 확인하지 못했습니다. 다시 보내기 전에 대화를 확인하세요.",
+    "declined": "고객이 참석할 수 없다고 답했습니다. 대화를 확인하세요. 예약은 자동으로 취소되지 않았습니다.",
+    "ambiguous": "고객에게 여러 확인 대기 예약이 있습니다. 대화에서 해당 예약을 확인하세요. 자동으로 확인된 예약은 없습니다.",
+    "missingContact": "{title}: 확인된 전화번호가 없습니다. 연락처를 완성하고 고객에게 확인하세요.",
+    "missingPhone": "{title}: 연락처에 전화번호가 없습니다. 번호를 입력하고 고객에게 확인하세요.",
+    "noOpening": "{title}: 예약 전 남은 영업시간이 없습니다. 고객에게 확인하세요.",
+    "due": "{title}: 고객에게 확인 요청을 보냅니다.",
+    "config": "{title}: {reason}",
+    "template_unavailable": "선택한 언어로 승인된 확인 템플릿이 정확히 하나 있어야 합니다.",
+    "template_format": "템플릿 본문에 변수 두 개가 있어야 하며 헤더와 버튼은 없어야 합니다.",
+    "connector_unavailable": "템플릿은 영업시간이 설정된 연결된 WhatsApp 번호에 속해야 합니다.",
+    "hours_unavailable": "템플릿 WhatsApp 번호의 영업시간을 설정하고 활성화하세요.",
+    "hours_invalid": "WhatsApp 번호의 영업시간이 올바르지 않습니다."
+  },
   "Settings": {
     "pageTitle": "설정",
     "pageDesc": "계정과 워크스페이스에 관한 모든 것을 한곳에서 관리하세요. 관리할 섹션을 선택하세요.",
@@ -2428,6 +2447,9 @@
       "phonesHint": "국가 번호를 포함해 쉼표로 구분하세요(최대 5개). 예: +52 55 1234 5678",
       "templateName": "템플릿 이름",
       "templateLanguage": "템플릿 언어",
+      "confirmationEnabled": "고객 확인 요청",
+      "confirmationHint": "변수 두 개(식당, 날짜와 시간)가 있고 헤더나 버튼이 없는 승인된 템플릿과 해당 WhatsApp 번호의 활성 영업시간이 필요합니다.",
+      "confirmationTemplate": "고객 확인 템플릿",
       "save": "저장",
       "saved": "예약 알림이 저장되었습니다",
       "saveError": "예약 알림을 저장하지 못했습니다",

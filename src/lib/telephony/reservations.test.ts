@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePartySize, parseReservationWindow, parseRestaurant, resolveZone } from './reservations'
+import { parsePartySize, parseReservationWindow, parseRestaurant, reservationMemorySummary, resolveZone } from './reservations'
 
 describe('reservation rules', () => {
   it('accepts restaurant names in several spoken forms', () => {
@@ -19,6 +19,23 @@ describe('reservation rules', () => {
   it('validates party size', () => {
     expect(parsePartySize('4')).toBe(4)
     for (const bad of [0, 51, 2.5, 'abc', null]) expect(() => parsePartySize(bad)).toThrow()
+  })
+  it('includes the reservation details and local date in the memory event', () => {
+    const summary = reservationMemorySummary({
+      restaurant: 'B', zone: 'terraza', partySize: 4, name: 'Ana',
+      startsAt: '2026-11-11T02:00:00.000Z', occasion: 'Cumpleaños',
+    })
+    expect(summary).toContain('Restaurante B')
+    expect(summary).toContain('Terraza')
+    expect(summary).toContain('4 personas')
+    expect(summary).toContain('10 de noviembre de 2026')
+    expect(summary).toContain('20:00')
+    expect(summary).toContain('Ana')
+    expect(summary).toContain('Cumpleaños')
+    expect(reservationMemorySummary({
+      restaurant: 'A', zone: 'piso_uno', partySize: 1, name: 'Ana',
+      startsAt: '2026-11-11T02:00:00.000Z', occasion: null,
+    })).toContain('1 persona,')
   })
   it('builds a 90 minute window in Mexico City time and rejects past or impossible dates', () => {
     const now = new Date('2026-11-09T12:00:00Z')

@@ -19,6 +19,7 @@ import { processWebPushOutbox } from '@/lib/notifications/web-push'
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny } from '@/lib/whatsapp/broadcast-reply-flag'
 import { handleAgendaProConfirmationReply } from '@/lib/agendapro/confirmation'
+import { handleReservationConfirmationReply } from '@/lib/telephony/reservation-confirmation-worker'
 import type { ChannelType } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -986,9 +987,12 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         // WhatsApp webhook — a Zernio-only account sends its reminders
         // through this number, so the client's reply arrives here.
         if (contentType === 'text' && content.trim()) {
-          await handleAgendaProConfirmationReply(db, typed.account_id, contactId, content).catch((error) => {
-            console.error('[agendapro] could not process a confirmation reply (zernio):', error)
-          })
+          try {
+            const reservationReply = await handleReservationConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content)
+            if (reservationReply === 'none') await handleAgendaProConfirmationReply(db, typed.account_id, contactId, content)
+          } catch (error) {
+            console.error('[reservations] could not process a confirmation reply (zernio):', error)
+          }
         }
       }
       await db.rpc('auto_assign_inbound_conversation', { p_account_id: typed.account_id, p_conversation_id: conversationRow.id })

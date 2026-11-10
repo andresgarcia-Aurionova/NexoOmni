@@ -16,6 +16,20 @@ const MEXICO_CITY_OFFSET = '-06:00'
 
 export class ReservationError extends Error {}
 
+export function reservationMemorySummary(args: {
+  restaurant: RestaurantCode
+  zone: ReservationZone
+  partySize: number
+  startsAt: string
+  name: string
+  occasion: string | null
+}): string {
+  const when = new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'full', timeStyle: 'short', hour12: false, timeZone: 'America/Mexico_City',
+  }).format(new Date(args.startsAt))
+  return `Reservación en Restaurante ${args.restaurant}, ${ZONE_LABELS[args.zone]}, para ${args.partySize} ${args.partySize === 1 ? 'persona' : 'personas'}, el ${when}, a nombre de ${args.name}. Ocasión: ${args.occasion ?? 'ninguna'}.`
+}
+
 const fold = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 
 export function parseRestaurant(value: unknown): RestaurantCode {

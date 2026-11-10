@@ -8,7 +8,7 @@ vi.mock('@/lib/auth/api-context', () => ({ requireApiKey: mocks.key }))
 vi.mock('@/lib/account/entitlements', () => ({ getAccountEntitlements: mocks.entitlement }))
 vi.mock('@/lib/telephony/call-context', () => ({ findLiveCallerCall: mocks.live }))
 vi.mock('@/lib/api/v1/contacts', () => ({ findOrCreateContact: mocks.contact, resolveAuditUserId: async () => 'owner-1' }))
-vi.mock('@/lib/appointments/memory', () => ({ recordAppointmentMemoryEvent: mocks.memory }))
+vi.mock('@/lib/telephony/reservation-memory', () => ({ recordReservationMemory: mocks.memory }))
 vi.mock('@/lib/telephony/reservation-alert', async (original) => ({ ...(await original<typeof import('@/lib/telephony/reservation-alert')>()), sendReservationAlert: mocks.alert }))
 
 let writes: { url: string; body: Record<string, unknown> }[]
@@ -46,9 +46,13 @@ describe('AI receptionist reservations API', () => {
     expect(response.status).toBe(200)
     expect(mocks.key).toHaveBeenCalledWith(expect.any(Request), 'reservations:write')
     const insert = writes.find((w) => w.url.includes('/appointments'))!.body
-    expect(insert).toMatchObject({ account_id: 'account-from-key', status: 'confirmed', contact_id: 'contact-1' })
+    expect(insert).toMatchObject({ account_id: 'account-from-key', status: 'confirmed', contact_id: 'contact-1', reservation_restaurant: 'B' })
     expect(String(insert.notes)).toContain('Zona: Terraza')
     expect(mocks.contact).toHaveBeenCalledWith(expect.anything(), 'account-from-key', 'owner-1', { phone: '525512345678', name: 'Ana' })
+    expect(mocks.memory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      accountId: 'account-from-key', contactId: 'contact-1', appointmentId: 'appt-1',
+      summary: expect.stringContaining('4 personas'),
+    }))
     expect(await response.json()).toMatchObject({ data: { saved: true, appointment_id: 'appt-1', notified: true, notified_count: 2 } })
     expect(mocks.alert.mock.calls[0][2]).toEqual([
       'Restaurante B', expect.stringContaining('2999'), 'Ana, 4 personas, Terraza, tel. +525512345678',
@@ -59,11 +63,20 @@ describe('AI receptionist reservations API', () => {
     const response = await POST(request(valid))
     expect(await response.json()).toMatchObject({ data: { saved: true, notified: false } })
   })
+  it('keeps the reservation saved when the memory write fails', async () => {
+    mocks.memory.mockRejectedValue(new Error('database unavailable'))
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const response = await POST(request(valid))
+    expect(await response.json()).toMatchObject({ data: { saved: true } })
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
+  })
   it('still registers the reservation, without a contact, when the caller cannot be verified', async () => {
     mocks.live.mockResolvedValue(null)
     expect((await POST(request(valid))).status).toBe(200)
     expect(mocks.contact).not.toHaveBeenCalled()
     expect(writes.find((w) => w.url.includes('/appointments'))!.body.contact_id).toBeNull()
+    expect(mocks.alert.mock.calls[0][2][2]).toContain('teléfono no verificado; completar contacto')
   })
   it('does not duplicate a reservation when the tool retries', async () => {
     existing = { id: 'appt-0' } as unknown as unknown[]

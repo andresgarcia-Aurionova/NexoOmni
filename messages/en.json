@@ -2033,6 +2033,25 @@
       "tagNone": "{mode} tag (none picked)"
     }
   },
+  "ReservationConfirmations": {
+    "title": "Reservation confirmation",
+    "reviewTitle": "Reservation confirmation needs review",
+    "ambiguousTitle": "Reservation response needs review",
+    "declinedTitle": "Reservation not confirmed",
+    "failed": "The delivery result could not be verified. Check the conversation before resending.",
+    "declined": "The customer said they cannot attend. Check the conversation; the reservation was not cancelled automatically.",
+    "ambiguous": "The customer has multiple pending confirmations. Check the conversation to identify the reservation; none was confirmed automatically.",
+    "missingContact": "{title}: a verified phone number is missing. Complete the contact and confirm with the customer.",
+    "missingPhone": "{title}: the contact has no phone number. Complete it and confirm with the customer.",
+    "noOpening": "{title}: no business hours remain before the reservation. Confirm with the customer.",
+    "due": "{title}: a confirmation request will be sent to the customer.",
+    "config": "{title}: {reason}",
+    "template_unavailable": "Exactly one approved confirmation template is required for the selected language.",
+    "template_format": "The template must have two body variables and no header or buttons.",
+    "connector_unavailable": "The template must belong to a connected WhatsApp number with business hours.",
+    "hours_unavailable": "Configure and enable business hours on the template's WhatsApp number.",
+    "hours_invalid": "The WhatsApp number's business hours are invalid."
+  },
   "Settings": {
     "pageTitle": "Settings",
     "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
@@ -2428,6 +2447,9 @@
       "phonesHint": "Separate numbers with commas, including country code (max 5). Example: +52 55 1234 5678",
       "templateName": "Template name",
       "templateLanguage": "Template language",
+      "confirmationEnabled": "Request customer confirmation",
+      "confirmationHint": "Requires an approved template with two variables (restaurant and date and time), no header or buttons, and active business hours on the template's WhatsApp number.",
+      "confirmationTemplate": "Customer confirmation template",
       "save": "Save",
       "saved": "Reservation alert saved",
       "saveError": "Could not save the reservation alert",

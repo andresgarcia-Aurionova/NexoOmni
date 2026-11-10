@@ -94,6 +94,7 @@ describe('reservation staff alert settings', () => {
     const base = { templateName: 'aviso_reservacion_restaurante', templateLanguage: 'es_MX' }
     expect(parseAlertSettings({ ...base, enabled: true, recipientPhones: ['+525512345678'] })).toEqual({
       ...base, enabled: true, recipientPhones: ['525512345678'],
+      confirmationEnabled: false, confirmationTemplateName: 'confirmacion_reservacion', confirmationTemplateLanguage: 'es_MX',
     })
     expect(() => parseAlertSettings({ ...base, enabled: true, recipientPhones: [] })).toThrow(AlertSettingsError)
     expect(() => parseAlertSettings({ ...base, templateName: 'Bad Name', recipientPhones: [] })).toThrow(AlertSettingsError)

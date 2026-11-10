@@ -58,6 +58,12 @@ Nombre sugerido: **`nexoomni_registrar_reservacion`**.
 El teléfono del cliente no se pide a la IA: NexoOmni lo toma de la llamada
 activa en el PBX. Si no puede verificarse, la reservación se guarda igual, sin
 contacto asociado y con la nota "teléfono no verificado".
+Cuando los avisos al equipo están activos, el aviso por WhatsApp indica que
+hay que completar el contacto si no se pudo verificar el teléfono.
+
+Cuando la reserva tiene contacto asociado, Nexo Memory registra en su línea
+de tiempo el restaurante, la zona, el número de personas, la fecha y hora,
+el nombre y la ocasión. El registro se realiza para las nuevas reservas.
 
 Respuesta correcta: `{"data":{"saved":true,"appointment_id":"..."}}`. Si la
 llamada se repite con los mismos datos, devuelve `duplicate: true` y no crea
@@ -97,6 +103,51 @@ no aparece o su estado no está actualizado, sincronízala desde **Plantillas**.
 
 La respuesta de la herramienta incluye `notified` y `notified_count`. Si el
 aviso falla, la reservación queda guardada igualmente (`notified: false`).
+
+## Confirmación antes de la reservación
+
+En **Configuración → Telefonía → Aviso de reservaciones** activa
+**Solicitar confirmación al cliente** e indica el nombre y el idioma de la
+plantilla aprobada para el número que usará el recordatorio. Configura y
+activa también el horario de atención de ese mismo número de WhatsApp
+conectado con la Conexión NexoOmni,
+incluyendo sus festivos.
+El horario se configura en **Automatizaciones → Horario de atención de
+WhatsApp conectado**. Al activarlo también se habilita el aviso de cierre
+del canal y se impide iniciar nuevos flujos fuera de horario; revisa ese
+mensaje y comportamiento antes de activarlo.
+
+La plantilla debe tener dos variables en el cuerpo, sin encabezado ni
+botones: `{{1}}` es el restaurante y `{{2}}` la fecha y hora. Debe pedir
+al cliente que responda **SÍ** o **NO**. Un ejemplo es:
+
+> Hola, te recordamos tu reservación en {{1}} para el {{2}}. Por favor
+> responde SÍ para confirmar tu asistencia o NO si no puedes asistir.
+
+La plantilla sugerida se llama `confirmacion_reservacion` y su idioma es
+`es_MX`. Es necesario esperar su aprobación y sincronizarla en **Plantillas**.
+Si el mismo nombre e idioma están aprobados en más de un número, usa un
+nombre distinto para evitar ambigüedad.
+
+- El mensaje se programa 12 horas antes. Si ese momento cae fuera del
+  horario, se adelanta al último minuto del horario anterior.
+- Si la reserva se hace demasiado tarde para ese momento, se envía en el
+  siguiente horario disponible antes de la reserva. Si no queda ninguno,
+  se avisa al equipo dentro de NexoOmni.
+- Los administradores reciben una notificación en NexoOmni cuando se solicita
+  la confirmación y si falta el contacto, el horario o la plantilla aprobada.
+  Cuando no se puede comprobar el envío, revisan la conversación antes de
+  reenviar.
+- **SÍ** registra la respuesta en la memoria del contacto. **NO** también
+  registra la respuesta y avisa al equipo, pero no cancela la reservación.
+  Si el cliente tiene varias confirmaciones pendientes y la respuesta es
+  ambigua, el equipo recibe un aviso y ninguna se confirma automáticamente.
+- Si se cambia la fecha o el contacto, se recalcula el recordatorio. Al
+  cancelar la reserva no se envía un recordatorio pendiente.
+
+Estas confirmaciones se programan para las nuevas reservaciones por teléfono
+creadas después de instalar la actualización; las reservas anteriores no se
+programan automáticamente.
 
 ## Pendiente
 

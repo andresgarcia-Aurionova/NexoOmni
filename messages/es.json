@@ -2033,6 +2033,25 @@
       "tagNone": "{mode} etiqueta (ninguna seleccionada)"
     }
   },
+  "ReservationConfirmations": {
+    "title": "Confirmación de reservación",
+    "reviewTitle": "Confirmación de reservación por revisar",
+    "ambiguousTitle": "Respuesta de reservación por revisar",
+    "declinedTitle": "Reservación sin confirmar",
+    "failed": "No se pudo verificar el resultado del envío. Revisa la conversación antes de reenviar el mensaje.",
+    "declined": "El cliente indicó que no puede asistir. Revisa su conversación; la reservación no se canceló automáticamente.",
+    "ambiguous": "El cliente tiene varias confirmaciones pendientes. Revisa su conversación para identificar la reserva; no se confirmó ninguna automáticamente.",
+    "missingContact": "{title}: falta un teléfono verificado. Completa el contacto y confirma con el cliente.",
+    "missingPhone": "{title}: el contacto no tiene teléfono. Completa el dato y confirma con el cliente.",
+    "noOpening": "{title}: no queda horario de atención antes de la reservación. Confirma con el cliente.",
+    "due": "{title}: se enviará una solicitud de confirmación al cliente.",
+    "config": "{title}: {reason}",
+    "template_unavailable": "Debe existir una sola plantilla de confirmación aprobada para el idioma elegido.",
+    "template_format": "La plantilla debe tener dos variables en el cuerpo y no tener encabezado ni botones.",
+    "connector_unavailable": "La plantilla debe pertenecer a un número conectado con horario de WhatsApp.",
+    "hours_unavailable": "Configura y activa el horario del número de WhatsApp de la plantilla.",
+    "hours_invalid": "El horario del número de WhatsApp no es válido."
+  },
   "Settings": {
     "pageTitle": "Configuración",
     "pageDesc": "Todo en un solo lugar — tu cuenta y tu espacio de trabajo. Elige una sección para gestionarla.",
@@ -2416,6 +2435,9 @@
       "phonesHint": "Separa los números con comas, con lada de país (máximo 5). Ejemplo: +52 55 1234 5678",
       "templateName": "Nombre de la plantilla",
       "templateLanguage": "Idioma de la plantilla",
+      "confirmationEnabled": "Solicitar confirmación al cliente",
+      "confirmationHint": "Necesitas una plantilla aprobada con dos variables (restaurante y fecha y hora), sin encabezado ni botones, y un horario activo en el número de WhatsApp de la plantilla.",
+      "confirmationTemplate": "Plantilla de confirmación al cliente",
       "save": "Guardar",
       "saved": "Aviso de reservaciones guardado",
       "saveError": "No se pudo guardar el aviso",

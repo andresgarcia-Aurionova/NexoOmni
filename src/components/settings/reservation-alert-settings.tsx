@@ -10,7 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
-type Settings = { enabled: boolean; templateName: string; templateLanguage: string; recipientPhones: string[] };
+type Settings = {
+  enabled: boolean; templateName: string; templateLanguage: string; recipientPhones: string[];
+  confirmationEnabled: boolean; confirmationTemplateName: string; confirmationTemplateLanguage: string;
+};
 
 export function ReservationAlertSettings() {
   const t = useTranslations('Settings.reservationAlert');
@@ -20,6 +23,9 @@ export function ReservationAlertSettings() {
   const [phones, setPhones] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templateLanguage, setTemplateLanguage] = useState('');
+  const [confirmationEnabled, setConfirmationEnabled] = useState(false);
+  const [confirmationTemplateName, setConfirmationTemplateName] = useState('');
+  const [confirmationTemplateLanguage, setConfirmationTemplateLanguage] = useState('');
 
   useEffect(() => {
     fetch('/api/telephony/reservation-alert')
@@ -30,6 +36,9 @@ export function ReservationAlertSettings() {
         setPhones(settings.recipientPhones.map((phone) => `+${phone}`).join(', '));
         setTemplateName(settings.templateName);
         setTemplateLanguage(settings.templateLanguage);
+        setConfirmationEnabled(settings.confirmationEnabled);
+        setConfirmationTemplateName(settings.confirmationTemplateName);
+        setConfirmationTemplateLanguage(settings.confirmationTemplateLanguage);
       })
       .catch(() => toast.error(t('loadError')))
       .finally(() => setLoading(false));
@@ -41,7 +50,10 @@ export function ReservationAlertSettings() {
       const response = await fetch('/api/telephony/reservation-alert', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled, recipientPhones: phones, templateName, templateLanguage }),
+        body: JSON.stringify({
+          enabled, recipientPhones: phones, templateName, templateLanguage,
+          confirmationEnabled, confirmationTemplateName, confirmationTemplateLanguage,
+        }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || t('saveError'));
@@ -82,6 +94,23 @@ export function ReservationAlertSettings() {
               <div className="space-y-1.5">
                 <Label htmlFor="reservation-alert-language">{t('templateLanguage')}</Label>
                 <Input id="reservation-alert-language" value={templateLanguage} onChange={(event) => setTemplateLanguage(event.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center gap-3">
+                <Switch id="reservation-confirmation-enabled" checked={confirmationEnabled} onCheckedChange={setConfirmationEnabled} />
+                <Label htmlFor="reservation-confirmation-enabled">{t('confirmationEnabled')}</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('confirmationHint')}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="reservation-confirmation-template">{t('confirmationTemplate')}</Label>
+                  <Input id="reservation-confirmation-template" value={confirmationTemplateName} onChange={(event) => setConfirmationTemplateName(event.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="reservation-confirmation-language">{t('templateLanguage')}</Label>
+                  <Input id="reservation-confirmation-language" value={confirmationTemplateLanguage} onChange={(event) => setConfirmationTemplateLanguage(event.target.value)} />
+                </div>
               </div>
             </div>
             <Button onClick={save} disabled={saving}>

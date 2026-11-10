@@ -15,6 +15,7 @@ import {
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny as flagBroadcastReplyIfAnyShared } from '@/lib/whatsapp/broadcast-reply-flag'
 import { handleAgendaProConfirmationReply } from '@/lib/agendapro/confirmation'
+import { handleReservationConfirmationReply } from '@/lib/telephony/reservation-confirmation-worker'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -677,9 +678,12 @@ async function processMessage(
   // before the flow/automation dispatch below but never blocks it —
   // most inbound text has no pending confirmation and is a fast no-op.
   if (message.type === 'text' && !interactiveReplyId && contentText?.trim()) {
-    await handleAgendaProConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, contentText).catch((error) => {
-      console.error('[agendapro] could not process a confirmation reply:', error)
-    })
+    try {
+      const reservationReply = await handleReservationConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, conversation.id, contentText)
+      if (reservationReply === 'none') await handleAgendaProConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, contentText)
+    } catch (error) {
+      console.error('[reservations] could not process a confirmation reply:', error)
+    }
   }
 
   // ============================================================
