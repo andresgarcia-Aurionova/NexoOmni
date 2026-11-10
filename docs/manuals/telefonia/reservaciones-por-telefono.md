@@ -90,6 +90,10 @@ Se configura en **Configuración → Telefonía → Aviso de reservaciones**
 4. Pulsa **Guardar**.
 
 Los números y la plantilla los define tu equipo en la plataforma, nunca la IA.
+El aviso sale por el número de WhatsApp al que pertenece la plantilla aprobada.
+Si tienes la misma plantilla y el mismo idioma aprobados en más de un número,
+usa un nombre de plantilla distinto para evitar confusiones. Si la plantilla
+no aparece o su estado no está actualizado, sincronízala desde **Plantillas**.
 
 La respuesta de la herramienta incluye `notified` y `notified_count`. Si el
 aviso falla, la reservación queda guardada igualmente (`notified: false`).

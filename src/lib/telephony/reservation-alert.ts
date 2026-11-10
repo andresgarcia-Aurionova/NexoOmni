@@ -77,23 +77,48 @@ export function reservationAlertParams(args: {
   return [`Restaurante ${args.restaurant}`, oneLine(when), oneLine(detail)]
 }
 
-async function sendToOne(db: SupabaseClient, accountId: string, settings: ReservationAlertSettings, phone: string, params: string[]) {
-  const { data: meta } = await db.from('whatsapp_config').select('phone_number_id, access_token').eq('account_id', accountId).maybeSingle()
-  if (!meta) {
-    const [connector] = await listZernioWhatsAppConnectors(db, accountId)
-    if (!connector) throw new Error('No WhatsApp number is connected')
+type AlertSender =
+  | { kind: 'zernio'; accountId: string }
+  | { kind: 'meta'; phoneNumberId: string; accessToken: string }
+
+async function resolveAlertSender(db: SupabaseClient, accountId: string, settings: ReservationAlertSettings): Promise<AlertSender> {
+  const { data: templates, error } = await db.from('message_templates')
+    .select('connector_id, status')
+    .eq('account_id', accountId)
+    .eq('name', settings.templateName)
+    .eq('language', settings.templateLanguage)
+  if (error) throw error
+  const approved = (templates ?? []).filter((template) => String(template.status).toLowerCase() === 'approved')
+  if (approved.length !== 1) {
+    throw new Error(`Expected one approved reservation alert template; found ${approved.length}`)
+  }
+  const connectorId = approved[0].connector_id
+  if (connectorId) {
+    const connectors = await listZernioWhatsAppConnectors(db, accountId)
+    const connector = connectors.find((item) => item.id === connectorId)
+    if (!connector) throw new Error('The reservation alert template WhatsApp connector is not active')
+    return { kind: 'zernio', accountId: connector.zernio_account_id }
+  }
+  const { data: meta, error: metaError } = await db.from('whatsapp_config')
+    .select('phone_number_id, access_token').eq('account_id', accountId).maybeSingle()
+  if (metaError) throw metaError
+  if (!meta) throw new Error('The reservation alert template direct WhatsApp number is not connected')
+  return { kind: 'meta', phoneNumberId: meta.phone_number_id, accessToken: decrypt(meta.access_token) }
+}
+
+async function sendToOne(sender: AlertSender, settings: ReservationAlertSettings, phone: string, params: string[]) {
+  if (sender.kind === 'zernio') {
     await sendZernioTemplateMessage({
-      zernioAccountId: connector.zernio_account_id, phone,
+      zernioAccountId: sender.accountId, phone,
       templateName: settings.templateName, templateLanguage: settings.templateLanguage, templateParams: params,
     })
     return
   }
-  const accessToken = decrypt(meta.access_token)
   let lastError: unknown = new Error('Recipient not allowed')
   for (const candidate of phoneVariants(phone)) {
     try {
       await sendTemplateMessage({
-        phoneNumberId: meta.phone_number_id, accessToken, to: candidate,
+        phoneNumberId: sender.phoneNumberId, accessToken: sender.accessToken, to: candidate,
         templateName: settings.templateName, language: settings.templateLanguage, params,
       })
       return
@@ -110,7 +135,8 @@ export async function sendReservationAlert(db: SupabaseClient, accountId: string
   try {
     const settings = await loadAlertSettings(db, accountId)
     if (!settings.enabled || settings.recipientPhones.length === 0) return 0
-    const results = await Promise.allSettled(settings.recipientPhones.map((phone) => sendToOne(db, accountId, settings, phone, params)))
+    const sender = await resolveAlertSender(db, accountId, settings)
+    const results = await Promise.allSettled(settings.recipientPhones.map((phone) => sendToOne(sender, settings, phone, params)))
     for (const result of results) {
       if (result.status === 'rejected') {
         console.error('[telephony/reservations] alert failed:', result.reason instanceof Error ? result.reason.message : result.reason)
