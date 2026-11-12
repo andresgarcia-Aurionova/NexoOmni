@@ -4,9 +4,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 vi.mock('@/lib/zernio/server', () => ({
   sendZernioTemplateMessage: vi.fn(),
   sendZernioTemplateToConversation: vi.fn(),
+  getZernioParticipantProfile: vi.fn(),
 }));
 
-import { sendZernioTemplateMessage, sendZernioTemplateToConversation } from '@/lib/zernio/server';
+import { getZernioParticipantProfile, sendZernioTemplateMessage, sendZernioTemplateToConversation } from '@/lib/zernio/server';
 import { sendZernioTemplateToContact } from './send-template-to-contact';
 
 type Row = Record<string, unknown>;
@@ -17,6 +18,8 @@ function makeDb(opts: {
   existingConversation?: Row | null;
   insertConversationError?: { code: string } | null;
   racedConversation?: Row | null;
+  mappedIdentity?: Row | null;
+  strictConversation?: Row | null;
 }) {
   const inserts: { table: string; row: Row }[] = [];
   const updates: { table: string; patch: Row }[] = [];
@@ -39,7 +42,11 @@ function makeDb(opts: {
         }
         return Promise.resolve({ data: [], error: null });
       },
-      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+      maybeSingle: () => Promise.resolve({
+        data: table === 'omnichannel_contact_identities' ? (opts.mappedIdentity === undefined ? { account_id: 'acct', contact_id: 'contact-1' } : opts.mappedIdentity)
+          : table === 'conversations' ? (opts.strictConversation ?? null) : null,
+        error: null,
+      }),
       single: () => {
         if (table === 'conversations' && mode === 'insert') {
           if (opts.insertConversationError) return Promise.resolve({ data: null, error: opts.insertConversationError });
@@ -75,6 +82,7 @@ describe('sendZernioTemplateToContact', () => {
   beforeEach(() => {
     vi.mocked(sendZernioTemplateMessage).mockReset();
     vi.mocked(sendZernioTemplateToConversation).mockReset();
+    vi.mocked(getZernioParticipantProfile).mockReset();
   });
 
   it('sends into the existing Zernio thread and logs it as a bot message', async () => {
@@ -127,6 +135,78 @@ describe('sendZernioTemplateToContact', () => {
     const { db } = makeDb({});
     await expect(sendZernioTemplateToContact(db, { ...base, phone: 'zernio:zernio_whatsapp:abc' })).rejects.toThrow();
     expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+    expect(sendZernioTemplateToConversation).not.toHaveBeenCalled();
+  });
+
+  it('sends only when the provider confirms the exact participant', async () => {
+    vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId: '525512345678' });
+    vi.mocked(sendZernioTemplateToConversation).mockResolvedValue('zmsg-1');
+    const { db } = makeDb({ existingConversation: { id: 'conv-1', connector_id: 'conn-1', external_session_id: 'zconv-1' } });
+    await sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true });
+    expect(getZernioParticipantProfile).toHaveBeenCalledWith('zconv-1', 'zacc-1');
+    expect(sendZernioTemplateToConversation).toHaveBeenCalledOnce();
+    expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(['525512345679', '5215512345678', null, 'user:525512345678'])(
+    'does not send if the provider participant is missing or different: %s',
+    async (participantId) => {
+      vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId });
+      const { db } = makeDb({ existingConversation: { id: 'conv-1', connector_id: 'conn-1', external_session_id: 'zconv-1' } });
+      await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true })).rejects.toThrow();
+      expect(sendZernioTemplateToConversation).not.toHaveBeenCalled();
+      expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not open a new conversation in exact-participant mode', async () => {
+    const { db } = makeDb({});
+    await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true })).rejects.toThrow();
+    expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+    expect(getZernioParticipantProfile).not.toHaveBeenCalled();
+  });
+
+  it('checks the returned participant before associating the new thread', async () => {
+    vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'message', conversationId: 'zconv' });
+    vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId: '525512345678' });
+    const { db } = makeDb({ mappedIdentity: null });
+    const result = await sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true, allowVerifiedColdStart: true });
+    expect(result.conversationId).toBe('conv-new');
+    expect(getZernioParticipantProfile).toHaveBeenCalledWith('zconv', 'zacc-1');
+  });
+
+  it('refuses to send when an existing identity belongs to someone else', async () => {
+    const { db } = makeDb({ mappedIdentity: { account_id: 'acct', contact_id: 'other' } });
+    await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true, allowVerifiedColdStart: true })).rejects.toThrow();
+    expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(['525599999999', 'opaque-id', null])('does not attach an unverified thread: %s', async (participantId) => {
+    vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'message', conversationId: 'zconv' });
+    vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId });
+    const { db, inserts } = makeDb({});
+    await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true, allowVerifiedColdStart: true })).rejects.toThrow();
+    expect(inserts.some((row) => row.table === 'conversations')).toBe(false);
+  });
+
+  it('refuses a concurrent thread attached to a different contact', async () => {
+    vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'message', conversationId: 'zconv' });
+    vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId: '525512345678' });
+    const { db } = makeDb({ insertConversationError: { code: '23505' }, strictConversation: null });
+    await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true, allowVerifiedColdStart: true })).rejects.toThrow();
+  });
+
+  it('accepts a concurrent thread only for the exact contact and conversation', async () => {
+    vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'message', conversationId: 'zconv' });
+    vi.mocked(getZernioParticipantProfile).mockResolvedValue({ name: null, picture: null, participantId: '525512345678' });
+    const { db } = makeDb({ insertConversationError: { code: '23505' }, strictConversation: { id: 'raced' } });
+    expect((await sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true, allowVerifiedColdStart: true })).conversationId).toBe('raced');
+  });
+
+  it('does not send if participant lookup fails', async () => {
+    vi.mocked(getZernioParticipantProfile).mockRejectedValue(new Error('provider unavailable'));
+    const { db } = makeDb({ existingConversation: { id: 'conv-1', connector_id: 'conn-1', external_session_id: 'zconv-1' } });
+    await expect(sendZernioTemplateToContact(db, { ...base, requireExactParticipant: true })).rejects.toThrow('provider unavailable');
     expect(sendZernioTemplateToConversation).not.toHaveBeenCalled();
   });
 });

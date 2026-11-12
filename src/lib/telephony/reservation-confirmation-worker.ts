@@ -9,6 +9,10 @@ import { recordReservationMemory } from './reservation-memory'
 import { loadReservationReminderConfig, ReservationReminderConfigError } from './reservation-reminder-config'
 import { reservationReminderDueAt } from './reservation-reminder-schedule'
 import { parseRestaurant } from './reservations'
+import { reservationPbxPhone } from './reservation-phone'
+import { findOrCreateReservationContact, lookupReservationContact } from './reservation-contact'
+import { safeZernioContactName } from '@/lib/omnichannel/webhook-normalizer'
+import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 
 type Job = {
   appointment_id: string
@@ -126,7 +130,7 @@ export async function processReservationConfirmationJobs(db: SupabaseClient) {
     if (!await updateJob(db, job, { state: 'processing' }, job.state)) continue
     try {
       const { data: appointment, error: appointmentError } = await db.from('appointments')
-        .select('id,contact_id,created_by,title,notes,starts_at,status,reservation_restaurant')
+        .select('id,contact_id,created_by,title,notes,starts_at,status,reservation_restaurant,reservation_whatsapp_preference,reservation_whatsapp_phone')
         .eq('id', job.appointment_id).eq('account_id', job.account_id).maybeSingle()
       if (appointmentError) throw appointmentError
       if (!appointment || !appointment.reservation_restaurant || ['cancelled', 'completed', 'no_show'].includes(appointment.status)) {
@@ -145,6 +149,15 @@ export async function processReservationConfirmationJobs(db: SupabaseClient) {
           accountId: job.account_id, contactId: appointment.contact_id, appointmentId: appointment.id,
           summary: `Reservación en Restaurante ${parseRestaurant(appointment.reservation_restaurant)}. ${reservationDateLabel(appointment.starts_at)}. ${details}`,
         })
+      }
+      if (appointment.reservation_whatsapp_preference === 'declined' || appointment.reservation_whatsapp_preference === 'unavailable') {
+        const preference = appointment.reservation_whatsapp_preference
+        const notice = preference === 'declined' ? copy.whatsappDeclined
+          : preference === 'unavailable' ? copy.whatsappUnavailable : copy.whatsappReview
+        await notify(db, job, `whatsapp_${preference}`, copy.reviewTitle, formatCopy(notice, { title: appointment.title }))
+        await updateJob(db, job, { state: 'skipped', error_message: 'La preferencia de WhatsApp requiere revisión.' }, 'processing')
+        counts.skipped++
+        continue
       }
       const { data: settings, error: settingsError } = await db.from('reservation_alert_settings')
         .select('confirmation_enabled,confirmation_template_name,confirmation_template_language')
@@ -196,15 +209,44 @@ export async function processReservationConfirmationJobs(db: SupabaseClient) {
         counts.skipped++
         continue
       }
+      const preference = appointment.reservation_whatsapp_preference
+      const destination = preference == null ? contact.phone : appointment.reservation_whatsapp_phone
+      let recipientContactId = appointment.contact_id as string
+      let destinationNeedsReview = preference != null && !destination
+      if (destination && preference != null && destination !== reservationPbxPhone(contact.phone)) {
+        if (preference === 'other') {
+          const recipient = await lookupReservationContact(db, job.account_id, destination)
+          if (recipient.status === 'missing') {
+            const ownerUserId = appointment.created_by ?? await resolveAuditUserId(db, job.account_id)
+            const created = await findOrCreateReservationContact(db, job.account_id, ownerUserId, destination, safeZernioContactName('whatsapp', destination))
+            if (created && created.id !== appointment.contact_id) recipientContactId = created.id
+            else destinationNeedsReview = true
+          } else if (recipient.status === 'found' && recipient.id !== appointment.contact_id) {
+            recipientContactId = recipient.id
+          } else {
+            destinationNeedsReview = true
+          }
+        } else {
+          destinationNeedsReview = true
+        }
+      }
+      if (destinationNeedsReview || !destination) {
+        await notify(db, job, 'whatsapp_destination_review', copy.reviewTitle, formatCopy(copy.whatsappReview, { title: appointment.title }))
+        await updateJob(db, job, { state: 'skipped', error_message: 'El número elegido requiere revisión.' }, 'processing')
+        counts.skipped++
+        continue
+      }
       await notify(db, job, 'due', title, formatCopy(copy.due, { title: appointment.title }))
       if (!await updateJob(db, job, { state: 'sending', error_message: null }, 'processing')) continue
       try {
         const ownerUserId = appointment.created_by ?? await resolveAuditUserId(db, job.account_id)
         const result = await sendReservationConfirmation(db, {
-          accountId: job.account_id, contactId: appointment.contact_id, phone: contact.phone, ownerUserId,
+          accountId: job.account_id, contactId: recipientContactId, phone: destination, ownerUserId,
           restaurant: parseRestaurant(appointment.reservation_restaurant), startsAt: appointment.starts_at,
           templateName: settings.confirmation_template_name, templateLanguage: settings.confirmation_template_language,
           connector: config.connector,
+          requireExactParticipant: preference != null,
+          allowVerifiedColdStart: preference != null,
         })
         if (!await updateJob(db, job, {
           state: 'sent', sent_at: new Date().toISOString(), conversation_id: result.conversationId,
@@ -228,19 +270,68 @@ export async function processReservationConfirmationJobs(db: SupabaseClient) {
 }
 
 export async function handleReservationConfirmationReply(
-  db: SupabaseClient, accountId: string, contactId: string, conversationId: string, text: string,
+  db: SupabaseClient, accountId: string, contactId: string, conversationId: string, text: string, senderPhone?: string,
 ): Promise<'none' | 'handled' | 'ambiguous'> {
   const normalized = text.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase()
   if (normalized !== 'si' && normalized !== 'no') return 'none'
   const copy = notificationCopy()
-  const { data: jobs, error } = await db.from('reservation_confirmation_jobs')
-    .select('appointment_id,account_id,revision,state,appointment:appointments!inner(contact_id,starts_at,status,title)')
-    .eq('account_id', accountId).eq('conversation_id', conversationId).eq('state', 'sent')
-    .is('response', null).eq('appointment.contact_id', contactId)
-    .gt('appointment.starts_at', new Date().toISOString()).not('appointment.status', 'in', '(cancelled,completed,no_show)')
-    .limit(3)
-  if (error) throw error
-  if (!jobs?.length) return 'none'
+  const sentJobs = async () => {
+    const result = await db.from('reservation_confirmation_jobs')
+      .select('appointment_id,account_id,revision,state,appointment:appointments!inner(contact_id,starts_at,status,title,reservation_whatsapp_preference,reservation_whatsapp_phone)')
+      .eq('account_id', accountId).eq('conversation_id', conversationId).eq('state', 'sent')
+      .is('response', null)
+      .gt('appointment.starts_at', new Date().toISOString()).not('appointment.status', 'in', '(cancelled,completed,no_show)')
+      .limit(3)
+    if (result.error) throw result.error
+    return result.data ?? []
+  }
+  let jobs = await sentJobs()
+  {
+    let inFlightQuery = db.from('reservation_confirmation_jobs')
+      .select('appointment_id,account_id,revision,state,appointment:appointments!inner(starts_at,status,reservation_whatsapp_preference,reservation_whatsapp_phone)')
+      .eq('account_id', accountId).eq('state', 'sending')
+      .in('appointment.reservation_whatsapp_preference', ['caller', 'other'])
+      .gt('appointment.starts_at', new Date().toISOString()).not('appointment.status', 'in', '(cancelled,completed,no_show)')
+      .limit(20)
+    if (senderPhone && /^\+?[\d ()-]+$/.test(senderPhone)) {
+      inFlightQuery = inFlightQuery.eq('appointment.reservation_whatsapp_phone', sanitizePhoneForMeta(senderPhone))
+    }
+    const { data: inFlight, error: inFlightError } = await inFlightQuery
+    if (inFlightError) throw inFlightError
+    if (inFlight?.length) {
+      for (const pending of [...jobs, ...inFlight] as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)
+      return 'ambiguous'
+    }
+    // The send may have completed between the two lookups.
+    jobs = await sentJobs()
+  }
+  if (!jobs.length) return 'none'
+  const { data: activeFlows, error: flowError } = await db.from('flow_runs')
+    .select('id').eq('account_id', accountId).eq('contact_id', contactId).eq('status', 'active').limit(1)
+  if (flowError) throw flowError
+  if (activeFlows?.length) {
+    for (const pending of jobs as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)
+    return 'ambiguous'
+  }
+  const { data: conversation, error: conversationError } = await db.from('conversations')
+    .select('id').eq('id', conversationId).eq('account_id', accountId).eq('contact_id', contactId).maybeSingle()
+  if (conversationError) throw conversationError
+  if (!conversation) {
+    for (const pending of jobs as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)
+    return 'ambiguous'
+  }
+  for (const candidate of jobs) {
+    const appointment = Array.isArray(candidate.appointment) ? candidate.appointment[0] : candidate.appointment
+    const preference = appointment?.reservation_whatsapp_preference
+    if (!appointment?.contact_id || ((preference == null || preference === 'caller') && appointment.contact_id !== contactId)
+      || (preference != null && (
+        !senderPhone || !/^\+?[\d ()-]+$/.test(senderPhone)
+        || sanitizePhoneForMeta(senderPhone) !== appointment.reservation_whatsapp_phone
+      ))) {
+      for (const pending of jobs as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)
+      return 'ambiguous'
+    }
+  }
   const { data: agendaPro, error: agendaError } = await db.from('agendapro_bookings')
     .select('id').eq('account_id', accountId).eq('contact_id', contactId)
     .eq('confirmation_status', 'pending').eq('confirmation_reminder_status', 'sent')
@@ -253,9 +344,12 @@ export async function handleReservationConfirmationReply(
     return 'ambiguous'
   }
   const job = jobs[0] as Job
-  const { data: accepted, error: responseError } = await db.rpc('accept_voice_reservation_response', {
+  const appointment = Array.isArray(jobs[0].appointment) ? jobs[0].appointment[0] : jobs[0].appointment
+  const { data: accepted, error: responseError } = await db.rpc('accept_voice_reservation_recipient_response', {
     p_appointment_id: job.appointment_id, p_account_id: accountId, p_revision: job.revision,
-    p_contact_id: contactId, p_conversation_id: conversationId,
+    p_contact_id: appointment.contact_id, p_conversation_id: conversationId,
+    p_recipient_contact_id: contactId,
+    p_sender_phone: senderPhone ? sanitizePhoneForMeta(senderPhone) : null,
     p_response: normalized === 'si' ? 'yes' : 'no',
     p_notice_title: copy.declinedTitle, p_notice_body: copy.declined,
   })

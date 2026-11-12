@@ -5,6 +5,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import { findExistingContact } from '@/lib/contacts/dedupe'
 import { aiCdrIds, findValue, parsePbxLocalTime, type JsonRecord } from '@/lib/telephony/yeastar-ai'
 import { callAgentExtension, callCustomerPhone } from '@/lib/telephony/call-party'
+import { reservationCallContact } from '@/lib/telephony/reservation-call-contact'
 import { isExtensionAllowed, parseExtensionRanges } from '@/lib/telephony/extension-scope'
 import { sendIncomingCallPush } from '@/lib/notifications/web-push'
 
@@ -252,7 +253,10 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
       const durationValue = firstNestedNumber(event.payload, ['call_duration', 'talk_duration'])
       const startTime = firstNestedText(event.payload, ['time_start'])
       const startedAt = startTime ? parsePbxLocalTime(startTime) : null
-      const contact = customerPhone ? await findExistingContact(db, accountId, customerPhone) : null
+      const reservationContact = await reservationCallContact(db, accountId, event.callId, customerPhone)
+      const contact = reservationContact.status === 'found' ? { id: reservationContact.id }
+        : reservationContact.status === 'ambiguous' ? null
+          : customerPhone ? await findExistingContact(db, accountId, customerPhone) : null
       const contactRow = contact ? (await db.from('contacts').select('id, name, email, phone').eq('id', contact.id).maybeSingle()).data : null
       const agentConfig = agentExtension ? (await db.from('telephony_user_configs').select('user_id').eq('account_id', accountId).eq('provider', 'yeastar').eq('extension', agentExtension).maybeSingle()).data : null
       const cdrIds = aiCdrIds(event.payload).join(',')

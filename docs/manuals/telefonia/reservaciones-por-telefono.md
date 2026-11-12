@@ -54,16 +54,35 @@ Nombre sugerido: **`nexoomni_registrar_reservacion`**.
   - `time`: hora de 24 h `HH:mm`.
   - `occasion`: opcional, ocasión especial.
   - `customer_name`: nombre de quien reserva.
+  - `whatsapp_preference`: `caller`, `other`, `declined` o `unavailable`,
+    según la respuesta del cliente.
+  - `whatsapp_phone`: solo para `other`; el número que dictó el cliente.
+  - `whatsapp_phone_confirmed`: `true` para `other`, únicamente cuando el
+    recepcionista repitió el número y el cliente confirmó que es correcto.
+
+El recepcionista debe preguntar si puede usar para WhatsApp el número desde el
+que llama. Si el cliente prefiere otro, debe solicitarlo, repetirlo y
+confirmarlo antes de registrar `other`. Si no desea mensajes, registra
+`declined`; si no se obtuvo un número confirmado, registra `unavailable`.
+El mensaje al cliente sigue siendo el recordatorio programado, no un envío
+adicional durante la llamada.
 
 El teléfono del cliente no se pide a la IA: NexoOmni lo toma de la llamada
-activa en el PBX. Si no puede verificarse, la reservación se guarda igual, sin
-contacto asociado y con la nota "teléfono no verificado".
+activa en el PBX. Para esta POC, los números nacionales de diez dígitos se
+interpretan como mexicanos y los nuevos contactos se guardan con el código
+`52`. Se buscan coincidencias completas, incluidas las variantes mexicanas
+históricas, sin unir contactos diferentes por coincidencias parciales. Si el
+número no puede identificarse con seguridad o hay varios contactos posibles,
+la reservación se guarda sin contacto y queda pendiente de revisión.
 Cuando los avisos al equipo están activos, el aviso por WhatsApp indica que
-hay que completar el contacto si no se pudo verificar el teléfono.
+hay que completar o revisar el contacto.
 
 Cuando la reserva tiene contacto asociado, Nexo Memory registra en su línea
 de tiempo el restaurante, la zona, el número de personas, la fecha y hora,
 el nombre y la ocasión. El registro se realiza para las nuevas reservas.
+La llamada se vincula usando el identificador de Yeastar y el teléfono
+verificado cuando ambos coinciden. Las importaciones históricas que no
+incluyen ese identificador no cuentan con esta comprobación adicional.
 
 Respuesta correcta: `{"data":{"saved":true,"appointment_id":"..."}}`. Si la
 llamada se repite con los mismos datos, devuelve `duplicate: true` y no crea
@@ -142,12 +161,47 @@ nombre distinto para evitar ambigüedad.
   registra la respuesta y avisa al equipo, pero no cancela la reservación.
   Si el cliente tiene varias confirmaciones pendientes y la respuesta es
   ambigua, el equipo recibe un aviso y ninguna se confirma automáticamente.
+- Si una respuesta llega mientras todavía se está registrando el envío,
+  puede quedar pendiente de revisión en lugar de confirmar automáticamente.
+  Revisa la conversación antes de actualizar la reservación.
+- Si el contacto ya tiene un flujo de preguntas activo y responde **SÍ** o
+  **NO**, la respuesta continúa en ese flujo. La confirmación de la reserva
+  queda pendiente y el equipo recibe un aviso para revisarla.
 - Si se cambia la fecha o el contacto, se recalcula el recordatorio. Al
   cancelar la reserva no se envía un recordatorio pendiente.
 
 Estas confirmaciones se programan para las nuevas reservaciones por teléfono
 creadas después de instalar la actualización; las reservas anteriores no se
 programan automáticamente.
+
+### Preferencia de WhatsApp registrada por una herramienta externa
+
+La herramienta de reservaciones puede registrar `whatsapp_preference` como
+`caller` (número de la llamada), `other` (otro número), `declined` (no desea
+mensajes) o `unavailable` (no hay un número confirmado). Para `other`, también
+se envían `whatsapp_phone` y `whatsapp_phone_confirmed: true`, únicamente
+después de repetir el número y recibir la confirmación del cliente. El número
+no se agrega automáticamente al contacto ni demuestra que tenga WhatsApp.
+
+El recordatorio se envía a una conversación existente solo si se puede
+comprobar que corresponde exactamente al número elegido. Cuando no existe
+conversación, se solicita al proveedor que la abra con ese número; el hilo
+devuelto también se comprueba antes de asociarlo a la reserva. Para otro
+número se busca o crea un contacto independiente por coincidencia completa;
+la reserva y sus respuestas permanecen en la memoria del contacto que llamó.
+Si el proveedor no devuelve un hilo verificable o existe un conflicto de
+identidad, el equipo debe revisar la reserva y contactar al cliente. El
+mensaje podría haberse enviado aunque la comprobación posterior falle:
+revisa el estado antes de reenviarlo. Las respuestas solo se asocian
+automáticamente si proceden del número elegido.
+Si el cliente rechaza WhatsApp, debe respetarse su decisión y utilizar otro
+medio. Si una nueva reservación llega sin la preferencia, se guarda como
+pendiente de revisión y no se envía el recordatorio automáticamente. Las
+reservas anteriores a esta actualización conservan el comportamiento anterior.
+La aceptación del envío por el proveedor no garantiza que el número tenga
+WhatsApp ni que el mensaje se haya entregado; revisa el estado de entrega.
+Si el proveedor no permite comprobar la identidad de la conversación o la
+respuesta llega sin un remitente verificable, el equipo debe revisarla.
 
 ## Pendiente
 

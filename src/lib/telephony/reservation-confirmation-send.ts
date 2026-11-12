@@ -13,6 +13,8 @@ export async function sendReservationConfirmation(db: SupabaseClient, args: {
   templateName: string
   templateLanguage: string
   connector: ZernioWhatsAppConnector
+  requireExactParticipant?: boolean
+  allowVerifiedColdStart?: boolean
 }) {
   return sendZernioTemplateToContact(db, {
     accountId: args.accountId,
@@ -23,5 +25,7 @@ export async function sendReservationConfirmation(db: SupabaseClient, args: {
     templateLanguage: args.templateLanguage,
     bodyParams: [`Restaurante ${args.restaurant}`, reservationDateLabel(args.startsAt)],
     connectors: [args.connector],
+    requireExactParticipant: args.requireExactParticipant,
+    allowVerifiedColdStart: args.allowVerifiedColdStart,
   })
 }

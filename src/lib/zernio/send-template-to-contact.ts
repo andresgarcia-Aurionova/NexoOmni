@@ -20,7 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isUniqueViolation } from '@/lib/contacts/dedupe';
 import { renderTemplateBody } from '@/lib/whatsapp/broadcast-message-log';
 import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
-import { sendZernioTemplateMessage, sendZernioTemplateToConversation } from '@/lib/zernio/server';
+import { getZernioParticipantProfile, sendZernioTemplateMessage, sendZernioTemplateToConversation } from '@/lib/zernio/server';
 import { persistZernioOutbound } from './outbound-message';
 
 export type ZernioWhatsAppConnector = { id: string; zernio_account_id: string };
@@ -50,6 +50,8 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
   templateLanguage: string;
   bodyParams: string[];
   connectors: ZernioWhatsAppConnector[];
+  requireExactParticipant?: boolean;
+  allowVerifiedColdStart?: boolean;
 }): Promise<{ conversationId: string; messageId: string | null }> {
   const phone = sanitizePhoneForMeta(args.phone);
   if (!isValidE164(phone)) throw new Error('El contacto no tiene un teléfono de WhatsApp válido.');
@@ -69,6 +71,20 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
   if (existingError) throw existingError;
   const existing = existingRows?.[0] as { id: string; connector_id: string; external_session_id: string | null } | undefined;
   const connector = args.connectors.find((c) => c.id === existing?.connector_id) ?? args.connectors[0];
+
+  if (args.requireExactParticipant) {
+    if (existing?.external_session_id) {
+      await verifyParticipant(existing.external_session_id, connector.zernio_account_id, phone);
+    } else {
+      if (!args.allowVerifiedColdStart) throw new Error('No hay una conversación verificada para este número de WhatsApp.');
+      const { data: identity, error: identityError } = await db.from('omnichannel_contact_identities')
+        .select('account_id, contact_id').eq('connector_id', connector.id).eq('external_user_id', phone).maybeSingle();
+      if (identityError) throw identityError;
+      if (identity && (identity.account_id !== args.accountId || identity.contact_id !== args.contactId)) {
+        throw new Error('La identidad de WhatsApp pertenece a otro contacto y requiere revisión.');
+      }
+    }
+  }
 
   let conversationId: string;
   let messageId: string | null;
@@ -90,7 +106,21 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
       templateParams: args.bodyParams,
     });
     messageId = result.messageId;
-    conversationId = await attachZernioConversation(db, args, connector.id, existing?.id, result.conversationId);
+    if (args.requireExactParticipant) {
+      if (!result.conversationId) throw new Error('El envío no devolvió una conversación verificable.');
+      await verifyParticipant(result.conversationId, connector.zernio_account_id, phone);
+      conversationId = await attachVerifiedZernioConversation(db, args, connector.id, existing?.id, result.conversationId);
+    } else {
+      conversationId = await attachZernioConversation(db, args, connector.id, existing?.id, result.conversationId);
+    }
+  }
+
+  async function verifyParticipant(conversationId: string, zernioAccountId: string, phone: string) {
+    const participant = await getZernioParticipantProfile(conversationId, zernioAccountId);
+    if (!participant.participantId || !/^\+?[\d ()-]+$/.test(participant.participantId)
+      || sanitizePhoneForMeta(participant.participantId) !== phone) {
+      throw new Error('El destinatario de la conversación no coincide con el número de WhatsApp elegido.');
+    }
   }
 
   const { data: templateRow } = await db
@@ -119,6 +149,35 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
     .eq('account_id', args.accountId);
 
   return { conversationId, messageId };
+}
+
+export async function attachVerifiedZernioConversation(
+  db: SupabaseClient,
+  args: { accountId: string; contactId: string; ownerUserId: string },
+  connectorId: string,
+  existingId: string | undefined,
+  externalSessionId: string,
+): Promise<string> {
+  if (existingId) {
+    const { data, error } = await db.from('conversations').update({ external_session_id: externalSessionId })
+      .eq('id', existingId).eq('account_id', args.accountId).eq('contact_id', args.contactId)
+      .eq('connector_id', connectorId).is('external_session_id', null).select('id').maybeSingle();
+    if (error && !isUniqueViolation(error)) throw error;
+    if (data) return data.id as string;
+  } else {
+    const { data, error } = await db.from('conversations').insert({
+      account_id: args.accountId, user_id: args.ownerUserId, contact_id: args.contactId,
+      channel_type: 'zernio_whatsapp', connector_id: connectorId, external_session_id: externalSessionId,
+    }).select('id').single();
+    if (!error && data) return data.id as string;
+    if (error && !isUniqueViolation(error)) throw error;
+  }
+  const { data, error } = await db.from('conversations').select('id')
+    .eq('account_id', args.accountId).eq('connector_id', connectorId)
+    .eq('contact_id', args.contactId).eq('external_session_id', externalSessionId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('La conversación del destinatario cambió y requiere revisión.');
+  return data.id as string;
 }
 
 export async function attachZernioConversation(

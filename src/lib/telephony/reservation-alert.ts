@@ -89,12 +89,14 @@ export function reservationDateLabel(startsAt: string): string {
 /** Template variables cannot contain line breaks. */
 export function reservationAlertParams(args: {
   restaurant: string; startsAt: string; name: string; partySize: number; zone: string; occasion: string | null; phone: string | null
+  contactUnresolved?: boolean
 }): [string, string, string] {
   const when = reservationDateLabel(args.startsAt)
   const detail = [
     args.name, `${args.partySize} ${args.partySize === 1 ? 'persona' : 'personas'}`, args.zone,
     args.occasion ? `ocasión: ${args.occasion}` : null,
     args.phone ? `tel. +${args.phone.replace(/^\+/, '')}` : 'teléfono no verificado; completar contacto',
+    args.contactUnresolved && args.phone ? 'contacto pendiente de revisión' : null,
   ].filter(Boolean).join(', ')
   return [`Restaurante ${args.restaurant}`, when, oneLine(detail)]
 }

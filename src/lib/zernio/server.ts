@@ -319,6 +319,7 @@ export async function getZernioParticipantProfile(conversationId: string, zernio
   return {
     name: name || null,
     picture: secureUrl(data.participantPicture ?? data.participant_picture),
+    participantId: typeof data.participantId === 'string' ? data.participantId.trim() || null : null,
   }
 }
 

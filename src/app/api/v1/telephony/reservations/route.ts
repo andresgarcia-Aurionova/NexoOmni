@@ -1,8 +1,11 @@
 import { requireApiKey } from '@/lib/auth/api-context'
 import { badRequest, forbidden, ok, toApiErrorResponse } from '@/lib/api/v1/respond'
 import { getAccountEntitlements } from '@/lib/account/entitlements'
-import { findOrCreateContact, resolveAuditUserId } from '@/lib/api/v1/contacts'
+import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { findLiveCallerCall } from '@/lib/telephony/call-context'
+import { findOrCreateReservationContact } from '@/lib/telephony/reservation-contact'
+import { reservationPbxPhone } from '@/lib/telephony/reservation-phone'
+import { parseReservationWhatsAppPreference, ReservationWhatsAppError } from '@/lib/telephony/reservation-whatsapp'
 import { reservationAlertParams, sendReservationAlert } from '@/lib/telephony/reservation-alert'
 import { recordReservationMemory } from '@/lib/telephony/reservation-memory'
 import {
@@ -30,9 +33,10 @@ export async function POST(request: Request) {
         name: cleanText(body.customer_name, 100),
         callId: cleanText(body.call_id, 120),
         aiExtension: cleanText(body.ai_extension, 20),
+        whatsapp: parseReservationWhatsAppPreference(body),
       }
     } catch (error) {
-      if (error instanceof ReservationError) throw badRequest(error.message)
+      if (error instanceof ReservationError || error instanceof ReservationWhatsAppError) throw badRequest(error.message)
       throw error
     }
     if (!parsed.name) throw badRequest('customer_name is required')
@@ -45,30 +49,47 @@ export async function POST(request: Request) {
       })
       : null
 
-    const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId)
-    const contact = call
-      ? await findOrCreateContact(ctx.supabase, ctx.accountId, auditUserId, { phone: call.phone, name: parsed.name })
-      : null
-
     const zone = ZONE_LABELS[parsed.zone]
     const title = `Reservación Restaurante ${parsed.restaurant} · ${parsed.partySize} ${parsed.partySize === 1 ? 'persona' : 'personas'} · ${parsed.name}`
-    const notes = [
-      `Restaurante: ${parsed.restaurant}`, `Zona: ${zone}`, `Personas: ${parsed.partySize}`,
-      `Ocasión: ${parsed.occasion ?? 'Ninguna'}`, `Nombre: ${parsed.name}`,
-      call ? `Teléfono: ${call.phone}` : 'Teléfono: no verificado en la llamada', 'Origen: recepcionista de IA por teléfono',
-    ].join('\n')
-
     // Tool retries must not create the same reservation twice.
-    const { data: existing, error: lookupError } = await ctx.supabase.from('appointments').select('id')
+    const { data: existing, error: lookupError } = await ctx.supabase.from('appointments')
+      .select('id,reservation_whatsapp_preference,reservation_whatsapp_phone')
       .eq('account_id', ctx.accountId).eq('starts_at', parsed.window.startsAt).eq('title', title)
       .neq('status', 'cancelled').maybeSingle()
     if (lookupError) throw lookupError
-    if (existing) return ok({ saved: true, duplicate: true, appointment_id: existing.id })
+    if (existing) {
+      if (parsed.whatsapp && (
+        existing.reservation_whatsapp_preference !== parsed.whatsapp.kind
+        || (parsed.whatsapp.kind !== 'caller' && existing.reservation_whatsapp_phone !== parsed.whatsapp.phone)
+      )) throw badRequest('Reservation already exists with a different WhatsApp preference; review it before retrying')
+      return ok({ saved: true, duplicate: true, appointment_id: existing.id })
+    }
+
+    const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId)
+    const callerPhone = call ? reservationPbxPhone(call.phone) : null
+    const contact = callerPhone
+      ? await findOrCreateReservationContact(ctx.supabase, ctx.accountId, auditUserId, callerPhone, parsed.name)
+        .catch((error) => {
+          console.error('[telephony/reservations] contact resolution failed:', error)
+          return null
+        })
+      : null
+    const notes = [
+      `Restaurante: ${parsed.restaurant}`, `Zona: ${zone}`, `Personas: ${parsed.partySize}`,
+      `Ocasión: ${parsed.occasion ?? 'Ninguna'}`, `Nombre: ${parsed.name}`,
+      call ? `Teléfono: ${call.phone}` : 'Teléfono: no verificado en la llamada',
+      parsed.whatsapp ? `WhatsApp: ${parsed.whatsapp.kind}${parsed.whatsapp.phone ? ` +${parsed.whatsapp.phone}` : ''}` : 'WhatsApp: pendiente de confirmar',
+      contact ? null : 'Contacto: pendiente de revisión', 'Origen: recepcionista de IA por teléfono',
+    ].filter(Boolean).join('\n')
 
     const { data: created, error } = await ctx.supabase.from('appointments').insert({
       account_id: ctx.accountId, created_by: auditUserId, assigned_agent_id: auditUserId, title,
       starts_at: parsed.window.startsAt, ends_at: parsed.window.endsAt, contact_id: contact?.id ?? null,
       status: 'confirmed', notes, timezone: 'America/Mexico_City', reservation_restaurant: parsed.restaurant,
+      reservation_whatsapp_preference: parsed.whatsapp?.kind ?? 'unavailable',
+      reservation_whatsapp_phone: parsed.whatsapp?.kind === 'caller' ? callerPhone : parsed.whatsapp?.phone ?? null,
+      reservation_call_id: callerPhone ? call?.callId ?? null : null,
+      reservation_call_phone: callerPhone,
     }).select('id').single()
     if (error || !created) throw error ?? new Error('Reservation insert failed')
 
@@ -87,7 +108,7 @@ export async function POST(request: Request) {
     }
     const alertedCount = await sendReservationAlert(ctx.supabase, ctx.accountId, reservationAlertParams({
       restaurant: parsed.restaurant, startsAt: parsed.window.startsAt, name: parsed.name, partySize: parsed.partySize,
-      zone, occasion: parsed.occasion, phone: call?.phone ?? null,
+      zone, occasion: parsed.occasion, phone: callerPhone, contactUnresolved: !contact,
     }))
     return ok({ saved: true, duplicate: false, appointment_id: created.id, notified: alertedCount > 0, notified_count: alertedCount })
   } catch (error) { return toApiErrorResponse(error) }

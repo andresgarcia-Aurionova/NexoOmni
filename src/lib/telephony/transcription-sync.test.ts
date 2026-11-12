@@ -3,13 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 import { processCallTranscriptions } from './transcription-sync'
 
 const mocks = vi.hoisted(() => ({
-  fetch: vi.fn(), detail: vi.fn(), analyze: vi.fn(), memory: vi.fn(), contact: vi.fn(),
+  fetch: vi.fn(), detail: vi.fn(), analyze: vi.fn(), memory: vi.fn(), contact: vi.fn(), reservation: vi.fn(),
 }))
 vi.mock('./yeastar-ai', () => ({ fetchAiResult: mocks.fetch, fetchCdrDetail: mocks.detail }))
 vi.mock('./call-summary', () => ({ analyzeCall: mocks.analyze }))
 vi.mock('@/lib/ai/memory', () => ({ applyContactMemory: mocks.memory }))
 vi.mock('@/lib/api/v1/contacts', () => ({ resolveAuditUserId: async () => 'owner-1' }))
 vi.mock('@/lib/whatsapp/resolve-conversation', () => ({ findOrCreateContactByPhone: mocks.contact }))
+vi.mock('./reservation-call-contact', () => ({ reservationCallContact: mocks.reservation }))
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -18,15 +19,16 @@ beforeEach(() => {
   mocks.analyze.mockResolvedValue({ summary: 'Seguimiento solicitado', key_points: [], action_items: [], memory: {} })
   mocks.memory.mockResolvedValue(undefined)
   mocks.contact.mockResolvedValue({ contactId: 'contact-1' })
+  mocks.reservation.mockResolvedValue({ status: 'none' })
 })
 
-function database(transcript: string | null, allowClaim = true) {
+function database(transcript: string | null, allowClaim = true, eventCallId?: string | number) {
   const writes: Record<string, unknown>[] = []
   const row = {
     id: 'row-1', account_id: 'account-1', call_id: 'call-1', contact_id: null,
     customer_phone: '7000', transcript, summary: null, created_at: new Date().toISOString(),
     started_at: '2026-10-01T16:00:00.000Z',
-    yeastar_payload: { event: { type: 'inbound', call_from: '+525512345678', call_to: '7000', call_note_id: 'leg-1' } },
+    yeastar_payload: { event: { type: 'inbound', call_from: '+525512345678', call_to: '7000', call_note_id: 'leg-1', call_id: eventCallId } },
   }
   const db = createClient('https://db.example.test', 'test-key', {
     global: { fetch: async (input, init) => {
@@ -68,6 +70,31 @@ describe('call transcription and Nexo Memory pipeline', () => {
     expect(writes.at(-1)).toMatchObject({ analysis_status: 'failed', sync_claimed_at: null })
     expect(writes.at(-1)?.next_sync_at).toBeTruthy()
     expect(writes.some((patch) => patch.transcript === null)).toBe(false)
+  })
+
+  it('uses the verified reservation contact instead of the fuzzy phone resolver', async () => {
+    mocks.reservation.mockResolvedValue({ status: 'found', id: 'reservation-caller' })
+    const { db, writes } = database('Transcript already saved', true, 'pbx-call')
+    expect(await processCallTranscriptions(db)).toMatchObject({ completed: 1 })
+    expect(mocks.reservation).toHaveBeenCalledWith(db, 'account-1', 'pbx-call', '+525512345678')
+    expect(mocks.contact).not.toHaveBeenCalled()
+    expect(writes).toContainEqual({ contact_id: 'reservation-caller' })
+    expect(mocks.memory).toHaveBeenCalledWith(db, expect.objectContaining({ contactId: 'reservation-caller' }), expect.anything(), expect.anything())
+  })
+
+  it('passes a numeric call ID in the same form as the event webhook', async () => {
+    const { db } = database('Transcript already saved', true, 12345)
+    await processCallTranscriptions(db)
+    expect(mocks.reservation).toHaveBeenCalledWith(db, 'account-1', '12345', '+525512345678')
+  })
+
+  it('does not apply memory for an ambiguous reservation contact', async () => {
+    mocks.reservation.mockResolvedValue({ status: 'ambiguous' })
+    const { db, writes } = database('Transcript already saved')
+    expect(await processCallTranscriptions(db)).toMatchObject({ completed: 1 })
+    expect(mocks.contact).not.toHaveBeenCalled()
+    expect(mocks.memory).not.toHaveBeenCalled()
+    expect(writes.at(-1)).toMatchObject({ memory_applied_at: null, analysis_error: expect.stringContaining('con seguridad') })
   })
 
   it('does not pretend memory was updated when account AI is not configured', async () => {

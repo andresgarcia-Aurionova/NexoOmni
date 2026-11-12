@@ -20,6 +20,9 @@ import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny } from '@/lib/whatsapp/broadcast-reply-flag'
 import { handleAgendaProConfirmationReply } from '@/lib/agendapro/confirmation'
 import { handleReservationConfirmationReply } from '@/lib/telephony/reservation-confirmation-worker'
+import { reservationReplySenderPhone } from '@/lib/telephony/reservation-reply-sender'
+import { findExactZernioWhatsAppContact } from '@/lib/zernio/whatsapp-contact'
+import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversation'
 import type { ChannelType } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -167,9 +170,13 @@ async function resolveContact(
   const fallback = safeZernioContactName(channel, externalUserId)
   const placeholderPhone = `zernio:${connector.provider}:${externalUserId}`
 
-  const phoneMatch = phone ? await findExistingContact(db, connector.account_id, phone) : null
+  const phoneMatch = phone
+    ? connector.provider === 'zernio_whatsapp'
+      ? await findExactZernioWhatsAppContact(db, connector.account_id, phone)
+      : await findExistingContact(db, connector.account_id, phone)
+    : null
   let emailMatch: { id: string; name: string | null; email: string | null; phone: string | null; avatar_url: string | null } | null = null
-  if (!phoneMatch && email) {
+  if (!phoneMatch && email && connector.provider !== 'zernio_whatsapp') {
     const normalizedEmail = email.trim().toLowerCase()
     const { data, error } = await db
       .from('contacts')
@@ -200,14 +207,21 @@ async function resolveContact(
       if (error && !isUniqueViolation(error)) console.error('[zernio] could not enrich existing contact:', error.message)
     }
   } else {
+    const storedPhone = connector.provider === 'zernio_whatsapp' && phone && !/^\+?[\d ()-]+$/.test(phone) ? placeholderPhone : phone || placeholderPhone
     const { data: created, error } = await db
       .from('contacts')
-      .insert({ account_id: connector.account_id, user_id: auditUserId, phone: phone || placeholderPhone, email: email || null, name: name || fallback, avatar_url: avatarUrl || null })
+      .insert({ account_id: connector.account_id, user_id: auditUserId, phone: storedPhone, email: email || null, name: name || fallback, avatar_url: avatarUrl || null })
       .select('id')
       .single()
-    if (error || !created) throw error ?? new Error('No se pudo crear el contacto del canal conectado.')
-    contactId = created.id
-    contactCreated = true
+    if (error && isUniqueViolation(error) && connector.provider === 'zernio_whatsapp' && phone) {
+      const raced = await findExactZernioWhatsAppContact(db, connector.account_id, phone)
+      if (!raced) throw error
+      contactId = raced.id
+    } else {
+      if (error || !created) throw error ?? new Error('No se pudo crear el contacto del canal conectado.')
+      contactId = created.id
+      contactCreated = true
+    }
   }
 
   const { error: identityError } = await db.from('omnichannel_contact_identities').insert({
@@ -239,53 +253,6 @@ async function resolveContact(
     }
   }
   return { contactId, created: contactCreated }
-}
-
-type ConversationRow = { id: string; unread_count: number | null; status: string | null }
-
-/**
- * Find-or-create the NexoOmni conversation for a Zernio thread. An inbound
- * message and the Page's automatic reply (`message.sent`) for a brand-new
- * conversation are delivered at practically the same instant; both used to
- * insert and the loser hit the (account, connector, external_session_id)
- * unique index — marking that event failed and silently dropping it (the
- * customer's own message, in the worst case, leaving the thread with no
- * inbound message and a falsely "expired" 24h window). On that violation
- * we re-read the winner's row instead.
- */
-async function findOrCreateZernioConversation(
-  db: ReturnType<typeof admin>,
-  connector: Connector,
-  contactId: string,
-  auditUserId: string,
-  externalConversationId: string,
-): Promise<{ row: ConversationRow; created: boolean }> {
-  const find = async () => {
-    const { data, error } = await db
-      .from('conversations')
-      .select('id, unread_count, status')
-      .eq('account_id', connector.account_id)
-      .eq('connector_id', connector.id)
-      .eq('external_session_id', externalConversationId)
-      .limit(1)
-    if (error) throw error
-    return (data?.[0] as ConversationRow | undefined) ?? null
-  }
-
-  const existing = await find()
-  if (existing) return { row: existing, created: false }
-
-  const { data, error } = await db
-    .from('conversations')
-    .insert({ account_id: connector.account_id, user_id: auditUserId, contact_id: contactId, channel_type: connector.provider, connector_id: connector.id, external_session_id: externalConversationId, channel_source_label: connector.display_name, queue_id: connector.queue_id })
-    .select('id, unread_count, status')
-    .single()
-  if (!error && data) return { row: data as ConversationRow, created: true }
-  if (isUniqueViolation(error)) {
-    const raced = await find()
-    if (raced) return { row: raced, created: false }
-  }
-  throw error ?? new Error('No se pudo crear la conversación del canal conectado.')
 }
 
 async function registerReceipt(
@@ -756,7 +723,8 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
             participantPicture = profile?.picture ?? undefined
           }
           const outgoingContactName = participantName || safeZernioContactName(channel, externalUserId)
-          const outgoingContactPhone = channel === 'whatsapp' ? externalUserId : ''
+          const outgoingContactPhone = channel === 'whatsapp' && !text(conversation.businessScopedUserId, participant.businessScopedUserId)
+            ? externalUserId : ''
           const { contactId: outgoingContactId } = await resolveContact(
             db, typed, externalUserId, auditUserId, outgoingContactName, undefined, outgoingContactPhone || undefined, participantPicture,
           )
@@ -809,7 +777,8 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       // WhatsApp has no separate "phone" field on the sender/conversation —
       // the platform's own contact identity (senderId/participantId) IS the
       // E.164 phone number, so that's the phone-dedupe key on this channel.
-      const contactPhone = text(sender.phone, participant.phone, incoming.phone, comment.author_phone, comment.authorPhone, channel === 'whatsapp' ? externalUserId : '')
+      const contactPhone = text(sender.phoneNumber, sender.phone, participant.phone, incoming.phone, comment.author_phone, comment.authorPhone,
+        channel === 'whatsapp' && !text(sender.businessScopedUserId, conversation.businessScopedUserId, participant.businessScopedUserId) ? externalUserId : '')
       const webhookAvatarUrl = safeHttpsUrl(
         sender.avatarUrl ?? sender.avatar_url ?? sender.profilePicture ?? sender.profile_picture ?? sender.profileImage ?? sender.profile_image ?? sender.profilePhoto ?? sender.profile_photo ?? sender.picture ?? sender.pictureUrl ?? sender.picture_url ?? sender.imageUrl ?? sender.image_url ?? sender.photoUrl ?? sender.photo_url ??
         participant.avatarUrl ?? participant.avatar_url ?? participant.profilePicture ?? participant.profile_picture ?? participant.profileImage ?? participant.profile_image ?? participant.profilePhoto ?? participant.profile_photo ?? participant.picture ?? participant.pictureUrl ?? participant.picture_url ?? participant.imageUrl ?? participant.image_url ?? participant.photoUrl ?? participant.photo_url,
@@ -988,7 +957,9 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         // through this number, so the client's reply arrives here.
         if (contentType === 'text' && content.trim()) {
           try {
-            const reservationReply = await handleReservationConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content)
+            const inboundSender = record(incoming.sender ?? event.sender)
+            const replyPhone = reservationReplySenderPhone(inboundSender.phoneNumber, inboundSender.phone)
+            const reservationReply = await handleReservationConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content, replyPhone)
             if (reservationReply === 'none') await handleAgendaProConfirmationReply(db, typed.account_id, contactId, content)
           } catch (error) {
             console.error('[reservations] could not process a confirmation reply (zernio):', error)

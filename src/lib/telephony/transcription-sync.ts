@@ -6,6 +6,7 @@ import { applyContactMemory } from '@/lib/ai/memory'
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { findOrCreateContactByPhone } from '@/lib/whatsapp/resolve-conversation'
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils'
+import { reservationCallContact } from './reservation-call-contact'
 
 type SyncRow = {
   id: string; account_id: string; call_id: string; contact_id: string | null
@@ -97,8 +98,19 @@ export async function processCallTranscriptions(db: SupabaseClient) {
           .eq('id', row.id).eq('account_id', row.account_id)
         if (agentWriteError) throw agentWriteError
       }
-      const phone = sanitizePhoneForMeta(callCustomerPhone(event) ?? row.customer_phone ?? '')
-      if (!contactId && isValidE164(phone)) {
+      const callerPhone = callCustomerPhone(event) ?? row.customer_phone
+      const phone = sanitizePhoneForMeta(callerPhone ?? '')
+      const reservationContact = await reservationCallContact(
+        db, row.account_id,
+        typeof event.call_id === 'string' || typeof event.call_id === 'number' ? String(event.call_id) : null,
+        callerPhone,
+      )
+      if (reservationContact.status !== 'none') {
+        contactId = reservationContact.status === 'found' ? reservationContact.id : null
+        const { error: linkError } = await db.from('yeastar_call_transcriptions')
+          .update({ contact_id: contactId }).eq('id', row.id).eq('account_id', row.account_id)
+        if (linkError) throw linkError
+      } else if (!contactId && isValidE164(phone)) {
         const ownerId = await resolveAuditUserId(db, row.account_id)
         contactId = (await findOrCreateContactByPhone(db, row.account_id, phone, null, ownerId)).contactId
         const { error: linkError } = await db.from('yeastar_call_transcriptions')
@@ -131,7 +143,9 @@ export async function processCallTranscriptions(db: SupabaseClient) {
         }, analysis, analysis.memory)
       }
       await update({
-        analysis_status: 'completed', analysis_error: contactId ? null : 'No hay un teléfono externo válido para vincular esta llamada a Nexo Memory.',
+        analysis_status: 'completed', analysis_error: contactId ? null : reservationContact.status === 'ambiguous'
+          ? 'No se pudo vincular la llamada de la reservación con seguridad; revisa el contacto.'
+          : 'No hay un teléfono externo válido para vincular esta llamada a Nexo Memory.',
         memory_applied_at: contactId ? new Date().toISOString() : null,
       })
       counts.completed++
