@@ -187,12 +187,10 @@ export async function attachZernioConversation(
   existingId: string | undefined,
   externalSessionId: string | null,
 ): Promise<string> {
+  if (externalSessionId) {
+    return attachVerifiedZernioConversation(db, args, connectorId, existingId, externalSessionId);
+  }
   if (existingId) {
-    if (externalSessionId) {
-      const { error } = await db.from('conversations').update({ external_session_id: externalSessionId })
-        .eq('id', existingId).eq('account_id', args.accountId).eq('connector_id', connectorId);
-      if (error) throw error;
-    }
     return existingId;
   }
   const { data: created, error } = await db.from('conversations').insert({
@@ -207,13 +205,6 @@ export async function attachZernioConversation(
   if (isUniqueViolation(error)) {
     // The webhook's echo of this send (or an inbound from the client) got
     // there first — reuse that row.
-    const byThread = externalSessionId
-      ? await db.from('conversations').select('id')
-          .eq('account_id', args.accountId).eq('connector_id', connectorId).eq('external_session_id', externalSessionId)
-          .limit(1)
-      : null;
-    if (byThread?.error) throw byThread.error;
-    if (byThread?.data?.[0]) return byThread.data[0].id as string;
     const { data: byContact, error: contactError } = await db.from('conversations').select('id')
       .eq('account_id', args.accountId).eq('contact_id', args.contactId).eq('connector_id', connectorId).eq('channel_type', 'zernio_whatsapp')
       .limit(1);

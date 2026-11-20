@@ -28,6 +28,11 @@ Un administrador diseña y publica los flujos.
 4. Pruébalo antes de publicar.
 5. Publica — solo entonces empieza a correr con clientes reales.
 
+Si una misma persona escribe por varias líneas conectadas, cada conversación
+mantiene su propio flujo. Una respuesta o intervención del equipo en una línea
+no detiene el flujo de otra. Los datos guardados en la ficha de contacto, como
+etiquetas y notas, siguen siendo compartidos.
+
 ### Guardar una respuesta en las notas del contacto
 
 En un paso **Recopilar datos**, activa **Guardar la respuesta en Notas del

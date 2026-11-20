@@ -2034,6 +2034,8 @@
     }
   },
   "ReservationConfirmations": {
+    "agendaReviewTitle": "AgendaPro 응답 검토 필요",
+    "agendaReviewBody": "대화를 검토하고 AgendaPro 예약을 수동으로 확인하세요. 응답을 안전하게 연결할 수 없습니다.",
     "title": "예약 확인",
     "reviewTitle": "예약 확인 검토 필요",
     "ambiguousTitle": "예약 응답 검토 필요",

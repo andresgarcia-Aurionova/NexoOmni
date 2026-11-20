@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import {
   sendMessageToConversation,
@@ -32,6 +32,17 @@ async function expectSendError(
     }
   );
 }
+
+it('does not send a connected-channel conversation through native WhatsApp', async () => {
+  const fetch = vi.fn(async () => Response.json({
+    id: 'cv-1', channel_type: 'zernio_whatsapp', contact: { phone: '525512345678' },
+  }));
+  const db = createClient('https://db.example.test', 'key', { global: { fetch } });
+  await expect(sendMessageToConversation(db, 'acct-1', {
+    conversationId: 'cv-1', messageType: 'text', contentText: 'hello',
+  })).rejects.toMatchObject({ status: 400 });
+  expect(fetch).toHaveBeenCalledOnce();
+});
 
 describe('sendMessageToConversation — param validation (pre-DB)', () => {
   const base = { conversationId: 'cv-1' };

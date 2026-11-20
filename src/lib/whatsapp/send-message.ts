@@ -8,7 +8,7 @@
 //   2. loads the conversation + contact + WhatsApp config,
 //   3. sends to Meta (with phone-variant retry + contact auto-fix),
 //   4. persists the message + updates the conversation,
-//   5. pauses any active Flow run for the contact (agent stepped in).
+//   5. pauses the active Flow run for the conversation (agent stepped in).
 //
 // It is transport-agnostic: it takes a `SupabaseClient` and an
 // `accountId` and throws `SendMessageError` on failure. The callers
@@ -41,6 +41,7 @@ import {
   META_MESSAGING_WINDOW_CLOSED_MESSAGE,
 } from '@/lib/omnichannel/messaging-window';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { pauseFlowOnAgentReply } from '@/lib/flows/pause-on-agent-reply';
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -232,6 +233,10 @@ export async function sendMessageToConversation(
 
   if (convError || !conversation) {
     throw new SendMessageError('not_found', 'Conversation not found', 404);
+  }
+
+  if (conversation.channel_type !== 'whatsapp') {
+    throw new SendMessageError('bad_request', 'This conversation does not use native WhatsApp.', 400);
   }
 
   if (
@@ -580,27 +585,10 @@ export async function sendMessageToConversation(
     console.error('[send-message] conversation preview update failed:', error);
   }
 
-  // Pause any active Flow run for this contact — the agent stepping in
-  // is the strongest "yield, human is here" signal. Best-effort.
   try {
-    const { error: pauseErr } = await supabaseAdmin()
-      .from('flow_runs')
-      .update({
-        status: 'paused_by_agent',
-        ended_at: new Date().toISOString(),
-        end_reason: 'agent_replied',
-      })
-      .eq('account_id', accountId)
-      .eq('contact_id', contact.id)
-      .eq('status', 'active');
-    if (pauseErr) {
-      console.error('[flows] pause-on-agent-send failed:', pauseErr.message);
-    }
-  } catch (err) {
-    console.error(
-      '[flows] pause-on-agent-send threw:',
-      err instanceof Error ? err.message : err
-    );
+    await pauseFlowOnAgentReply(supabaseAdmin(), accountId, conversationId);
+  } catch (error) {
+    console.error('[flows] pause-on-agent-send client failed:', error);
   }
 
   return { messageId: messageRecord.id, whatsappMessageId: waMessageId };

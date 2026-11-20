@@ -960,7 +960,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
             const inboundSender = record(incoming.sender ?? event.sender)
             const replyPhone = reservationReplySenderPhone(inboundSender.phoneNumber, inboundSender.phone)
             const reservationReply = await handleReservationConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content, replyPhone)
-            if (reservationReply === 'none') await handleAgendaProConfirmationReply(db, typed.account_id, contactId, content)
+            if (reservationReply === 'none') await handleAgendaProConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content)
           } catch (error) {
             console.error('[reservations] could not process a confirmation reply (zernio):', error)
           }

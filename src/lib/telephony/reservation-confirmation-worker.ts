@@ -307,7 +307,8 @@ export async function handleReservationConfirmationReply(
   }
   if (!jobs.length) return 'none'
   const { data: activeFlows, error: flowError } = await db.from('flow_runs')
-    .select('id').eq('account_id', accountId).eq('contact_id', contactId).eq('status', 'active').limit(1)
+    .select('id').eq('account_id', accountId).eq('contact_id', contactId)
+    .eq('conversation_id', conversationId).eq('status', 'active').limit(1)
   if (flowError) throw flowError
   if (activeFlows?.length) {
     for (const pending of jobs as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)

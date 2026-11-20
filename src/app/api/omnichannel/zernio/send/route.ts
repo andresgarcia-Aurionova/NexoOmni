@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
+import { pauseFlowOnAgentReply } from '@/lib/flows/pause-on-agent-reply'
 import {
   getMetaCustomerServiceWindow,
   isMetaDirectMessageChannel,
@@ -172,6 +173,7 @@ export async function POST(request: Request) {
           created_at: now,
         },
       })
+      await pauseFlowOnAgentReply(db, accountId, targetConversationId)
       const { error: updateError } = await db.from('conversations').update({
         last_message_text: `Plantilla: ${templateName}`, last_message_at: now, updated_at: now,
       }).eq('id', targetConversationId).eq('account_id', accountId)
@@ -278,6 +280,7 @@ export async function POST(request: Request) {
         created_at: now,
       },
     })
+    await pauseFlowOnAgentReply(db, accountId, conversation.id)
     const { error: updateError } = await db.from('conversations').update({
       last_message_text: text, last_message_at: now, updated_at: now,
     }).eq('id', conversation.id).eq('account_id', accountId)

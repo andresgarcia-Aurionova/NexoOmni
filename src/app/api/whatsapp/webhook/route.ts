@@ -680,7 +680,7 @@ async function processMessage(
   if (message.type === 'text' && !interactiveReplyId && contentText?.trim()) {
     try {
       const reservationReply = await handleReservationConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, conversation.id, contentText)
-      if (reservationReply === 'none') await handleAgendaProConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, contentText)
+      if (reservationReply === 'none') await handleAgendaProConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, conversation.id, contentText)
     } catch (error) {
       console.error('[reservations] could not process a confirmation reply:', error)
     }

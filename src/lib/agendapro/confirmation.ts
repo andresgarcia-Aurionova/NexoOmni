@@ -8,6 +8,9 @@ import { isUniqueViolation } from '@/lib/contacts/dedupe'
 import { isAgendaProCancelled } from '@/lib/agendapro/server'
 import { listZernioWhatsAppConnectors, sendZernioTemplateToContact } from '@/lib/zernio/send-template-to-contact'
 import { sendZernioTemplateMessage } from '@/lib/zernio/server'
+import esMessages from '../../../messages/es.json'
+import enMessages from '../../../messages/en.json'
+import koMessages from '../../../messages/ko.json'
 
 type Db = ReturnType<typeof aiAdmin>
 
@@ -37,6 +40,34 @@ type BookingRow = {
   start_time: string | null
   status_id?: number | null
   status_name?: string | null
+}
+
+type ReminderBookingRow = BookingRow & { confirmation_revision: number }
+
+async function notifyReview(db: Db, accountId: string, bookingId: string) {
+  const locale = process.env.NEXT_PUBLIC_APP_LOCALE
+  const copy = locale === 'en' ? enMessages.ReservationConfirmations
+    : locale === 'ko' ? koMessages.ReservationConfirmations : esMessages.ReservationConfirmations
+  const { data, error } = await db.rpc('notify_agendapro_confirmation_review', {
+    p_account_id: accountId, p_booking_id: bookingId,
+    p_title: copy.agendaReviewTitle, p_body: copy.agendaReviewBody,
+  })
+  if (error) throw error
+  if (data !== true) console.error('[agendapro] review notice has no active administrator:', bookingId)
+}
+
+async function retryReviewNotifications(db: Db) {
+  const { data, error } = await db.from('agendapro_bookings')
+    .select('id, account_id').eq('confirmation_review_required', true)
+    .is('confirmation_review_notified_at', null).limit(20)
+  if (error) throw error
+  for (const booking of data ?? []) {
+    try {
+      await notifyReview(db, booking.account_id, booking.id)
+    } catch (cause) {
+      console.error('[agendapro] review notification failed:', { bookingId: booking.id, cause })
+    }
+  }
 }
 
 function normalizeReply(text: string): string {
@@ -109,9 +140,10 @@ async function findOrCreateWhatsAppConversation(db: Db, accountId: string, conta
  *  booking whose due_at has arrived. Mirrors processAppointmentReminders
  *  in the ai-analysis-worker route (claim-then-process, small batch). */
 export async function processAgendaProConfirmationReminders(db: Db) {
+  await retryReviewNotifications(db)
   const { data, error } = await db
     .from('agendapro_bookings')
-    .select('id, account_id, contact_id, service_name, location_name, start_time, status_id, status_name')
+    .select('id, account_id, contact_id, service_name, location_name, start_time, status_id, status_name, confirmation_revision')
     .eq('confirmation_reminder_status', 'queued')
     .lte('confirmation_reminder_due_at', new Date().toISOString())
     .order('confirmation_reminder_due_at')
@@ -122,18 +154,28 @@ export async function processAgendaProConfirmationReminders(db: Db) {
   }
 
   let sent = 0, skipped = 0, failed = 0
-  for (const booking of (data ?? []) as BookingRow[]) {
-    const { data: claimed } = await db
+  for (const booking of (data ?? []) as ReminderBookingRow[]) {
+    const { data: claimed, error: claimError } = await db
       .from('agendapro_bookings')
       .update({ confirmation_reminder_status: 'sending' })
       .eq('id', booking.id)
+      .eq('account_id', booking.account_id)
+      .eq('confirmation_revision', booking.confirmation_revision)
       .eq('confirmation_reminder_status', 'queued')
       .select('id')
       .maybeSingle()
+    if (claimError) {
+      console.error('[agendapro] could not claim confirmation reminder:', { bookingId: booking.id, error: claimError })
+      failed++
+      continue
+    }
     if (!claimed) continue
 
     const skip = async (reason: string) => {
-      await db.from('agendapro_bookings').update({ confirmation_reminder_status: 'skipped' }).eq('id', booking.id)
+      const { error: skipError } = await db.from('agendapro_bookings').update({ confirmation_reminder_status: 'skipped' })
+        .eq('id', booking.id).eq('account_id', booking.account_id)
+        .eq('confirmation_revision', booking.confirmation_revision).eq('confirmation_reminder_status', 'sending')
+      if (skipError) throw skipError
       console.warn('[agendapro] confirmation reminder skipped:', { bookingId: booking.id, reason })
       skipped++
     }
@@ -177,6 +219,7 @@ export async function processAgendaProConfirmationReminders(db: Db) {
       // before this, a Zernio-only account (no whatsapp_config) failed every
       // reminder because the send always went through the native engine.
       const { data: nativeConfig } = await db.from('whatsapp_config').select('id').eq('account_id', booking.account_id).maybeSingle()
+      let reminderConversationId: string
       if (nativeConfig) {
         const conversationId = await findOrCreateWhatsAppConversation(db, booking.account_id, contact.id, ownerUserId)
         await engineSendTemplate({
@@ -188,13 +231,14 @@ export async function processAgendaProConfirmationReminders(db: Db) {
           language: settings.confirmation_template_language,
           params,
         })
+        reminderConversationId = conversationId
       } else {
         const connectors = await listZernioWhatsAppConnectors(db, booking.account_id)
         if (connectors.length === 0) {
           await skip('la cuenta no tiene WhatsApp conectado (ni directo ni con la Conexión NexoOmni)')
           continue
         }
-        await sendZernioTemplateToContact(db, {
+        const sentMessage = await sendZernioTemplateToContact(db, {
           accountId: booking.account_id,
           contactId: contact.id,
           phone: contact.phone,
@@ -204,15 +248,24 @@ export async function processAgendaProConfirmationReminders(db: Db) {
           bodyParams: params,
           connectors,
         })
+        reminderConversationId = sentMessage.conversationId
       }
-      await db.from('agendapro_bookings').update({
+      const { data: markedSent, error: markError } = await db.from('agendapro_bookings').update({
         confirmation_reminder_status: 'sent',
         confirmation_reminder_sent_at: new Date().toISOString(),
-      }).eq('id', booking.id)
+        confirmation_reminder_conversation_id: reminderConversationId,
+      }).eq('id', booking.id).eq('account_id', booking.account_id)
+        .eq('confirmation_revision', booking.confirmation_revision).eq('confirmation_reminder_status', 'sending')
+        .select('id').maybeSingle()
+      if (markError) throw markError
+      if (!markedSent) throw new Error('La cita cambió mientras se enviaba el recordatorio; requiere revisión.')
       sent++
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 500) : 'No se pudo enviar el recordatorio.'
-      await db.from('agendapro_bookings').update({ confirmation_reminder_status: 'failed' }).eq('id', booking.id)
+      const { error: failError } = await db.from('agendapro_bookings').update({ confirmation_reminder_status: 'failed' })
+        .eq('id', booking.id).eq('account_id', booking.account_id)
+        .eq('confirmation_revision', booking.confirmation_revision).eq('confirmation_reminder_status', 'sending')
+      if (failError) console.error('[agendapro] could not mark confirmation reminder failed:', failError)
       console.error('[agendapro] could not send confirmation reminder:', { bookingId: booking.id, error: message })
       failed++
     }
@@ -311,6 +364,7 @@ export async function escalateUnconfirmedAgendaProBookings(db: Db) {
     .select('id, account_id, contact_id, service_name, location_name, start_time, status_id, status_name')
     .eq('confirmation_status', 'pending')
     .eq('confirmation_reminder_status', 'sent')
+    .eq('confirmation_review_required', false)
     .is('reception_alert_sent_at', null)
     .lte('confirmation_reminder_sent_at', cutoff)
     .gt('start_time', new Date().toISOString())
@@ -325,6 +379,7 @@ export async function escalateUnconfirmedAgendaProBookings(db: Db) {
       .from('agendapro_bookings')
       .update({ reception_alert_sent_at: new Date().toISOString() })
       .eq('id', booking.id)
+      .eq('confirmation_review_required', false)
       .is('reception_alert_sent_at', null)
       .select('id')
       .maybeSingle()
@@ -348,35 +403,28 @@ export async function escalateUnconfirmedAgendaProBookings(db: Db) {
  *  "NO" escalates to reception right away instead of waiting for the
  *  6h sweep. No-op (not an error) when nothing matches — most inbound
  *  text has nothing to do with a pending confirmation. */
-export async function handleAgendaProConfirmationReply(db: Db, accountId: string, contactId: string, text: string) {
+export async function handleAgendaProConfirmationReply(db: Db, accountId: string, contactId: string, conversationId: string, text: string) {
   const normalized = normalizeReply(text)
   if (!normalized) return
   const isYes = YES_WORDS.has(normalized)
   const isNo = !isYes && NO_WORDS.has(normalized)
   if (!isYes && !isNo) return
 
-  const { data: booking } = await db
-    .from('agendapro_bookings')
+  const { data: result, error } = await db.rpc('handle_agendapro_confirmation_reply', {
+    p_account_id: accountId, p_contact_id: contactId,
+    p_conversation_id: conversationId, p_response: isYes ? 'yes' : 'no',
+  })
+  if (error) throw error
+  if (result?.outcome === 'review') {
+    for (const id of result.booking_ids as string[]) await notifyReview(db, accountId, id)
+    return
+  }
+  if (result?.outcome !== 'handled' || !isNo) return
+  const { data: booking, error: bookingError } = await db.from('agendapro_bookings')
     .select('id, account_id, contact_id, service_name, location_name, start_time, reception_alert_sent_at')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .eq('confirmation_status', 'pending')
-    .eq('confirmation_reminder_status', 'sent')
-    .gt('start_time', new Date().toISOString())
-    .order('start_time', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (!booking) return
-
-  // Conditioned on confirmation_status still being 'pending' — a claim
-  // guard against the 6h escalation sweep racing this same row.
-  const { data: claimed } = await db.from('agendapro_bookings').update({
-    confirmation_status: isYes ? 'confirmed' : 'declined',
-    confirmation_responded_at: new Date().toISOString(),
-  }).eq('id', booking.id).eq('confirmation_status', 'pending').select('id').maybeSingle()
-  if (!claimed) return
-
-  if (isNo && !booking.reception_alert_sent_at) {
+    .eq('id', result.booking_id).eq('account_id', accountId).maybeSingle()
+  if (bookingError) throw bookingError
+  if (booking && !booking.reception_alert_sent_at) {
     await notifyReceptionUnconfirmed(db, booking as BookingRow, 'declined').catch((cause) => {
       console.error('[agendapro] could not notify reception about a declined booking:', cause)
     })

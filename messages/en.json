@@ -2034,6 +2034,8 @@
     }
   },
   "ReservationConfirmations": {
+    "agendaReviewTitle": "AgendaPro reply needs review",
+    "agendaReviewBody": "Review the conversation and confirm the AgendaPro appointment manually. The reply could not be matched reliably.",
     "title": "Reservation confirmation",
     "reviewTitle": "Reservation confirmation needs review",
     "ambiguousTitle": "Reservation response needs review",

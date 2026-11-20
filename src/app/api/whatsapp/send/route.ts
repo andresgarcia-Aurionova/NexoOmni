@@ -204,13 +204,18 @@ async function findOrCreateConversation(
   userId: string,
   contactId: string,
 ): Promise<string | null> {
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('conversations')
     .select('id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+    .eq('channel_type', 'whatsapp')
     .maybeSingle()
 
+  if (lookupError) {
+    console.error('Error finding native WhatsApp conversation:', lookupError.message)
+    return null
+  }
   if (existing) return existing.id
 
   const { data: created, error } = await supabase
@@ -219,6 +224,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: userId,
       contact_id: contactId,
+      channel_type: 'whatsapp',
     })
     .select('id')
     .single()

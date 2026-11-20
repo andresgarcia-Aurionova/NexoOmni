@@ -178,7 +178,7 @@ export async function runAssistantTool(args: {
       if (action.action_type === 'send_whatsapp_text') {
         const { data: conversation, error } = await db.from('conversations')
           .select('id, channel_type').eq('account_id', accountId)
-          .eq('contact_id', action.contact_id).maybeSingle()
+          .eq('contact_id', action.contact_id).eq('channel_type', 'whatsapp').maybeSingle()
         if (error) throwQueryError('assistant action conversation', error)
         if (!conversation || conversation.channel_type !== 'whatsapp') {
           throw new Error('A native WhatsApp conversation for this contact is required.')
