@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAvailableSlots } from '@/lib/appointments/availability'
-import { bookFlowAppointment, loadOfferedSlots } from './appointments'
+import { findConflict, getAvailableSlots } from '@/lib/appointments/availability'
+import { bookFlowAppointment, loadOfferedSlots, matchSecureOffer } from './appointments'
 
 vi.mock('@/lib/appointments/availability', () => ({
   findConflict: vi.fn().mockResolvedValue(false),
@@ -103,6 +103,8 @@ describe('requested date for flow appointments', () => {
 })
 
 describe('flow appointment booking', () => {
+  afterEach(() => vi.clearAllMocks())
+
   it('does not book a slot that has already passed', async () => {
     const fetch = vi.fn()
     const db = createClient('https://db.example.test', 'key', { global: { fetch } })
@@ -111,6 +113,7 @@ describe('flow appointment booking', () => {
       cfg: { slot_var_key: 'slot', title: 'Reservación', next_node_key: 'next' },
       vars: { slot: '2000-01-01T18:00:00.000Z' },
     })
+
     expect(result).toEqual({ ok: false, reason: 'no_slot' })
     expect(fetch).not.toHaveBeenCalled()
   })
@@ -143,5 +146,62 @@ describe('flow appointment booking', () => {
       title: 'Reservación - Tabgha',
       notes: 'Sede: Tabgha\nPersonas: 4\nZona: Terraza',
     })
+  })
+
+  it('uses the atomic booking operation even when a prior attempt now conflicts', async () => {
+    vi.mocked(findConflict).mockResolvedValueOnce(true)
+    const calls: { path: string; body: Record<string, unknown> }[] = []
+    const db = createClient('https://db.example.test', 'key', { global: {
+      fetch: async (input, init) => {
+        const path = new URL(String(input)).pathname
+        if (path.endsWith('/appointment_schedules')) {
+          return Response.json([{ timezone: 'America/Mexico_City', specialist_id: 'poc', agent_user_id: null }])
+        }
+        calls.push({ path, body: JSON.parse(String(init?.body)) })
+        if (path.endsWith('/rpc/book_flow_appointment_once')) {
+          return Response.json([{ result: 'already_booked', appointment_id: 'appointment', starts_at: '2035-01-01T18:00:00Z' }])
+        }
+        return new Response('Unexpected request', { status: 500 })
+      },
+    } })
+    const result = await bookFlowAppointment(db, {
+      accountId: 'account', userId: 'owner', contactId: 'contact', conversationId: 'conversation',
+      flowRunId: 'run', nodeKey: 'book', expectedNodeKey: 'offer', expectedOfferToken: 'token',
+      cfg: { slot_var_key: 'slot', title: 'Reserva', specialist_id: 'poc', idempotent_booking: true, next_node_key: 'next' },
+      vars: { slot: '2035-01-01T18:00:00Z' },
+    })
+    expect(result).toEqual({ ok: true, appointmentId: 'appointment', startsAt: '2035-01-01T18:00:00Z' })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      path: '/rest/v1/rpc/book_flow_appointment_once',
+      body: { p_run_id: 'run', p_node_key: 'book', p_has_conflict: true },
+    })
+  })
+
+  it('fails closed when the atomic booking result is invalid', async () => {
+    const db = createClient('https://db.example.test', 'key', { global: {
+      fetch: async (input) => new URL(String(input)).pathname.endsWith('/appointment_schedules')
+        ? Response.json([{ timezone: 'America/Mexico_City', specialist_id: 'poc', agent_user_id: null }])
+        : Response.json([{ result: 'booked' }]),
+    } })
+    const result = await bookFlowAppointment(db, {
+      accountId: 'account', userId: 'owner', contactId: 'contact', conversationId: 'conversation',
+      flowRunId: 'run', nodeKey: 'book', expectedNodeKey: 'offer', expectedOfferToken: 'token',
+      cfg: { slot_var_key: 'slot', title: 'Reserva', specialist_id: 'poc', idempotent_booking: true, next_node_key: 'next' },
+      vars: { slot: '2035-01-01T18:00:00Z' },
+    })
+    expect(result).toEqual({ ok: false, reason: 'failed' })
+  })
+})
+
+describe('protected slot selection', () => {
+  const slots = [{ id: 'slot_1', title: '18:00', start: '2035-01-01T18:00:00Z', end: '2035-01-01T18:30:00Z' }]
+
+  it('only accepts the option number with the current offer code', () => {
+    const token = 'abcdef12-3456-7890-abcd-ef1234567890'
+    expect(matchSecureOffer('1 ABCDEF123456', slots, token)).toEqual(slots[0])
+    for (const text of ['1', '1 ABCDEF123457', '2 ABCDEF123456', '1 ABCDEF123456 extra']) {
+      expect(matchSecureOffer(text, slots, token)).toBeNull()
+    }
   })
 })

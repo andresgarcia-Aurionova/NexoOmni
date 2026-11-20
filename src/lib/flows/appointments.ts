@@ -27,6 +27,33 @@ export function slotsVarKey(nodeKey: string): string {
   return `__slots_${nodeKey}`
 }
 
+export function offerTokenVarKey(nodeKey: string): string {
+  return `__offer_token_${nodeKey}`
+}
+
+export function offerClaimVarKey(nodeKey: string): string {
+  return `__offer_claim_${nodeKey}`
+}
+
+export function offerPendingVarKey(nodeKey: string): string {
+  return `__offer_pending_${nodeKey}`
+}
+
+export function secureOfferCode(token: string): string {
+  return token.replaceAll('-', '').slice(0, 12).toUpperCase()
+}
+
+export function matchSecureOffer(
+  text: string,
+  slots: OfferedSlot[],
+  token: string,
+): OfferedSlot | null {
+  const match = /^(\d{1,2})\s+([0-9a-f]{12})$/i.exec(text.trim())
+  if (!match || match[2].toUpperCase() !== secureOfferCode(token)) return null
+  const index = Number(match[1]) - 1
+  return slots[index] ?? null
+}
+
 function labelFor(startIso: string, endIso: string, timeZone: string): string {
   const start = new Date(startIso)
   const day = new Intl.DateTimeFormat('es-MX', {
@@ -164,7 +191,7 @@ async function scheduleTimezone(
 
 export type BookResult =
   | { ok: true; appointmentId: string; startsAt: string }
-  | { ok: false; reason: 'no_slot' | 'conflict' | 'failed' }
+  | { ok: false; reason: 'no_slot' | 'conflict' | 'failed' | 'stale' }
 
 /**
  * Book the slot the customer chose. The window between the offer and the
@@ -178,6 +205,10 @@ export async function bookFlowAppointment(
     userId: string
     contactId: string
     conversationId: string
+    flowRunId?: string
+    nodeKey?: string
+    expectedNodeKey?: string | null
+    expectedOfferToken?: string
     cfg: BookAppointmentNodeConfig
     vars: Record<string, unknown>
   },
@@ -192,8 +223,49 @@ export async function bookFlowAppointment(
   const end = new Date(start.getTime() + duration * 60_000)
   const specialistId = args.cfg.specialist_id ?? null
 
-  if (await findConflict(db, args.accountId, { specialistId }, start, end)) {
+  const conflictFound = await findConflict(db, args.accountId, { specialistId }, start, end)
+  if (conflictFound && args.cfg.idempotent_booking !== true) {
     return { ok: false, reason: 'conflict' }
+  }
+  const title = args.cfg.title ? interpolateVars(args.cfg.title, args.vars).trim().slice(0, 160) || 'Cita agendada' : 'Cita agendada'
+  const notes = args.cfg.notes ? interpolateVars(args.cfg.notes, args.vars).trim().slice(0, 2000) || null : null
+  const timezone = args.cfg.idempotent_booking === true
+    ? await preferenceScheduleTimezone(db, args.accountId, specialistId)
+    : await scheduleTimezone(db, args.accountId, specialistId)
+
+  if (args.cfg.idempotent_booking === true) {
+    if (!args.flowRunId || !args.nodeKey || !args.expectedNodeKey || !args.expectedOfferToken || !timezone) {
+      console.error('[flows] idempotent appointment is missing its run, offer, node or schedule')
+      return { ok: false, reason: 'failed' }
+    }
+    const { data, error } = await db.rpc('book_flow_appointment_once', {
+      p_account_id: args.accountId,
+      p_run_id: args.flowRunId,
+      p_node_key: args.nodeKey,
+      p_starts_at: start.toISOString(),
+      p_ends_at: end.toISOString(),
+      p_specialist_id: specialistId,
+      p_title: title,
+      p_notes: notes,
+      p_timezone: timezone,
+      p_has_conflict: conflictFound,
+      p_expected_node_key: args.expectedNodeKey,
+      p_expected_offer_token: args.expectedOfferToken,
+    })
+    if (error) {
+      console.error('[flows] idempotent appointment booking failed:', error.message)
+      return { ok: false, reason: 'failed' }
+    }
+    const row = Array.isArray(data) ? data[0] : null
+    if ((row?.result === 'booked' || row?.result === 'already_booked')
+        && typeof row.appointment_id === 'string' && typeof row.starts_at === 'string') {
+      return { ok: true, appointmentId: row.appointment_id, startsAt: row.starts_at }
+    }
+    if (row?.result === 'conflict' || row?.result === 'stale') {
+      return { ok: false, reason: row.result }
+    }
+    console.error('[flows] idempotent appointment returned an invalid result')
+    return { ok: false, reason: 'failed' }
   }
 
   const { data, error } = await db
@@ -204,11 +276,11 @@ export async function bookFlowAppointment(
       contact_id: args.contactId,
       source_conversation_id: args.conversationId,
       specialist_id: specialistId,
-      title: args.cfg.title ? interpolateVars(args.cfg.title, args.vars).trim().slice(0, 160) || 'Cita agendada' : 'Cita agendada',
-      notes: args.cfg.notes ? interpolateVars(args.cfg.notes, args.vars).trim().slice(0, 2000) || null : null,
+      title,
+      notes,
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
-      timezone: await scheduleTimezone(db, args.accountId, specialistId),
+      timezone,
     })
     .select('id, starts_at')
     .single()

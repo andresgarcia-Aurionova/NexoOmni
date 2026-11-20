@@ -4,7 +4,7 @@ description: "Construye conversaciones automáticas de varios pasos (menús, bot
 section: "automatizaciones-y-flujos"
 role: ["admin", "owner"]
 plan: ["crecimiento", "premium"]
-updated: "2026-09-28"
+updated: "2026-11-20"
 ---
 
 ## ¿Qué es?
@@ -38,6 +38,28 @@ esa línea en el disparador del flujo y comprueba también los canales elegidos.
 Sin línea seleccionada, el flujo puede iniciarse en todos los canales elegidos.
 Las ejecuciones ya iniciadas no se detienen al cambiar esta selección. Esta
 opción limita el inicio del flujo, no la respuesta automática general de IA.
+
+### Interpretar respuestas en un menú con IA
+
+En un paso de botones o lista, activa **Interpretar respuestas con IA** para
+que el flujo intente entender una respuesta escrita que no coincida directamente
+con una opción. La IA solo puede elegir entre las opciones configuradas. También
+puede responder preguntas con un fragmento de la base de conocimiento autorizada;
+si no encuentra información suficiente o el cliente solicita atención humana,
+la conversación se transfiere al equipo.
+
+Esta opción es solo para WhatsApp y requiere IA activa, créditos y el
+mantenimiento periódico de flujos funcionando. Configura y revisa primero la
+base de conocimiento y limita el disparador a la línea que corresponda. Se cobra
+el uso de IA aunque la respuesta termine en transferencia. La IA puede
+interpretar mal una solicitud: prueba cada opción antes de publicar. No crea
+reservas ni factura por sí sola; esas acciones siguen los pasos y validaciones
+del flujo. No activa la respuesta automática general.
+
+Activa la opción antes de iniciar una conversación nueva. Si llegan mensajes
+simultáneos mientras se procesa un turno o este se interrumpe, la conversación
+puede transferirse para revisión. El equipo debe comprobar el historial: un
+mensaje cuyo envío se interrumpió podría llegar tarde.
 
 ### Guardar una respuesta en las notas del contacto
 
@@ -95,6 +117,27 @@ recopiladas antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y
 `Personas: {{vars.personas}}`. Estas notas quedan en la cita vinculada al
 contacto y la conversación. La agenda de horarios no controla automáticamente
 el cupo de mesas o zonas de un restaurante.
+
+Conecta **Ofrecer horarios** directamente con **Agendar cita** y activa
+**Evitar citas duplicadas en este paso** si debe crearse como máximo una cita
+por ejecución del flujo y paso de agendamiento. Los horarios se envían como
+texto con un código para cada oferta; pide al cliente que responda con el
+número y el código, por ejemplo `1 ABC123DEF456`. Un código de una oferta
+anterior no acepta una selección nueva. Los reintentos del
+mismo horario recuperan la cita anterior; si el horario cambió, la cita se
+canceló o ya no existe, la conversación se transfiere para revisión. No uses
+esta opción si el mismo paso debe agendar varias citas en una ejecución. Si
+una selección y otra respuesta llegan casi al mismo tiempo, una transferencia
+no se aplica después de aceptar la selección; si la transferencia ocurre
+primero, no se agenda. El cliente podría tener que repetir una selección
+descartada. Si se interrumpe el envío de horarios o el procesamiento tras
+elegir uno, el mantenimiento periódico puede transferir la conversación
+para revisión. Si falla el envío del mensaje posterior a la elección, también
+se transfiere para revisión. El equipo debe comprobar la cita y el historial
+de mensajes antes de responder: un envío interrumpido podría llegar tarde y
+no se garantiza su entrega ni que llegue una sola vez. El mantenimiento debe
+estar configurado y funcionando. Activa esta protección antes de iniciar
+una conversación nueva; las ejecuciones anteriores requieren revisión.
 
 Para mostrar la referencia de una cita, escribe por ejemplo `referencia_cita`
 en **Clave para guardar la referencia de la cita**. Un mensaje posterior puede

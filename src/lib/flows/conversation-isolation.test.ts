@@ -29,6 +29,19 @@ function database() {
         const url = new URL(String(input))
         const table = url.pathname.split('/').pop()
         const method = init?.method ?? 'GET'
+        if (table === 'update_flow_run_vars_if_current') {
+          const args = JSON.parse(String(init?.body)) as {
+            p_run_id: string; p_account_id: string; p_expected_node_key: string;
+            p_expected_vars: Record<string, string>; p_new_vars: Record<string, string>;
+          }
+          const run = runs.find((item) => item.id === args.p_run_id && item.account_id === args.p_account_id
+            && item.status === 'active' && item.current_node_key === args.p_expected_node_key
+            && JSON.stringify(item.vars) === JSON.stringify(args.p_expected_vars))
+          if (!run) return Response.json(false)
+          updates.push(run.id)
+          run.vars = args.p_new_vars
+          return Response.json(true)
+        }
         if (table === 'flow_runs') {
           const matching = runs.filter((run) =>
             (['id', 'account_id', 'contact_id', 'conversation_id', 'status'] as const)
@@ -36,6 +49,7 @@ function database() {
           if (method === 'PATCH') {
             updates.push(...matching.map((run) => run.id))
             matching.forEach((run) => Object.assign(run, JSON.parse(String(init?.body))))
+            if (url.searchParams.has('select')) return Response.json(matching.map((run) => ({ id: run.id })))
             return new Response(null, { status: 204 })
           }
           return Response.json(matching)

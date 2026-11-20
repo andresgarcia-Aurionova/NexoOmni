@@ -1899,6 +1899,8 @@
       "noNodeDesc": "Select a node on the canvas to edit its configuration.",
       "form": {
         "appointmentReferenceVariable": "Variable for the appointment reference (optional)",
+        "appointmentPreventDuplicates": "Prevent duplicate appointments at this step",
+        "appointmentPreventDuplicatesHelp": "Connect Offer slots directly to this step and ask customers to reply with the number and displayed code, for example 1 ABC123DEF456. Only one appointment is created per run.",
         "appointmentDateVariable": "Requested date variable key (optional)",
         "appointmentDateVariableHelp": "Use the key of a question that captures a date in DD/MM/YYYY format. Only slots on that day in the calendar's time zone will be offered.",
         "appointmentTimeVariable": "Preferred time variable key (optional)",
@@ -1911,6 +1913,8 @@
         "varKeyLabel": "Variable key (stored in flow_runs.vars; alphanumeric + underscore)",
         "varKeyPlaceholder": "e.g. name, email, company",
         "varKeyHelp": "Interpolate in downstream prompts and handoff notes with",
+        "aiAssist": "Interpret replies with AI",
+        "aiAssistHelp": "WhatsApp only. AI chooses an option or replies with authorized information; otherwise it hands off to the team.",
         "allowedValues": "Accept only answers from a list",
         "allowedValuesLabel": "Accepted answers (one per line)",
         "allowedValuesHelp": "Include the options in the question. Case and accents are ignored; an unrecognized answer follows the retry rule.",

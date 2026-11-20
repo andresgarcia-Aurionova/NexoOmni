@@ -20,19 +20,13 @@
  *   - Policy resolution (reprompt vs handoff vs end) — `fallback.ts`.
  *   - Type definitions — `types.ts`.
  *
- * Concurrency model:
- *   - Idempotency on `meta_message_id`: the runner refuses to advance
- *     an active run twice for the same Meta message — protects against
- *     Meta's retries.
- *   - Optimistic UPDATE with `current_node_key` precondition: two
- *     simultaneous taps for the same run collide at the DB layer; the
- *     second is a no-op.
- *   - Partial unique index `idx_one_active_run_per_conversation`: two
- *     simultaneous starts for the same conversation collide; the second
- *     INSERT raises 23505 and the runner catches & exits.
+ * The event-based duplicate check is not atomic. Variable captures use
+ * compare-and-set, but the runner as a whole is not serialized: effects in
+ * other node types may still race before the optimistic node update.
  */
 
 import { supabaseAdmin } from "./admin-client";
+import { randomUUID } from "node:crypto";
 import {
   flowSendButtons,
   flowSendList,
@@ -45,9 +39,15 @@ import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
 import { timeMinutes } from "./time-input";
 import { matchAllowedInput } from "./allowed-input";
+import { decideFlowAiTurn } from "./ai-assist";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
+  matchSecureOffer,
+  offerClaimVarKey,
+  offerPendingVarKey,
+  offerTokenVarKey,
+  secureOfferCode,
   slotsVarKey,
   type OfferedSlot,
 } from "./appointments";
@@ -584,8 +584,61 @@ async function endRun(
       ended_at: new Date().toISOString(),
       end_reason: reason,
     })
-    .eq("id", runId);
+    .eq("id", runId)
+    .eq("status", "active");
   if (error) console.error("[flows] endRun error:", error.message);
+}
+
+async function applyGuardedOfferFallback(
+  db: AdminClient,
+  run: FlowRunRow,
+  action: "reprompt" | "ignore" | "handoff" | "end",
+  newReprompts: number,
+  reason: "fallback" | "selection_failed" | "reprompt_failed" | "offer_send_failed",
+): Promise<"applied" | "stale" | "failed"> {
+  const { data, error } = await db.rpc("apply_guarded_offer_fallback", {
+    p_account_id: run.account_id,
+    p_run_id: run.id,
+    p_expected_node_key: run.current_node_key,
+    p_expected_vars: run.vars,
+    p_expected_reprompt_count: run.reprompt_count,
+    p_new_reprompt_count: newReprompts,
+    p_action: action,
+    p_reason: reason,
+  });
+  if (error || typeof data !== "boolean") {
+    console.error("[flows] guarded offer action failed:", error?.message ?? "invalid result");
+    return "failed";
+  }
+  return data ? "applied" : "stale";
+}
+
+async function updateVarsIfCurrent(
+  db: AdminClient,
+  run: FlowRunRow,
+  vars: Record<string, unknown>,
+  resetReprompts: boolean,
+): Promise<{ saved: boolean; error: { message: string } | null }> {
+  if (run.vars.__guarded_appointments !== true) {
+    const update: { vars: Record<string, unknown>; reprompt_count?: number } = { vars };
+    if (resetReprompts) update.reprompt_count = 0;
+    const { data, error } = await db.from("flow_runs").update(update)
+      .eq("id", run.id).eq("account_id", run.account_id).eq("status", "active").select("id");
+    return { saved: !error && (data?.length ?? 0) > 0, error };
+  }
+  const { data, error } = await db.rpc("update_flow_run_vars_if_current", {
+    p_account_id: run.account_id,
+    p_run_id: run.id,
+    p_expected_node_key: run.current_node_key,
+    p_expected_vars: run.vars,
+    p_new_vars: vars,
+    p_reset_reprompts: resetReprompts,
+  });
+  if (error) return { saved: false, error };
+  if (typeof data !== "boolean") {
+    return { saved: false, error: { message: "Invalid flow state update result" } };
+  }
+  return { saved: data, error: null };
 }
 
 // ============================================================
@@ -600,7 +653,7 @@ async function advanceFromNodeKey(
   run: FlowRunRow,
   startNodeKey: string,
   nodes: Map<string, FlowNodeRow>,
-): Promise<{ outcome: "advanced" | "completed" | "handed_off" }> {
+): Promise<{ outcome: "advanced" | "completed" | "handed_off" | "processing_failed" }> {
   let currentKey: string | null = startNodeKey;
   // Defensive cap — if a flow has a cycle (which the validator
   // SHOULD catch but doesn't yet in v1), we bail rather than loop.
@@ -630,6 +683,16 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "send_message") {
       const cfg = node.config as unknown as SendMessageNodeConfig;
+      if (run.vars.__guarded_appointments === true) {
+        const { data: active, error } = await db.from("flow_runs").select("id")
+          .eq("id", run.id).eq("account_id", run.account_id).eq("status", "active")
+          .eq("current_node_key", run.current_node_key).maybeSingle();
+        if (error || !active) {
+          if (error) console.error("[flows] could not verify active run before sending:", error.message);
+          await logEvent(db, run.id, "error", node.node_key, { reason: "guarded_message_run_unavailable" });
+          return { outcome: "completed" };
+        }
+      }
       try {
         const { message_id: whatsapp_message_id } = await flowSendText({
           accountId: run.account_id,
@@ -647,6 +710,20 @@ async function advanceFromNodeKey(
           reason: "send_text_failed",
           detail: err instanceof Error ? err.message : String(err),
         });
+        const key = run.current_node_key;
+        const token = key && run.vars[offerTokenVarKey(key)];
+        if (run.vars.__guarded_appointments === true && key && typeof token === "string"
+            && run.vars[offerClaimVarKey(key)] === token) {
+          const { data, error } = await db.rpc("handoff_guarded_appointment_send_failure", {
+            p_account_id: run.account_id, p_run_id: run.id, p_expected_node_key: key,
+            p_expected_vars: run.vars, p_message_node_key: node.node_key,
+          });
+          if (error || typeof data !== "boolean") {
+            console.error("[flows] appointment message failure handoff failed:", error?.message ?? "invalid result");
+            return { outcome: "processing_failed" };
+          }
+          return { outcome: data ? "handed_off" : "completed" };
+        }
         await endRun(db, run.id, "failed", "send_text_failed");
         return { outcome: "completed" };
       }
@@ -851,9 +928,52 @@ async function advanceFromNodeKey(
 
       // The options are dynamic, so the run has to remember what it offered
       // before it can map the answer back to an instant.
-      const vars = { ...run.vars, [slotsVarKey(node.node_key)]: slots };
-      await db.from("flow_runs").update({ vars }).eq("id", run.id);
+      const nextNode = nodes.get(cfg.next_node_key);
+      const secureOffer = nextNode?.node_type === "book_appointment"
+        && (nextNode.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true;
+      if (secureOffer && run.vars.__guarded_appointments !== true) {
+        console.error("[flows] protected booking requires a newly started guarded run:", run.id);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "unguarded_appointment_run" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
+      const offerToken = randomUUID();
+      const vars = {
+        ...run.vars,
+        [slotsVarKey(node.node_key)]: slots,
+        ...(secureOffer ? {
+          [offerTokenVarKey(node.node_key)]: offerToken,
+          [offerPendingVarKey(node.node_key)]: offerToken,
+        } : {}),
+      };
+      if (secureOffer) delete vars[offerClaimVarKey(node.node_key)];
+      let savedOffer: boolean;
+      let saveOfferError: { message: string } | null;
+      if (secureOffer) {
+        const { data, error } = await db.rpc("prepare_guarded_appointment_offer", {
+          p_account_id: run.account_id, p_run_id: run.id,
+          p_expected_node_key: run.current_node_key, p_expected_vars: run.vars,
+          p_offer_node_key: node.node_key, p_new_vars: vars,
+        });
+        savedOffer = data === true && !error;
+        saveOfferError = error ?? (typeof data === "boolean" ? null : { message: "Invalid offer preparation result" });
+      } else {
+        const result = await updateVarsIfCurrent(db, run, vars, false);
+        savedOffer = result.saved;
+        saveOfferError = result.error;
+      }
+      if (saveOfferError) {
+        console.error("[flows] could not save appointment offer:", saveOfferError.message);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "appointment_offer_save_failed" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
+      if (!savedOffer) {
+        await logEvent(db, run.id, "error", node.node_key, { reason: "stale_appointment_offer" });
+        return { outcome: "advanced" };
+      }
       run.vars = vars;
+      if (secureOffer) run.current_node_key = node.node_key;
 
       const common = {
         accountId: run.account_id,
@@ -862,28 +982,58 @@ async function advanceFromNodeKey(
         contactId: run.contact_id!,
         bodyText: interpolateVars(cfg.text, run.vars),
       };
-      // Meta allows three reply buttons; anything longer has to be a list.
-      const sent =
-        slots.length <= 3
-          ? await flowSendButtons({
-              ...common,
-              buttons: slots.map((slot) => ({ id: slot.id, title: slot.title })),
+      let sent: { message_id: string };
+      try {
+        sent = secureOffer
+          ? await flowSendText({
+              accountId: run.account_id, userId: run.user_id,
+              conversationId: run.conversation_id!, contactId: run.contact_id!,
+              text: `${common.bodyText}\n\n${slots.map((slot, index) =>
+                `${index + 1}. ${slot.title} (${secureOfferCode(offerToken)})`,
+              ).join("\n")}`,
             })
-          : await flowSendList({
-              ...common,
-              buttonLabel: "Ver horarios",
-              sections: [
-                {
-                  title: "Horarios disponibles",
-                  rows: slots.map((slot) => ({ id: slot.id, title: slot.title })),
-                },
-              ],
-            });
+          : slots.length <= 3
+            ? await flowSendButtons({
+                ...common,
+                buttons: slots.map((slot) => ({ id: slot.id, title: slot.title })),
+              })
+            : await flowSendList({
+                ...common,
+                buttonLabel: "Ver horarios",
+                sections: [
+                  {
+                    title: "Horarios disponibles",
+                    rows: slots.map((slot) => ({ id: slot.id, title: slot.title })),
+                  },
+                ],
+              });
+      } catch (error) {
+        console.error("[flows] could not send appointment offer:", error);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "appointment_offer_send_failed" });
+        if (secureOffer) {
+          const handoff = await applyGuardedOfferFallback(db, run, "handoff", run.reprompt_count, "offer_send_failed");
+          return { outcome: handoff === "applied" ? "handed_off" : handoff === "failed" ? "processing_failed" : "completed" };
+        }
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
       await logEvent(db, run.id, "message_sent", node.node_key, {
         node_type: "offer_slots",
         offered: slots.length,
         whatsapp_message_id: sent.message_id,
       });
+      if (secureOffer) {
+        const sentVars = { ...run.vars };
+        delete sentVars[offerPendingVarKey(node.node_key)];
+        const { saved, error } = await updateVarsIfCurrent(db, run, sentVars, false);
+        if (error) {
+          console.error("[flows] could not record appointment offer delivery:", error.message);
+          await logEvent(db, run.id, "error", node.node_key, { reason: "appointment_offer_delivery_save_failed" });
+        } else if (saved) {
+          run.vars = sentVars;
+        }
+        return { outcome: "advanced" };
+      }
       const advanced = await advanceCurrentNodeKey(
         db,
         run.id,
@@ -899,14 +1049,34 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "book_appointment") {
       const cfg = node.config as unknown as BookAppointmentNodeConfig;
-      const result = await bookFlowAppointment(db, {
-        accountId: run.account_id,
-        userId: run.user_id,
-        contactId: run.contact_id!,
-        conversationId: run.conversation_id!,
-        cfg,
-        vars: run.vars,
-      });
+      if (cfg.idempotent_booking === true && run.vars.__guarded_appointments !== true) {
+        console.error("[flows] protected booking requires a newly started guarded run:", run.id);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "unguarded_appointment_run" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
+      let result: Awaited<ReturnType<typeof bookFlowAppointment>>;
+      try {
+        result = await bookFlowAppointment(db, {
+          accountId: run.account_id,
+          userId: run.user_id,
+          contactId: run.contact_id!,
+          conversationId: run.conversation_id!,
+          flowRunId: run.id,
+          nodeKey: node.node_key,
+          expectedNodeKey: run.current_node_key,
+          expectedOfferToken: run.current_node_key && typeof run.vars[offerTokenVarKey(run.current_node_key)] === "string"
+            ? String(run.vars[offerTokenVarKey(run.current_node_key)])
+            : undefined,
+          cfg,
+          vars: run.vars,
+        });
+      } catch (error) {
+        console.error("[flows] appointment booking failed:", error);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "appointment_booking_failed" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
       await logEvent(db, run.id, "node_entered", node.node_key, {
         node_type: "book_appointment",
         booked: result.ok,
@@ -914,6 +1084,10 @@ async function advanceFromNodeKey(
         appointment_id: result.ok ? result.appointmentId : null,
       });
       if (!result.ok) {
+        if (cfg.idempotent_booking && result.reason !== "conflict") {
+          await executeHandoff(db, run, node);
+          return { outcome: "handed_off" };
+        }
         if (!cfg.conflict_next) {
           await endRun(db, run.id, "completed", result.reason ?? "booking_failed");
           return { outcome: "completed" };
@@ -923,13 +1097,7 @@ async function advanceFromNodeKey(
       }
       if (cfg.reference_var_key) {
         const vars = { ...run.vars, [cfg.reference_var_key]: result.appointmentId };
-        const { data: updated, error } = await db.from("flow_runs")
-          .update({ vars })
-          .eq("id", run.id)
-          .eq("account_id", run.account_id)
-          .eq("status", "active")
-          .select("id")
-          .maybeSingle();
+        const { saved: updated, error } = await updateVarsIfCurrent(db, run, vars, false);
         if (error) {
           console.error("[flows] could not save appointment reference:", error.message);
           await logEvent(db, run.id, "error", node.node_key, {
@@ -1049,6 +1217,14 @@ export async function dispatchInboundToFlows(
       // One SELECT for the whole flow's nodes — advance loop is now
       // in-memory. See loadAllNodes.
       const nodes = await loadAllNodes(db, activeRun.flow_id);
+      if (activeRun.vars.__flow_ai_enabled === true) {
+        try {
+          return await handleAiFlowReply(db, activeRun, input, nodes);
+        } catch (error) {
+          console.error("[flows] AI dispatch failed:", error instanceof Error ? error.message : error);
+          return { consumed: true, flow_run_id: activeRun.id, outcome: "processing_failed" };
+        }
+      }
       return handleReplyForActiveRun(db, activeRun, input.message, nodes);
     }
 
@@ -1082,11 +1258,131 @@ export async function dispatchInboundToFlows(
   }
 }
 
+async function handleAiFlowReply(
+  db: AdminClient,
+  run: FlowRunRow,
+  input: DispatchInboundInput,
+  nodes: Map<string, FlowNodeRow>,
+  retried = false,
+): Promise<DispatchInboundResult> {
+  const nodeKey = run.current_node_key;
+  if (!nodeKey || !run.conversation_id || !run.contact_id) {
+    console.error("[flows] AI run is missing its node or conversation.");
+    return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+  }
+  const { data, error } = await db.rpc("claim_flow_ai_turn", {
+    p_account_id: run.account_id, p_run_id: run.id, p_node_key: nodeKey,
+    p_inbound_message_id: input.message.meta_message_id,
+  });
+  const claim = Array.isArray(data) ? data[0] : null;
+  if (error || !claim || typeof claim.outcome !== "string") {
+    console.error("[flows] AI turn claim failed:", error?.message ?? "invalid result");
+    return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+  }
+  if (claim.outcome === "duplicate") {
+    return { consumed: true, flow_run_id: run.id, outcome: "duplicate_inbound_ignored" };
+  }
+  if (claim.outcome === "stale") {
+    if (!retried) {
+      const current = await loadActiveRunForConversation(
+        db, input.accountId, input.contactId, input.conversationId, true,
+      );
+      if (current && current.id === run.id && current.vars.__flow_ai_enabled === true) {
+        return handleAiFlowReply(db, current, input, nodes, true);
+      }
+    }
+    return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+  }
+  if (claim.outcome === "handed_off") {
+    return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
+  }
+  if (claim.outcome !== "claimed"
+      || typeof claim.turn_id !== "string" || typeof claim.turn_node_key !== "string") {
+    console.error("[flows] AI turn claim returned an invalid state.");
+    return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+  }
+  const turnId = claim.turn_id;
+  const turnNode = claim.turn_node_key;
+  const handoff = async (): Promise<DispatchInboundResult> => {
+    const result = await db.rpc("handoff_flow_ai_turn", {
+      p_account_id: run.account_id, p_run_id: run.id, p_turn_id: turnId,
+      p_node_key: turnNode, p_stalled_only: false,
+    });
+    if (result.error || typeof result.data !== "boolean") {
+      console.error("[flows] AI handoff failed:", result.error?.message ?? "invalid result");
+      return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+    }
+    return { consumed: true, flow_run_id: run.id,
+      outcome: result.data ? "handed_off" : "stale_inbound_ignored" };
+  };
+  try {
+    const node = nodes.get(nodeKey);
+    if (!node) {
+      console.error("[flows] AI turn node is unavailable.");
+      return handoff();
+    }
+    let aiReplyId: string | undefined;
+    let aiAnswer: string | undefined;
+    if (node.config.ai_assist === true && input.message.kind === "text"
+        && (node.node_type === "send_buttons" || node.node_type === "send_list")) {
+      if (input.channelType !== "whatsapp" && input.channelType !== "zernio_whatsapp") {
+        console.error("[flows] AI assistance is restricted to WhatsApp.");
+        return handoff();
+      }
+      const options = menuOptions(node);
+      const directMatch = matchNumberedOption(input.message.text, options);
+      if (!directMatch) {
+        const decision = await decideFlowAiTurn({
+          accountId: run.account_id, conversationId: run.conversation_id,
+          turnId, text: input.message.text,
+          prompt: typeof node.config.text === "string" ? node.config.text : "",
+          options,
+        });
+        if (decision.action === "handoff") return handoff();
+        if (decision.action === "answer") aiAnswer = decision.text;
+        if (decision.action === "route") aiReplyId = decision.reply_id;
+      }
+    }
+    const active = await db.rpc("is_flow_ai_turn_active", {
+      p_account_id: run.account_id, p_run_id: run.id,
+      p_turn_id: turnId, p_node_key: turnNode,
+    });
+    if (active.error || typeof active.data !== "boolean") {
+      console.error("[flows] AI turn verification failed:", active.error?.message ?? "invalid result");
+      return handoff();
+    }
+    if (!active.data) return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+    let result: DispatchInboundResult;
+    if (aiAnswer !== undefined) {
+      await flowSendText({
+        accountId: run.account_id, userId: run.user_id,
+        conversationId: run.conversation_id, contactId: run.contact_id, text: aiAnswer,
+      });
+      result = { consumed: true, flow_run_id: run.id, outcome: "advanced" };
+    } else {
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId);
+    }
+    const finished = await db.rpc("finish_flow_ai_turn", {
+      p_account_id: run.account_id, p_run_id: run.id,
+      p_turn_id: turnId, p_node_key: turnNode,
+    });
+    if (finished.error || finished.data !== true) {
+      console.error("[flows] AI turn completion failed:", finished.error?.message ?? "stale turn");
+      return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+    }
+    return { ...result, consumed: true };
+  } catch (error) {
+    console.error("[flows] AI turn failed:", error instanceof Error ? error.message : error);
+    return handoff();
+  }
+}
+
 async function handleReplyForActiveRun(
   db: AdminClient,
   run: FlowRunRow,
   message: ParsedInbound,
   nodes: Map<string, FlowNodeRow>,
+  aiReplyId?: string,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -1130,14 +1426,41 @@ async function handleReplyForActiveRun(
     // what this run actually offered — not against the node's static config.
     const cfg = currentNode.config as unknown as OfferSlotsNodeConfig;
     const offered = (run.vars[slotsVarKey(currentNode.node_key)] ?? []) as OfferedSlot[];
+    const nextNode = nodes.get(cfg.next_node_key);
+    const secureOffer = nextNode?.node_type === "book_appointment"
+      && (nextNode.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true;
+    const token = run.vars[offerTokenVarKey(currentNode.node_key)];
+    if (secureOffer && typeof token === "string" && run.vars[offerClaimVarKey(currentNode.node_key)] === token) {
+      await logEvent(db, run.id, "error", currentNode.node_key, { reason: "appointment_offer_already_claimed" });
+      return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+    }
     const replyId =
       message.kind === "interactive_reply"
         ? message.reply_id
         : matchNumberedOption(message.text, offered.map((slot) => ({ id: slot.id, title: slot.title })));
-    const chosen = offered.find((slot) => slot.id === replyId);
+    const chosen = secureOffer
+      ? message.kind === "text" && typeof token === "string"
+        ? matchSecureOffer(message.text, offered, token)
+        : null
+      : offered.find((slot) => slot.id === replyId);
     if (chosen) {
-      const vars = { ...run.vars, [cfg.var_key]: chosen.start };
-      const { error } = await db.from("flow_runs").update({ vars, reprompt_count: 0 }).eq("id", run.id);
+      const vars = {
+        ...run.vars,
+        [cfg.var_key]: chosen.start,
+        ...(secureOffer ? { [offerClaimVarKey(currentNode.node_key)]: token } : {}),
+      };
+      const { saved, error } = await updateVarsIfCurrent(db, run, vars, true);
+      if (!error && !saved) {
+        await logEvent(db, run.id, "error", currentNode.node_key, { reason: "stale_appointment_selection" });
+        return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+      }
+      if (error && secureOffer) {
+        console.error("[flows] could not capture appointment selection:", error.message);
+        await logEvent(db, run.id, "error", currentNode.node_key, { reason: "appointment_selection_save_failed" });
+        const handoff = await applyGuardedOfferFallback(db, run, "handoff", run.reprompt_count, "selection_failed");
+        return { consumed: true, flow_run_id: run.id,
+          outcome: handoff === "applied" ? "handed_off" : handoff === "stale" ? "stale_inbound_ignored" : "processing_failed" };
+      }
       if (!error) {
         run.vars = vars;
         run.reprompt_count = 0;
@@ -1147,6 +1470,8 @@ async function handleReplyForActiveRun(
         matched = cfg.next_node_key;
       }
     }
+  } else if (aiReplyId && (currentNode.node_type === "send_buttons" || currentNode.node_type === "send_list")) {
+    matched = matchReplyId(currentNode, aiReplyId);
   } else if (
     message.kind === "interactive_reply" &&
     (currentNode.node_type === "send_buttons" ||
@@ -1190,18 +1515,20 @@ async function handleReplyForActiveRun(
           return { consumed: true, flow_run_id: run.id, outcome: "duplicate_inbound_ignored" };
         }
       } else {
-        const result = await db
-          .from("flow_runs")
-          .update({ vars: newVars, reprompt_count: 0 })
-          .eq("id", run.id);
+        const result = await updateVarsIfCurrent(db, run, newVars, true);
         capErr = result.error;
+        if (!capErr && !result.saved) {
+          await logEvent(db, run.id, "error", currentNode.node_key, { reason: "stale_input_capture" });
+          return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+        }
       }
-      if (capErr && cfg.save_contact_note === true) {
-        console.error("[flows] contact note capture failed:", capErr.message);
+      if (capErr && (cfg.save_contact_note === true || run.vars.__guarded_appointments === true)) {
+        console.error("[flows] input capture failed:", capErr.message);
         await logEvent(db, run.id, "error", currentNode.node_key, {
-          reason: "contact_note_capture_failed",
+          reason: cfg.save_contact_note === true ? "contact_note_capture_failed" : "input_capture_failed",
         });
-        await endRun(db, run.id, "failed", "contact_note_capture_failed");
+        await endRun(db, run.id, "failed",
+          cfg.save_contact_note === true ? "contact_note_capture_failed" : "input_capture_failed");
         if (run.conversation_id) {
           const { error } = await db.from("conversations")
             .update({ status: "pending", updated_at: new Date().toISOString() })
@@ -1253,16 +1580,31 @@ async function handleReplyForActiveRun(
     (await loadFlow(db, run.flow_id))?.fallback_policy,
   );
   const newReprompts = run.reprompt_count + 1;
-  await db
-    .from("flow_runs")
-    .update({ reprompt_count: newReprompts })
-    .eq("id", run.id);
-
   const action = decideFallback({ policy, reprompt_count: newReprompts });
-  await logEvent(db, run.id, "fallback_fired", run.current_node_key, {
-    action: action.type,
-    reprompt_count: newReprompts,
-  });
+  const offerNext = currentNode.node_type === "offer_slots"
+    ? nodes.get((currentNode.config as unknown as OfferSlotsNodeConfig).next_node_key) : null;
+  const guardedOffer = run.vars.__guarded_appointments === true
+    && offerNext?.node_type === "book_appointment"
+    && (offerNext.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true;
+  if (guardedOffer) {
+    const applied = await applyGuardedOfferFallback(db, run, action.type, newReprompts, "fallback");
+    if (applied !== "applied") {
+      return { consumed: true, flow_run_id: run.id,
+        outcome: applied === "stale" ? "stale_inbound_ignored" : "processing_failed" };
+    }
+    run.reprompt_count = newReprompts;
+    if (action.type === "handoff") return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
+    if (action.type === "end") return { consumed: true, flow_run_id: run.id, outcome: "completed" };
+  } else {
+    await db
+      .from("flow_runs")
+      .update({ reprompt_count: newReprompts })
+      .eq("id", run.id);
+    await logEvent(db, run.id, "fallback_fired", run.current_node_key, {
+      action: action.type,
+      reprompt_count: newReprompts,
+    });
+  }
   if (action.type === "ignore") {
     // Don't consume — let automations have a shot at it.
     return { consumed: false, flow_run_id: run.id, outcome: "no_match" };
@@ -1290,6 +1632,34 @@ async function handleReplyForActiveRun(
           reason: "reprompt_send_failed",
           detail: err instanceof Error ? err.message : String(err),
         });
+      }
+    } else if (currentNode.node_type === "offer_slots") {
+      const cfg = currentNode.config as unknown as OfferSlotsNodeConfig;
+      const next = nodes.get(cfg.next_node_key);
+      const token = run.vars[offerTokenVarKey(currentNode.node_key)];
+      const offered = (run.vars[slotsVarKey(currentNode.node_key)] ?? []) as OfferedSlot[];
+      if (next?.node_type === "book_appointment"
+          && (next.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true
+          && typeof token === "string" && offered.length > 0) {
+        try {
+          await flowSendText({
+            accountId: run.account_id, userId: run.user_id,
+            conversationId: run.conversation_id!, contactId: run.contact_id!,
+            text: `${interpolateVars(cfg.text, run.vars)}\n\n${offered.map((slot, index) =>
+              `${index + 1}. ${slot.title} (${secureOfferCode(token)})`,
+            ).join("\n")}`,
+          });
+        } catch (error) {
+          console.error("[flows] could not resend appointment offer:", error);
+          await logEvent(db, run.id, "error", currentNode.node_key, { reason: "appointment_offer_reprompt_failed" });
+          if (guardedOffer) {
+            const handoff = await applyGuardedOfferFallback(db, run, "handoff", run.reprompt_count, "reprompt_failed");
+            return { consumed: true, flow_run_id: run.id,
+              outcome: handoff === "applied" ? "handed_off" : handoff === "stale" ? "stale_inbound_ignored" : "processing_failed" };
+          }
+          await executeHandoff(db, run, currentNode);
+          return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
+        }
       }
     }
     return { consumed: true, flow_run_id: run.id, outcome: "fallback_fired" };
@@ -1334,6 +1704,16 @@ async function startNewRun(
       conversation_id: input.conversationId,
       status: "active",
       current_node_key: flow.entry_node_id,
+      vars: {
+        ...(Array.from(nodes.values()).some((node) =>
+          node.node_type === "book_appointment"
+            && (node.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true,
+        ) ? { __guarded_appointments: true } : {}),
+        ...(Array.from(nodes.values()).some((node) =>
+          (node.node_type === "send_buttons" || node.node_type === "send_list")
+            && node.config.ai_assist === true,
+        ) ? { __flow_ai_enabled: true } : {}),
+      },
     })
     .select("*")
     .maybeSingle();

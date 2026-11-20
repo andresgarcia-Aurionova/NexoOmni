@@ -1899,6 +1899,8 @@
       "noNodeDesc": "캔버스에서 노드를 선택해 설정을 편집하세요.",
       "form": {
         "appointmentReferenceVariable": "예약 참조를 저장할 변수 (선택)",
+        "appointmentPreventDuplicates": "이 단계에서 중복 예약 방지",
+        "appointmentPreventDuplicatesHelp": "시간대 제공 단계를 여기에 직접 연결하고 고객에게 번호와 표시된 코드(예: 1 ABC123DEF456)로 답하도록 안내하세요. 실행당 예약 하나만 생성됩니다.",
         "appointmentDateVariable": "요청 날짜의 변수 키 (선택)",
         "appointmentDateVariableHelp": "DD/MM/YYYY 형식으로 날짜를 수집한 질문의 키를 사용하세요. 일정 시간대에서 해당 날짜의 시간만 제공됩니다.",
         "appointmentTimeVariable": "선호 시간 변수 키 (선택)",
@@ -1911,6 +1913,8 @@
         "varKeyLabel": "변수 키 (flow_runs.vars에 저장됨; 영숫자 + 밑줄만 사용)",
         "varKeyPlaceholder": "예: name, email, company",
         "varKeyHelp": "다음과 같이 이후 프롬프트와 인계 메모에서 참조할 수 있습니다",
+        "aiAssist": "AI로 답변 해석",
+        "aiAssistHelp": "WhatsApp 전용입니다. AI가 옵션을 선택하거나 승인된 정보로 답변하며, 처리할 수 없으면 팀에 전달합니다.",
         "allowedValues": "목록에 있는 응답만 허용",
         "allowedValuesLabel": "허용 응답 (한 줄에 하나씩)",
         "allowedValuesHelp": "질문에 선택지를 포함하세요. 대소문자와 악센트를 구분하지 않으며, 인식되지 않은 응답에는 재시도 규칙이 적용됩니다.",

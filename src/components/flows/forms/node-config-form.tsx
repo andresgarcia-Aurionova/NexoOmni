@@ -309,6 +309,7 @@ export function NodeConfigForm({
 
 interface SendButtonsCfg {
   text?: string;
+  ai_assist?: boolean;
   footer_text?: string;
   buttons?: Array<{ reply_id: string; title: string; next_node_key: string }>;
 }
@@ -364,6 +365,7 @@ function SendButtonsForm({
         value={cfg.footer_text ?? ""}
         onChange={(v) => onUpdateConfig({ footer_text: v })}
       />
+      <AiAssistSwitch checked={cfg.ai_assist === true} onChange={(v) => onUpdateConfig({ ai_assist: v })} t={t} />
       <div>
         <div className="mb-2 flex items-center justify-between">
           <label className="text-xs text-muted-foreground">
@@ -453,6 +455,7 @@ interface OfferSlotsCfg {
 
 interface BookAppointmentCfg {
   slot_var_key?: string;
+  idempotent_booking?: boolean;
   reference_var_key?: string;
   title?: string;
   specialist_id?: string;
@@ -544,6 +547,10 @@ function BookAppointmentForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cf
     </div>
     <TextRow label="Título de la cita" value={cfg.title ?? ""} onChange={(title) => onUpdateConfig({ title })} />
     <TextRow label="Notas internas" value={cfg.notes ?? ""} onChange={(notes) => onUpdateConfig({ notes })} rows={2} />
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.idempotent_booking === true} onCheckedChange={(checked) => onUpdateConfig({ idempotent_booking: checked })} />{t("appointmentPreventDuplicates")}</label>
+      <p className="text-[10px] text-muted-foreground">{t("appointmentPreventDuplicatesHelp")}</p>
+    </div>
     <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentReferenceVariable")}</label><Input value={cfg.reference_var_key ?? ""} onChange={(event) => onUpdateConfig({ reference_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Cita confirmada" />
@@ -558,6 +565,7 @@ function BookAppointmentForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cf
 
 interface SendListCfg {
   text?: string;
+  ai_assist?: boolean;
   button_label?: string;
   footer_text?: string;
   sections?: Array<{
@@ -668,6 +676,7 @@ function SendListForm({
         onChange={(v) => onUpdateConfig({ text: v })}
         rows={3}
       />
+      <AiAssistSwitch checked={cfg.ai_assist === true} onChange={(v) => onUpdateConfig({ ai_assist: v })} t={t} />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <TextRow
           label={t("buttonLabel")}
@@ -788,6 +797,22 @@ function SendListForm({
         )}
       </div>
     </>
+  );
+}
+
+function AiAssistSwitch({ checked, onChange, t }: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Switch checked={checked} onCheckedChange={onChange} />
+        {t("aiAssist")}
+      </label>
+      <p className="text-[10px] text-muted-foreground">{t("aiAssistHelp")}</p>
+    </div>
   );
 }
 

@@ -38,6 +38,7 @@ export interface SendMessageNodeConfig {
 
 export interface SendButtonsNodeConfig {
   text: string;
+  ai_assist?: boolean;
   /** Optional header / footer lines around the buttons. */
   header_text?: string;
   footer_text?: string;
@@ -54,6 +55,7 @@ export interface SendButtonsNodeConfig {
 
 export interface SendListNodeConfig {
   text: string;
+  ai_assist?: boolean;
   /** Label of the tap-to-expand button on the message bubble. */
   button_label: string;
   header_text?: string;
@@ -227,6 +229,8 @@ export interface OfferSlotsNodeConfig {
 export interface BookAppointmentNodeConfig {
   /** Var holding the chosen ISO start time (written by `offer_slots`). */
   slot_var_key: string;
+  /** Create at most one appointment per run and booking node. */
+  idempotent_booking?: boolean;
   /** Supports {{vars.X}} interpolation. */
   title: string;
   duration_minutes?: number;
@@ -429,6 +433,8 @@ export interface DispatchInboundResult {
     | "handed_off"
     | "fallback_fired"
     | "duplicate_inbound_ignored"
+    | "stale_inbound_ignored"
+    | "processing_failed"
     | "no_match";
 }
 

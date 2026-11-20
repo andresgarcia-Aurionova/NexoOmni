@@ -49,8 +49,14 @@ describe("date capture in a flow", () => {
         if (init?.method === "HEAD" && table === "flow_run_events") {
           return new Response(null, { headers: { "content-range": "*/0" } });
         }
+        if (table === "update_flow_run_vars_if_current") {
+          const args = JSON.parse(String(init?.body)) as { p_new_vars: Record<string, unknown>; p_reset_reprompts: boolean };
+          writes.push({ table: "flow_runs", body: { vars: args.p_new_vars, ...(args.p_reset_reprompts ? { reprompt_count: 0 } : {}) } });
+          return Response.json(true);
+        }
         if (init?.body) {
           writes.push({ table, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+          if (table === "flow_runs" && url.searchParams.has("select")) return Response.json([{ id: "run" }]);
           return new Response(null, { status: 204 });
         }
         return new Response("Unexpected request", { status: 500 });

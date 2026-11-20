@@ -1899,6 +1899,8 @@
       "noNodeDesc": "Selecciona un nodo en el lienzo para editar su configuración.",
       "form": {
         "appointmentReferenceVariable": "Clave para guardar la referencia de la cita (opcional)",
+        "appointmentPreventDuplicates": "Evitar citas duplicadas en este paso",
+        "appointmentPreventDuplicatesHelp": "Conecta directamente Ofrecer horarios a este paso e indica en el texto que respondan con el número y el código mostrado, por ejemplo 1 ABC123DEF456. Solo se crea una cita por ejecución.",
         "appointmentDateVariable": "Clave de la fecha solicitada (opcional)",
         "appointmentDateVariableHelp": "Usa la clave de una pregunta que capture la fecha en formato DD/MM/AAAA. Solo se ofrecerán horarios de ese día en la zona de la agenda.",
         "appointmentTimeVariable": "Clave de la hora preferida (opcional)",
@@ -1911,6 +1913,8 @@
         "varKeyLabel": "Clave de variable (guardada en flow_runs.vars; alfanumérico + guion bajo)",
         "varKeyPlaceholder": "ej. nombre, correo, empresa",
         "varKeyHelp": "Interpola en prompts subsiguientes y notas de transferencia con",
+        "aiAssist": "Interpretar respuestas con IA",
+        "aiAssistHelp": "Solo WhatsApp. La IA elige entre las opciones o responde con información autorizada; si no puede hacerlo, transfiere al equipo.",
         "allowedValues": "Aceptar solo respuestas de una lista",
         "allowedValuesLabel": "Respuestas aceptadas (una por línea)",
         "allowedValuesHelp": "Indica las opciones en la pregunta. Se ignoran mayúsculas y acentos; una respuesta no reconocida sigue la regla de reintentos.",
