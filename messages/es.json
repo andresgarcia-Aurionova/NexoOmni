@@ -1993,6 +1993,14 @@
           "label": "Etiquetar contacto",
           "blurb": "Añade o quita una etiqueta al contacto"
         },
+        "offer_slots": {
+          "label": "Ofrecer horarios",
+          "blurb": "Muestra horarios disponibles y guarda la elección"
+        },
+        "book_appointment": {
+          "label": "Agendar cita",
+          "blurb": "Registra el horario elegido en la agenda"
+        },
         "handoff": {
           "label": "Transferir a agente",
           "blurb": "Transfiere la conversación a un humano"

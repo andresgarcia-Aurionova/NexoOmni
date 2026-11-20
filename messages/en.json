@@ -1993,6 +1993,14 @@
           "label": "Tag contact",
           "blurb": "Adds or removes a contact tag"
         },
+        "offer_slots": {
+          "label": "Offer time slots",
+          "blurb": "Shows available times and saves the selection"
+        },
+        "book_appointment": {
+          "label": "Book appointment",
+          "blurb": "Records the selected time in the calendar"
+        },
         "handoff": {
           "label": "Handoff to agent",
           "blurb": "Hands the conversation to a human"
