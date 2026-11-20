@@ -25,6 +25,7 @@
 
 import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
 import { isValidTimeZone } from "./date-input";
+import { isValidAllowedValues } from "./allowed-input";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -550,6 +551,7 @@ function validateNode(
         contact_note_label?: string;
         date_not_past?: boolean;
         date_timezone?: string;
+        allowed_values?: unknown;
       };
       if (!cfg.prompt_text?.trim()) {
         issues.push({
@@ -593,6 +595,13 @@ function validateNode(
           node_key: node.node_key,
           field: "date_timezone",
           message: "La validación de fecha necesita una zona horaria IANA válida.",
+        });
+      }
+      if (cfg.allowed_values !== undefined && !isValidAllowedValues(cfg.allowed_values)) {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "allowed_values",
+          message: "La lista necesita opciones no vacías y distintas, sin contar mayúsculas ni acentos.",
         });
       }
       if (!cfg.next_node_key) {

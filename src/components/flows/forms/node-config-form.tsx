@@ -167,6 +167,26 @@ export function NodeConfigForm({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
+                checked={Array.isArray(cfg.allowed_values)}
+                onCheckedChange={(checked) => onUpdateConfig({ allowed_values: checked ? [""] : undefined })}
+              />
+              {t("allowedValues")}
+            </label>
+            {Array.isArray(cfg.allowed_values) && (
+              <>
+                <TextRow
+                  label={t("allowedValuesLabel")}
+                  value={cfg.allowed_values.join("\n")}
+                  onChange={(v) => onUpdateConfig({ allowed_values: v.split("\n") })}
+                  rows={4}
+                />
+                <p className="text-[10px] text-muted-foreground">{t("allowedValuesHelp")}</p>
+              </>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
                 checked={cfg.date_not_past === true}
                 onCheckedChange={(checked) => onUpdateConfig({ date_not_past: checked })}
               />

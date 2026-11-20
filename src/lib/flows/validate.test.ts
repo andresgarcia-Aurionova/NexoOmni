@@ -43,6 +43,24 @@ describe("connected line validation", () => {
   });
 });
 
+describe("accepted input values", () => {
+  it("rejects empty or ambiguous lists before activation", () => {
+    const nodes = (allowed_values: unknown) => [
+      { node_key: "start", node_type: "start", config: { next_node_key: "sede" } },
+      { node_key: "sede", node_type: "collect_input", config: {
+        prompt_text: "Sede", var_key: "sede", next_node_key: "end", allowed_values,
+      } },
+      { node_key: "end", node_type: "end", config: {} },
+    ];
+    for (const invalid of [[], [""], ["Tabgha", "tabgha"], ["Metz", "Métz"]]) {
+      expect(validateFlowForActivation(validFlow, nodes(invalid))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: "allowed_values" })]),
+      );
+    }
+    expect(validateFlowForActivation(validFlow, nodes(["Tabgha", "Metz"]))).toEqual([]);
+  });
+});
+
 describe("contact note capture validation", () => {
   const nodes = (label: string) => [
     { node_key: "start", node_type: "start", config: { next_node_key: "reason" } },

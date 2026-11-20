@@ -19,7 +19,7 @@ describe("date capture in a flow", () => {
     vi.clearAllMocks();
   });
 
-  async function reply(text: string, dateNotPast: boolean) {
+  async function reply(text: string, dateNotPast: boolean, allowedValues?: string[]) {
     const writes: { table: string; body: Record<string, unknown> }[] = [];
     const run = {
       id: "run", flow_id: "flow", account_id: "account", user_id: "user",
@@ -30,6 +30,7 @@ describe("date capture in a flow", () => {
       { node_key: "date", node_type: "collect_input", config: {
         prompt_text: "Fecha DD/MM/AAAA", var_key: "fecha", next_node_key: "end",
         date_not_past: dateNotPast, date_timezone: "America/Mexico_City",
+        allowed_values: allowedValues,
       } },
       { node_key: "end", node_type: "end", config: {} },
     ];
@@ -80,5 +81,18 @@ describe("date capture in a flow", () => {
         table: "flow_runs", body: { vars: { fecha: text }, reprompt_count: 0 },
       }));
     }
+  });
+
+  it("only captures a configured answer, using its canonical spelling", async () => {
+    const options = ["Jalapeños Pop", "Tabgha"];
+    const unknown = await reply("sede desconocida", false, options);
+    expect(unknown.result.outcome).toBe("fallback_fired");
+    expect(unknown.writes.some((write) => write.table === "flow_runs" && "vars" in write.body)).toBe(false);
+    const known = await reply("jalapenos pop", false, options);
+    expect(known.writes).toContainEqual(expect.objectContaining({
+      table: "flow_runs", body: { vars: { fecha: "Jalapeños Pop" }, reprompt_count: 0 },
+    }));
+    const ambiguous = await reply("tabgha", false, ["Tabgha", "TABGHA"]);
+    expect(ambiguous.result.outcome).toBe("fallback_fired");
   });
 });

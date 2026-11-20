@@ -138,6 +138,8 @@ export interface CollectInputNodeConfig {
   date_not_past?: boolean;
   /** IANA time zone used when checking a date against today. */
   date_timezone?: string;
+  /** Optional, explicit set of accepted answers; captures the configured value. */
+  allowed_values?: string[];
   /** Opt-in to copying this answer into ordinary contact notes. */
   save_contact_note?: boolean;
   /** Identifies the automatic note to the team. */

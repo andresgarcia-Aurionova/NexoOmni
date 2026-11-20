@@ -43,6 +43,7 @@ import {
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
+import { matchAllowedInput } from "./allowed-input";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
@@ -1165,9 +1166,9 @@ async function handleReplyForActiveRun(
     currentNode.node_type === "collect_input"
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
-    const captured = message.text.trim();
+    const captured = matchAllowedInput(message.text.trim(), cfg.allowed_values);
     if (
-      captured.length > 0 &&
+      captured !== null && captured.length > 0 &&
       cfg.var_key &&
       (!cfg.date_not_past || isCurrentOrFutureDate(captured, typeof cfg.date_timezone === "string" ? cfg.date_timezone.trim() : ""))
     ) {

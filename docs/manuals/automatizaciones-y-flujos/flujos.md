@@ -63,6 +63,15 @@ pasadas no se guardan y se aplica la regla de reintentos del flujo.
 Esta opción permite el día actual: no comprueba la hora ni la disponibilidad.
 Las preguntas existentes no cambian hasta activar esta opción.
 
+### Restringir las respuestas a una lista
+
+En **Recopilar datos**, activa **Aceptar solo respuestas de una lista** y
+escribe una opción por línea. Incluye las opciones en la pregunta al cliente.
+El flujo acepta el nombre completo sin distinguir mayúsculas ni acentos y
+guarda la opción configurada; una respuesta desconocida sigue la regla de
+reintentos. Mantén la lista actualizada: las opciones que solo difieren en
+mayúsculas o acentos no se pueden usar porque serían ambiguas.
+
 ### Datos recopilados en una cita
 
 Para ofrecer únicamente horarios de una fecha solicitada, activa la validación
