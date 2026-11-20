@@ -25,7 +25,7 @@ describe('flow appointment booking', () => {
     const result = await bookFlowAppointment(db, {
       accountId: 'account', userId: 'owner', contactId: 'contact', conversationId: 'conversation',
       cfg: {
-        slot_var_key: 'slot', title: 'Reservación', next_node_key: 'next',
+        slot_var_key: 'slot', title: 'Reservación - {{vars.sede}}', next_node_key: 'next',
         notes: 'Sede: {{vars.sede}}\nPersonas: {{vars.personas}}\nZona: {{vars.zona}}',
       },
       vars: { slot: '2035-01-01T18:00:00.000Z', sede: 'Tabgha', personas: 4, zona: 'Terraza' },
@@ -33,6 +33,7 @@ describe('flow appointment booking', () => {
     expect(result.ok).toBe(true)
     expect(saved).toMatchObject({
       source_conversation_id: 'conversation',
+      title: 'Reservación - Tabgha',
       notes: 'Sede: Tabgha\nPersonas: 4\nZona: Terraza',
     })
   })

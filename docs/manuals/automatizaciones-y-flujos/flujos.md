@@ -44,8 +44,8 @@ manualmente. No se crean notas retroactivamente para respuestas anteriores.
 
 ### Datos recopilados en una cita
 
-En el paso **Agendar cita**, las notas internas admiten variables recopiladas
-antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y
+En el paso **Agendar cita**, el título y las notas internas admiten variables
+recopiladas antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y
 `Personas: {{vars.personas}}`. Estas notas quedan en la cita vinculada al
 contacto y la conversación. La agenda de horarios no controla automáticamente
 el cupo de mesas o zonas de un restaurante.

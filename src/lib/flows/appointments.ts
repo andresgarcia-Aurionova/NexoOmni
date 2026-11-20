@@ -138,7 +138,7 @@ export async function bookFlowAppointment(
       contact_id: args.contactId,
       source_conversation_id: args.conversationId,
       specialist_id: specialistId,
-      title: args.cfg.title?.trim().slice(0, 160) || 'Cita agendada',
+      title: args.cfg.title ? interpolateVars(args.cfg.title, args.vars).trim().slice(0, 160) || 'Cita agendada' : 'Cita agendada',
       notes: args.cfg.notes ? interpolateVars(args.cfg.notes, args.vars).trim().slice(0, 2000) || null : null,
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),

@@ -215,6 +215,7 @@ export interface OfferSlotsNodeConfig {
 export interface BookAppointmentNodeConfig {
   /** Var holding the chosen ISO start time (written by `offer_slots`). */
   slot_var_key: string;
+  /** Supports {{vars.X}} interpolation. */
   title: string;
   duration_minutes?: number;
   specialist_id?: string;
