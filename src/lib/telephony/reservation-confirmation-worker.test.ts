@@ -20,7 +20,7 @@ let notices: string[]
 let pendingDeclines: { appointment_id: string; revision: number }[]
 let conversationContact: string
 let completeSendOnInFlightLookup: boolean
-let activeFlows: { id: string }[]
+let activeFlows: { id: string; conversation_id: string }[]
 
 function db() {
   return createClient('https://db.example.test', 'test-key', {
@@ -96,7 +96,8 @@ function db() {
         if (table === 'flow_runs') {
           expect(url.searchParams.get('account_id')).toBe('eq.account')
           expect(url.searchParams.get('status')).toBe('eq.active')
-          return Response.json(activeFlows)
+          return Response.json(activeFlows.filter((flow) =>
+            url.searchParams.get('conversation_id') === `eq.${flow.conversation_id}`))
         }
         if (table === 'conversations') {
           return Response.json(url.searchParams.get('contact_id') === `eq.${conversationContact}` ? { id: 'conversation' } : null)
@@ -104,7 +105,13 @@ function db() {
         if (table === 'reservation_alert_settings') return Response.json(settings)
         if (table === 'contacts') return Response.json({ phone: '525512345678' })
         if (table === 'contact_memory_events') return Response.json({ id: 'existing-memory' })
-        if (table === 'agendapro_bookings') return Response.json(agenda)
+        if (table === 'agendapro_bookings') {
+          expect(url.searchParams.getAll('or')).toEqual([
+            '(confirmation_reminder_status.in.(sending,sent),confirmation_review_required.eq.true)',
+            '(confirmation_reminder_status.eq.sending,confirmation_reminder_conversation_id.is.null,confirmation_reminder_conversation_id.eq.conversation)',
+          ])
+          return Response.json(agenda)
+        }
         return new Response(`Unexpected query ${method} ${table}`, { status: 500 })
       },
     },
@@ -259,16 +266,31 @@ describe('reservation confirmation worker', () => {
 
   it('leaves the reservation for review when the recipient has an active flow', async () => {
     jobs[0].state = 'sent'
-    activeFlows = [{ id: 'flow-run' }]
+    activeFlows = [{ id: 'flow-run', conversation_id: 'conversation' }]
     expect(await handleReservationConfirmationReply(db(), 'account', 'contact', 'conversation', 'Sí')).toBe('ambiguous')
     expect(jobs[0].response).toBeNull()
     expect(mocks.memory).not.toHaveBeenCalled()
     expect(notices).toEqual(['ambiguous_reply'])
   })
 
+  it('leaves a reply for review when the flow consumed it and already ended', async () => {
+    jobs[0].state = 'sent'
+    expect(await handleReservationConfirmationReply(db(), 'account', 'contact', 'conversation', 'Sí', undefined, true)).toBe('ambiguous')
+    expect(jobs[0].response).toBeNull()
+    expect(notices).toEqual(['ambiguous_reply'])
+  })
+
   it('does not interfere with an active flow when no reservation is pending', async () => {
-    activeFlows = [{ id: 'flow-run' }]
+    activeFlows = [{ id: 'flow-run', conversation_id: 'conversation' }]
     expect(await handleReservationConfirmationReply(db(), 'account', 'contact', 'conversation', 'Sí')).toBe('none')
+    expect(notices).toEqual([])
+  })
+
+  it('does not treat a flow on a different line as an ambiguous reply', async () => {
+    jobs[0].state = 'sent'
+    activeFlows = [{ id: 'other-flow', conversation_id: 'other-conversation' }]
+    expect(await handleReservationConfirmationReply(db(), 'account', 'contact', 'conversation', 'Sí')).toBe('handled')
+    expect(jobs[0].response).toBe('yes')
     expect(notices).toEqual([])
   })
 

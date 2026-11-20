@@ -27,6 +27,11 @@ Un administrador las crea y activa; una vez activas, corren solas.
    etiqueta, mover un trato de etapa, notificar a alguien del equipo.
 4. Actívala.
 
+Si una automatización envía mensajes sin una conversación de origen y el
+contacto tiene varias conversaciones, el envío se detiene para evitar elegir
+una línea equivocada. Prueba las reglas de etiquetas y otros disparadores
+desde la conversación correspondiente.
+
 ## Aviso fuera de horario para WhatsApp conectado
 
 Un administrador puede configurar un aviso por cada número conectado mediante

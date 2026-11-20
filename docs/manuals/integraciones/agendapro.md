@@ -105,6 +105,19 @@ El aviso a recepción llega como notificación dentro de NexoOmni (campana
 de notificaciones) y, si configuraste un teléfono, también por
 WhatsApp.
 
+Si hay varias líneas conectadas y no se puede identificar una única línea
+para el cliente, el recordatorio no se envía; hay que revisar el envío.
+
+Las respuestas se relacionan con la conversación por la que se envió el
+recordatorio. Si el recordatorio es anterior a esta mejora y no se conoce
+la conversación, si hay varias citas posibles o la respuesta coincide con
+un flujo en curso, la cita no se confirma automáticamente: el equipo recibe
+una notificación para revisarla. Si la respuesta llega mientras se registra
+el envío, también se deja para revisión.
+Si se reagenda una cita cuyo recordatorio ya se envió o está en proceso,
+el equipo también debe revisarla: una respuesta podría referirse al horario
+anterior.
+
 ### 4. Vista de calendario por día, semana y mes, y colores por estado
 
 El menú **AgendaPro** se ve como el calendario de AgendaPro: una vista

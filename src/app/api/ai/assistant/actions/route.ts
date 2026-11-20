@@ -134,7 +134,7 @@ async function executeAction(
 
   const { data: conversation, error: conversationError } = await db.from('conversations')
     .select('id, channel_type').eq('account_id', accountId)
-    .eq('contact_id', contact.id).maybeSingle()
+    .eq('contact_id', contact.id).eq('channel_type', 'whatsapp').maybeSingle()
   if (conversationError) throw conversationError
   if (!conversation || conversation.channel_type !== 'whatsapp') {
     throw new ActionPreconditionError('The contact no longer has an eligible WhatsApp conversation.')

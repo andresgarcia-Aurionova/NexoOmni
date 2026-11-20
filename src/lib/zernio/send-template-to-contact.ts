@@ -57,7 +57,6 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
   if (!isValidE164(phone)) throw new Error('El contacto no tiene un teléfono de WhatsApp válido.');
   if (args.connectors.length === 0) throw new Error('No hay un número de WhatsApp conectado con la Conexión NexoOmni.');
 
-  // Prefer the number this contact already talks to; otherwise the first.
   const connectorIds = args.connectors.map((c) => c.id);
   const { data: existingRows, error: existingError } = await db
     .from('conversations')
@@ -66,9 +65,11 @@ export async function sendZernioTemplateToContact(db: SupabaseClient, args: {
     .eq('contact_id', args.contactId)
     .eq('channel_type', 'zernio_whatsapp')
     .in('connector_id', connectorIds)
-    .order('last_message_at', { ascending: false, nullsFirst: false })
-    .limit(1);
+    .limit(2);
   if (existingError) throw existingError;
+  if ((existingRows?.length ?? 0) > 1 || (!existingRows?.length && args.connectors.length > 1)) {
+    throw new Error('No se puede determinar la línea de WhatsApp; requiere revisión.');
+  }
   const existing = existingRows?.[0] as { id: string; connector_id: string; external_session_id: string | null } | undefined;
   const connector = args.connectors.find((c) => c.id === existing?.connector_id) ?? args.connectors[0];
 
@@ -187,12 +188,10 @@ export async function attachZernioConversation(
   existingId: string | undefined,
   externalSessionId: string | null,
 ): Promise<string> {
+  if (externalSessionId) {
+    return attachVerifiedZernioConversation(db, args, connectorId, existingId, externalSessionId);
+  }
   if (existingId) {
-    if (externalSessionId) {
-      const { error } = await db.from('conversations').update({ external_session_id: externalSessionId })
-        .eq('id', existingId).eq('account_id', args.accountId).eq('connector_id', connectorId);
-      if (error) throw error;
-    }
     return existingId;
   }
   const { data: created, error } = await db.from('conversations').insert({
@@ -207,13 +206,6 @@ export async function attachZernioConversation(
   if (isUniqueViolation(error)) {
     // The webhook's echo of this send (or an inbound from the client) got
     // there first — reuse that row.
-    const byThread = externalSessionId
-      ? await db.from('conversations').select('id')
-          .eq('account_id', args.accountId).eq('connector_id', connectorId).eq('external_session_id', externalSessionId)
-          .limit(1)
-      : null;
-    if (byThread?.error) throw byThread.error;
-    if (byThread?.data?.[0]) return byThread.data[0].id as string;
     const { data: byContact, error: contactError } = await db.from('conversations').select('id')
       .eq('account_id', args.accountId).eq('contact_id', args.contactId).eq('connector_id', connectorId).eq('channel_type', 'zernio_whatsapp')
       .limit(1);

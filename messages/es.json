@@ -2043,6 +2043,8 @@
     }
   },
   "ReservationConfirmations": {
+    "agendaReviewTitle": "Respuesta de AgendaPro por revisar",
+    "agendaReviewBody": "Revisa la conversación y confirma manualmente la cita de AgendaPro. No se pudo asociar la respuesta con seguridad.",
     "title": "Confirmación de reservación",
     "reviewTitle": "Confirmación de reservación por revisar",
     "ambiguousTitle": "Respuesta de reservación por revisar",

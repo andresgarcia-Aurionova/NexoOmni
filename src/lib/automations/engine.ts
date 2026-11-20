@@ -735,9 +735,9 @@ async function stepChannel(args: ExecuteArgs, conversationId: string): Promise<C
 /**
  * Pick the conversation a send-type step should use. Prefer the id the
  * webhook handed us (it's the one that just got the inbound message);
- * fall back to the contact's conversation for resumed/wait paths and
- * manual engine POSTs. Throws if none exists — send steps have
- * no meaningful target without a conversation.
+ * fall back only when the contact has exactly one conversation. A
+ * contact-only trigger with multiple conversations must fail rather than
+ * send through an arbitrary line.
  */
 async function resolveConversationId(args: ExecuteArgs): Promise<string> {
   const fromCtx = args.context.conversation_id

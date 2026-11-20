@@ -271,6 +271,7 @@ export async function processReservationConfirmationJobs(db: SupabaseClient) {
 
 export async function handleReservationConfirmationReply(
   db: SupabaseClient, accountId: string, contactId: string, conversationId: string, text: string, senderPhone?: string,
+  flowConsumed = false,
 ): Promise<'none' | 'handled' | 'ambiguous'> {
   const normalized = text.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase()
   if (normalized !== 'si' && normalized !== 'no') return 'none'
@@ -307,9 +308,10 @@ export async function handleReservationConfirmationReply(
   }
   if (!jobs.length) return 'none'
   const { data: activeFlows, error: flowError } = await db.from('flow_runs')
-    .select('id').eq('account_id', accountId).eq('contact_id', contactId).eq('status', 'active').limit(1)
+    .select('id').eq('account_id', accountId).eq('contact_id', contactId)
+    .eq('conversation_id', conversationId).eq('status', 'active').limit(1)
   if (flowError) throw flowError
-  if (activeFlows?.length) {
+  if (flowConsumed || activeFlows?.length) {
     for (const pending of jobs as Job[]) await notify(db, pending, 'ambiguous_reply', copy.ambiguousTitle, copy.ambiguous)
     return 'ambiguous'
   }
@@ -334,7 +336,9 @@ export async function handleReservationConfirmationReply(
   }
   const { data: agendaPro, error: agendaError } = await db.from('agendapro_bookings')
     .select('id').eq('account_id', accountId).eq('contact_id', contactId)
-    .eq('confirmation_status', 'pending').eq('confirmation_reminder_status', 'sent')
+    .eq('confirmation_status', 'pending')
+    .or('confirmation_reminder_status.in.(sending,sent),confirmation_review_required.eq.true')
+    .or(`confirmation_reminder_status.eq.sending,confirmation_reminder_conversation_id.is.null,confirmation_reminder_conversation_id.eq.${conversationId}`)
     .gt('start_time', new Date().toISOString()).limit(1)
   if (agendaError) throw agendaError
   if (jobs.length !== 1 || agendaPro?.length) {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('@/lib/zernio/server', () => ({
   sendZernioTemplateMessage: vi.fn(),
@@ -8,7 +8,7 @@ vi.mock('@/lib/zernio/server', () => ({
 }));
 
 import { getZernioParticipantProfile, sendZernioTemplateMessage, sendZernioTemplateToConversation } from '@/lib/zernio/server';
-import { sendZernioTemplateToContact } from './send-template-to-contact';
+import { attachZernioConversation, sendZernioTemplateToContact } from './send-template-to-contact';
 
 type Row = Record<string, unknown>;
 
@@ -16,6 +16,7 @@ type Row = Record<string, unknown>;
  *  for successive awaited selects on that table; inserts are recorded. */
 function makeDb(opts: {
   existingConversation?: Row | null;
+  existingConversations?: Row[];
   insertConversationError?: { code: string } | null;
   racedConversation?: Row | null;
   mappedIdentity?: Row | null;
@@ -38,7 +39,8 @@ function makeDb(opts: {
         if (table === 'conversations') {
           conversationSelects++;
           const row = conversationSelects === 1 ? opts.existingConversation : opts.racedConversation;
-          return Promise.resolve({ data: row ? [row] : [], error: null });
+          return Promise.resolve({ data: conversationSelects === 1 && opts.existingConversations
+            ? opts.existingConversations : row ? [row] : [], error: null });
         }
         return Promise.resolve({ data: [], error: null });
       },
@@ -77,6 +79,26 @@ const base = {
   bodyParams: ['Ana', 'Terapia', 'viernes 3', '10:00', 'Balbuena'],
   connectors: [{ id: 'conn-1', zernio_account_id: 'zacc-1' }],
 };
+
+it('resolves a raced thread only with the account, line, contact and exact external ID', async () => {
+  const requests: URL[] = [];
+  const db = createClient('https://db.example.test', 'key', { global: {
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (init?.method === 'POST') {
+        return Response.json({ code: '23505', message: 'duplicate' }, { status: 409 });
+      }
+      return Response.json([]);
+    },
+  } });
+  await expect(attachZernioConversation(db, base, 'conn-1', undefined, 'thread')).rejects.toThrow('requiere revisión');
+  const lookup = requests[1];
+  expect(lookup.searchParams.get('account_id')).toBe('eq.acct');
+  expect(lookup.searchParams.get('connector_id')).toBe('eq.conn-1');
+  expect(lookup.searchParams.get('contact_id')).toBe('eq.contact-1');
+  expect(lookup.searchParams.get('external_session_id')).toBe('eq.thread');
+});
 
 describe('sendZernioTemplateToContact', () => {
   beforeEach(() => {
@@ -118,17 +140,51 @@ describe('sendZernioTemplateToContact', () => {
     });
   });
 
+  it('does not choose an arbitrary line when the contact has conversations on two lines', async () => {
+    const { db } = makeDb({ existingConversations: [
+      { id: 'conv-1', connector_id: 'conn-1', external_session_id: 'thread-1' },
+      { id: 'conv-2', connector_id: 'conn-2', external_session_id: 'thread-2' },
+    ] });
+    await expect(sendZernioTemplateToContact(db, {
+      ...base, connectors: [...base.connectors, { id: 'conn-2', zernio_account_id: 'zacc-2' }],
+    })).rejects.toThrow('requiere revisión');
+    expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+    expect(sendZernioTemplateToConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not choose an arbitrary line for a new conversation', async () => {
+    const { db } = makeDb({});
+    await expect(sendZernioTemplateToContact(db, {
+      ...base, connectors: [...base.connectors, { id: 'conn-2', zernio_account_id: 'zacc-2' }],
+    })).rejects.toThrow('requiere revisión');
+    expect(sendZernioTemplateMessage).not.toHaveBeenCalled();
+    expect(sendZernioTemplateToConversation).not.toHaveBeenCalled();
+  });
+
   it("reuses the webhook's row when its echo created the conversation first", async () => {
     vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'zmsg-3', conversationId: 'zconv-3' });
     const { db } = makeDb({
       existingConversation: null,
       insertConversationError: { code: '23505' },
-      racedConversation: { id: 'conv-from-webhook' },
+      strictConversation: { id: 'conv-from-webhook' },
     });
 
     const result = await sendZernioTemplateToContact(db, base);
 
     expect(result.conversationId).toBe('conv-from-webhook');
+  });
+
+  it('does not associate a raced thread belonging to another contact', async () => {
+    vi.mocked(sendZernioTemplateMessage).mockResolvedValue({ messageId: 'zmsg', conversationId: 'thread' });
+    const { db, inserts } = makeDb({
+      existingConversation: null,
+      insertConversationError: { code: '23505' },
+      strictConversation: null,
+      racedConversation: { id: 'other-contact-thread' },
+    });
+
+    await expect(sendZernioTemplateToContact(db, base)).rejects.toThrow('requiere revisión');
+    expect(inserts.some((entry) => entry.table === 'messages')).toBe(false);
   });
 
   it('rejects an invalid phone without calling Zernio', async () => {

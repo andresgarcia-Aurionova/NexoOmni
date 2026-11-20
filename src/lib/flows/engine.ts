@@ -27,8 +27,8 @@
  *   - Optimistic UPDATE with `current_node_key` precondition: two
  *     simultaneous taps for the same run collide at the DB layer; the
  *     second is a no-op.
- *   - Partial unique index `idx_one_active_run_per_contact`: two
- *     simultaneous starts for the same contact collide; the second
+ *   - Partial unique index `idx_one_active_run_per_conversation`: two
+ *     simultaneous starts for the same conversation collide; the second
  *     INSERT raises 23505 and the runner catches & exits.
  */
 
@@ -219,30 +219,24 @@ export function evaluateConditionPredicate(args: {
 
 type AdminClient = ReturnType<typeof supabaseAdmin>;
 
-async function loadActiveRunForContact(
+async function loadActiveRunForConversation(
   db: AdminClient,
   accountId: string,
   contactId: string,
+  conversationId: string,
   strict = false,
 ): Promise<FlowRunRow | null> {
-  // The partial unique index `idx_one_active_run_per_contact` was
-  // rebuilt in migration 017 over `(account_id, contact_id)` — so
-  // "two active runs for one contact in one account" is impossible
-  // by design. But a future migration glitch or manual SQL could
-  // create one, and .maybeSingle() throws on >1 row — which would
-  // kill dispatch for that contact's webhook entirely. .limit(1) is
-  // forgiving: pick the newest, let the cron sweep clean up the
-  // stale one.
   const { data, error } = await db
     .from("flow_runs")
     .select("*")
     .eq("account_id", accountId)
     .eq("contact_id", contactId)
+    .eq("conversation_id", conversationId)
     .eq("status", "active")
     .order("started_at", { ascending: false })
     .limit(1);
   if (error) {
-    console.error("[flows] loadActiveRunForContact error:", error.message);
+    console.error("[flows] loadActiveRunForConversation error:", error.message);
     if (strict) throw error;
     return null;
   }
@@ -324,28 +318,27 @@ async function logEvent(
 
 /**
  * Idempotency check — has a `reply_received` event with this Meta
- * message_id already been recorded for any of the contact's flow
+ * message_id already been recorded for any of this conversation's flow
  * runs? If yes, the inbound is a duplicate (Meta retry) and we
  * exit without re-advancing.
  *
- * Implementation note: scoped to runs belonging to this user/contact
- * so the lookup is cheap (the index on flow_run_events(flow_run_id,
- * event_type) plus the small set of runs per contact).
+ * Scope the check to the conversation so different provider lines
+ * cannot suppress one another's replies.
  */
 async function isDuplicateInbound(
   db: AdminClient,
   accountId: string,
   contactId: string,
+  conversationId: string,
   metaMessageId: string,
 ): Promise<boolean> {
-  // Fetch ALL run ids for this contact in this account (active +
-  // historical). Bounded by how many flows the customer has been
-  // through — small.
+  // Include historical runs to catch retries after a run ends.
   const { data: runs } = await db
     .from("flow_runs")
     .select("id")
     .eq("account_id", accountId)
-    .eq("contact_id", contactId);
+    .eq("contact_id", contactId)
+    .eq("conversation_id", conversationId);
   if (!runs?.length) return false;
   const runIds = runs.map((r) => (r as { id: string }).id);
 
@@ -995,21 +988,23 @@ export async function dispatchInboundToFlows(
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
   try {
-    const activeRun = await loadActiveRunForContact(
+    const activeRun = await loadActiveRunForConversation(
       db,
       input.accountId,
       input.contactId,
+      input.conversationId,
       input.allowNewRuns === false,
     );
 
     // Idempotency — only matters if there's already a run for this
-    // contact. For new runs, the partial unique index catches duplicate
+    // conversation. For new runs, the partial unique index catches duplicate
     // starts at INSERT time.
     if (activeRun) {
       const dupe = await isDuplicateInbound(
         db,
         input.accountId,
         input.contactId,
+        input.conversationId,
         input.message.meta_message_id,
       );
       if (dupe) {
@@ -1285,17 +1280,14 @@ async function startNewRun(
   input: DispatchInboundInput,
   nodes: Map<string, FlowNodeRow>,
 ): Promise<DispatchInboundResult> {
-  // INSERT — partial unique index `idx_one_active_run_per_contact`
+  // INSERT — partial unique index `idx_one_active_run_per_conversation`
   // catches concurrent inserts with 23505. We catch and return as
   // consumed:true (the parallel webhook handles it).
   const { data: inserted, error: insErr } = await db
     .from("flow_runs")
     .insert({
       flow_id: flow.id,
-      // Tenancy: NOT NULL post-017. The partial unique index
-      // `idx_one_active_run_per_contact` is over (account_id,
-      // contact_id) WHERE status='active', so two accounts sharing
-      // a contact phone number each run their own flows independently.
+      // Tenancy: NOT NULL post-017.
       account_id: flow.account_id,
       // Audit: preserves the flow's author on the run row for log
       // attribution.

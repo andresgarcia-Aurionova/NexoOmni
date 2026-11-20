@@ -28,6 +28,11 @@ Cualquier persona del equipo que reconozca el duplicado.
    duplicado se mueven al contacto que conservaste, y el duplicado se
    elimina.
 
+Las conversaciones de distintas líneas de WhatsApp se conservan separadas.
+Si ambos contactos tienen una conversación en la misma línea conectada, la
+fusión se bloquea para no mezclar destinatarios ni historiales; revísalos
+con tu equipo antes de continuar.
+
 ## El segundo número no se pierde
 
 Si el duplicado tenía otro número de teléfono, ese número queda
@@ -49,8 +54,8 @@ No — revisa bien cuál contacto es el que quieres conservar antes de
 confirmar.
 
 **Un cliente tiene 3 números distintos, ¿puedo fusionar todos?**
-Sí, puedes fusionar tantas veces como haga falta; todos los números
-anteriores se van acumulando en la misma ficha.
+Puedes fusionarlos siempre que no tengan conversaciones en conflicto en la
+misma línea conectada. Los números anteriores se acumulan en la misma ficha.
 
 ## Ver también
 

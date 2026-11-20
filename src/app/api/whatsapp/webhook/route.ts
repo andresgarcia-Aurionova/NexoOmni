@@ -14,8 +14,7 @@ import {
 } from '@/lib/whatsapp/template-webhook'
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny as flagBroadcastReplyIfAnyShared } from '@/lib/whatsapp/broadcast-reply-flag'
-import { handleAgendaProConfirmationReply } from '@/lib/agendapro/confirmation'
-import { handleReservationConfirmationReply } from '@/lib/telephony/reservation-confirmation-worker'
+import { handleWhatsAppConfirmationReplies } from '@/lib/telephony/confirmation-replies'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -673,19 +672,6 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id, conversation.id)
 
-  // AgendaPro 24h confirmation: a plain-text SI/NO reply is matched
-  // against the contact's nearest pending confirmation, if any. Runs
-  // before the flow/automation dispatch below but never blocks it —
-  // most inbound text has no pending confirmation and is a fast no-op.
-  if (message.type === 'text' && !interactiveReplyId && contentText?.trim()) {
-    try {
-      const reservationReply = await handleReservationConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, conversation.id, contentText)
-      if (reservationReply === 'none') await handleAgendaProConfirmationReply(supabaseAdmin(), accountId, contactRecord.id, contentText)
-    } catch (error) {
-      console.error('[reservations] could not process a confirmation reply:', error)
-    }
-  }
-
   // ============================================================
   // Flow runner dispatch.
   //
@@ -727,6 +713,16 @@ async function processMessage(
     isFirstInboundMessage,
   })
   const flowConsumed = flowResult.consumed
+  if (message.type === 'text' && !interactiveReplyId && contentText?.trim()) {
+    try {
+      const flowHandled = flowConsumed || Boolean(flowResult.flow_run_id)
+      await handleWhatsAppConfirmationReplies(
+        supabaseAdmin(), accountId, contactRecord.id, conversation.id, contentText, flowHandled,
+      )
+    } catch (error) {
+      console.error('[reservations] could not process a confirmation reply:', error)
+    }
+  }
 
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound

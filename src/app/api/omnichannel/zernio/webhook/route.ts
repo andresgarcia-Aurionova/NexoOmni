@@ -18,8 +18,7 @@ import { parseZernioPublicComment } from '@/lib/zernio/comment-context'
 import { processWebPushOutbox } from '@/lib/notifications/web-push'
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny } from '@/lib/whatsapp/broadcast-reply-flag'
-import { handleAgendaProConfirmationReply } from '@/lib/agendapro/confirmation'
-import { handleReservationConfirmationReply } from '@/lib/telephony/reservation-confirmation-worker'
+import { handleWhatsAppConfirmationReplies } from '@/lib/telephony/confirmation-replies'
 import { reservationReplySenderPhone } from '@/lib/telephony/reservation-reply-sender'
 import { findExactZernioWhatsAppContact } from '@/lib/zernio/whatsapp-contact'
 import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversation'
@@ -952,19 +951,6 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       // up the same as a reply on the native (direct Meta) connection.
       if (typed.provider === 'zernio_whatsapp') {
         await flagBroadcastReplyIfAny(db, typed.account_id, contactId, conversationRow.id)
-        // AgendaPro 24h confirmation: same SI/NO handling as the native
-        // WhatsApp webhook — a Zernio-only account sends its reminders
-        // through this number, so the client's reply arrives here.
-        if (contentType === 'text' && content.trim()) {
-          try {
-            const inboundSender = record(incoming.sender ?? event.sender)
-            const replyPhone = reservationReplySenderPhone(inboundSender.phoneNumber, inboundSender.phone)
-            const reservationReply = await handleReservationConfirmationReply(db, typed.account_id, contactId, conversationRow.id, content, replyPhone)
-            if (reservationReply === 'none') await handleAgendaProConfirmationReply(db, typed.account_id, contactId, content)
-          } catch (error) {
-            console.error('[reservations] could not process a confirmation reply (zernio):', error)
-          }
-        }
       }
       await db.rpc('auto_assign_inbound_conversation', { p_account_id: typed.account_id, p_conversation_id: conversationRow.id })
       // Flows run before automations and the AI: a customer navigating a bot
@@ -988,6 +974,18 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
             isFirstInboundMessage: isFirstInboundMessage || deferred,
             allowNewRuns,
           })
+          if (typed.provider === 'zernio_whatsapp' && contentType === 'text' && content.trim()) {
+            try {
+              const inboundSender = record(incoming.sender ?? event.sender)
+              const replyPhone = reservationReplySenderPhone(inboundSender.phoneNumber, inboundSender.phone)
+              const flowHandled = result.consumed || Boolean(result.flow_run_id)
+              await handleWhatsAppConfirmationReplies(
+                db, typed.account_id, contactId, conversationRow.id, content, flowHandled, replyPhone,
+              )
+            } catch (error) {
+              console.error('[reservations] could not process a confirmation reply (zernio):', error)
+            }
+          }
           if (deferred && result.consumed) {
             await deferredFirstInbound(db, typed.account_id, conversationRow.id, true)
           }
