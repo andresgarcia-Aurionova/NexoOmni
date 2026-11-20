@@ -221,6 +221,8 @@ export interface BookAppointmentNodeConfig {
   specialist_id?: string;
   /** Optional note; supports {{vars.X}} interpolation. */
   notes?: string;
+  /** Optional variable for the resulting appointment reference. */
+  reference_var_key?: string;
   next_node_key: string;
   /** Taken between the offer and the confirmation — rare, but real. */
   conflict_next?: string;

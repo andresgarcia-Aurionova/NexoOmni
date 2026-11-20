@@ -50,6 +50,11 @@ recopiladas antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y
 contacto y la conversación. La agenda de horarios no controla automáticamente
 el cupo de mesas o zonas de un restaurante.
 
+Para mostrar la referencia de una cita, escribe por ejemplo `referencia_cita`
+en **Clave para guardar la referencia de la cita**. Un mensaje posterior puede
+incluir `{{vars.referencia_cita}}`. La referencia identifica la cita en
+NexoOmni; no reemplaza un folio comercial con formato acordado.
+
 ## Preguntas frecuentes
 
 **¿Un flujo puede reemplazar completamente a un agente humano?**

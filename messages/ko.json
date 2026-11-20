@@ -1893,6 +1893,7 @@
       "noNodeSelected": "선택된 노드가 없습니다",
       "noNodeDesc": "캔버스에서 노드를 선택해 설정을 편집하세요.",
       "form": {
+        "appointmentReferenceVariable": "예약 참조를 저장할 변수 (선택)",
         "advancesTo": "다음 진행",
         "textToCustomer": "고객에게 전송되는 텍스트",
         "promptToCustomer": "고객에게 전송되는 질문",

@@ -737,12 +737,16 @@ function validateNode(
     case "book_appointment": {
       const cfg = node.config as {
         slot_var_key?: string;
+        reference_var_key?: string;
         title?: string;
         duration_minutes?: number;
         next_node_key?: string;
         conflict_next?: string;
       };
       validateVarKey(issues, node.node_key, "slot_var_key", cfg.slot_var_key, "El nodo Agendar cita necesita la clave donde se guardó el horario elegido.");
+      if (cfg.reference_var_key) {
+        validateVarKey(issues, node.node_key, "reference_var_key", cfg.reference_var_key, "La clave de referencia no es válida.");
+      }
       if (!cfg.title?.trim()) {
         issues.push({ severity: "error", scope: "node", node_key: node.node_key, field: "title", message: "El nodo Agendar cita necesita un título." });
       }

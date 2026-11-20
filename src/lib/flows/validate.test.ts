@@ -45,6 +45,21 @@ describe("contact note capture validation", () => {
     )
     expect(validateFlowForActivation(validFlow, nodes("Motivo (flujo automático)"))).toEqual([])
   })
+
+  describe("appointment reference validation", () => {
+    it("rejects a malformed optional reference variable", () => {
+      const nodes = [
+        { node_key: "start", node_type: "start", config: { next_node_key: "book" } },
+        { node_key: "book", node_type: "book_appointment", config: {
+          slot_var_key: "slot", title: "Reserva", reference_var_key: "1invalida", next_node_key: "end",
+        } },
+        { node_key: "end", node_type: "end", config: {} },
+      ];
+      expect(validateFlowForActivation(validFlow, nodes)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: "reference_var_key" })]),
+      );
+    });
+  });
 })
 
 describe("validateFlowForActivation — flow-level", () => {

@@ -494,10 +494,12 @@ async function executeHandoff(
   };
   if (cfg.assign_to) convUpdate.assigned_agent_id = cfg.assign_to;
   if (run.conversation_id) {
-    await db
+    const { error } = await db
       .from("conversations")
       .update(convUpdate)
+      .eq("account_id", run.account_id)
       .eq("id", run.conversation_id);
+    if (error) console.error("[flows] handoff conversation update failed:", error.message);
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ?? null,
@@ -565,7 +567,7 @@ async function endRun(
   status: "completed" | "handed_off" | "timed_out" | "failed",
   reason: string,
 ): Promise<void> {
-  await db
+  const { error } = await db
     .from("flow_runs")
     .update({
       status,
@@ -573,6 +575,7 @@ async function endRun(
       end_reason: reason,
     })
     .eq("id", runId);
+  if (error) console.error("[flows] endRun error:", error.message);
 }
 
 // ============================================================
@@ -882,8 +885,8 @@ async function advanceFromNodeKey(
       await logEvent(db, run.id, "node_entered", node.node_key, {
         node_type: "book_appointment",
         booked: result.ok,
-        reason: result.reason ?? null,
-        appointment_id: result.appointmentId ?? null,
+        reason: result.ok ? null : result.reason,
+        appointment_id: result.ok ? result.appointmentId : null,
       });
       if (!result.ok) {
         if (!cfg.conflict_next) {
@@ -892,6 +895,34 @@ async function advanceFromNodeKey(
         }
         currentKey = cfg.conflict_next;
         continue;
+      }
+      if (cfg.reference_var_key) {
+        const vars = { ...run.vars, [cfg.reference_var_key]: result.appointmentId };
+        const { data: updated, error } = await db.from("flow_runs")
+          .update({ vars })
+          .eq("id", run.id)
+          .eq("account_id", run.account_id)
+          .eq("status", "active")
+          .select("id")
+          .maybeSingle();
+        if (error) {
+          console.error("[flows] could not save appointment reference:", error.message);
+          await logEvent(db, run.id, "error", node.node_key, {
+            reason: "appointment_reference_save_failed",
+            appointment_id: result.appointmentId,
+          });
+          await executeHandoff(db, run, node);
+          return { outcome: "handed_off" };
+        }
+        if (!updated) {
+          console.error("[flows] appointment reference not saved because the run is no longer active:", result.appointmentId);
+          await logEvent(db, run.id, "error", node.node_key, {
+            reason: "appointment_reference_run_inactive",
+            appointment_id: result.appointmentId,
+          });
+          return { outcome: "completed" };
+        }
+        run.vars = vars;
       }
       currentKey = cfg.next_node_key;
       continue;

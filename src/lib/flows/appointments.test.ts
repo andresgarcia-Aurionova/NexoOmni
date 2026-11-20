@@ -8,6 +8,18 @@ vi.mock('@/lib/appointments/availability', () => ({
 }))
 
 describe('flow appointment booking', () => {
+  it('does not book a slot that has already passed', async () => {
+    const fetch = vi.fn()
+    const db = createClient('https://db.example.test', 'key', { global: { fetch } })
+    const result = await bookFlowAppointment(db, {
+      accountId: 'account', userId: 'owner', contactId: 'contact', conversationId: 'conversation',
+      cfg: { slot_var_key: 'slot', title: 'Reservación', next_node_key: 'next' },
+      vars: { slot: '2000-01-01T18:00:00.000Z' },
+    })
+    expect(result).toEqual({ ok: false, reason: 'no_slot' })
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('stores the captured reservation details in the appointment notes', async () => {
     let saved: Record<string, unknown> | undefined
     const db = createClient('https://db.example.test', 'key', { global: {

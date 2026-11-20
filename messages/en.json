@@ -1893,6 +1893,7 @@
       "noNodeSelected": "No node selected",
       "noNodeDesc": "Select a node on the canvas to edit its configuration.",
       "form": {
+        "appointmentReferenceVariable": "Variable for the appointment reference (optional)",
         "advancesTo": "Advances to",
         "textToCustomer": "Text sent to the customer",
         "promptToCustomer": "Prompt sent to the customer",

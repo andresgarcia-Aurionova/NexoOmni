@@ -402,6 +402,7 @@ interface OfferSlotsCfg {
 
 interface BookAppointmentCfg {
   slot_var_key?: string;
+  reference_var_key?: string;
   title?: string;
   specialist_id?: string;
   duration_minutes?: number;
@@ -478,6 +479,7 @@ function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: Of
 }
 
 function BookAppointmentForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: BookAppointmentCfg; allNodes: BuilderNode[]; currentKey: string; onUpdateConfig: (patch: Record<string, unknown>) => void }) {
+  const t = useTranslations("Flows.builder.form");
   return <>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div><label className="mb-1 block text-xs text-muted-foreground">Clave del horario elegido</label><Input value={cfg.slot_var_key ?? "slot"} onChange={(event) => onUpdateConfig({ slot_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
@@ -488,6 +490,7 @@ function BookAppointmentForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cf
     </div>
     <TextRow label="Título de la cita" value={cfg.title ?? ""} onChange={(title) => onUpdateConfig({ title })} />
     <TextRow label="Notas internas" value={cfg.notes ?? ""} onChange={(notes) => onUpdateConfig({ notes })} rows={2} />
+    <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentReferenceVariable")}</label><Input value={cfg.reference_var_key ?? ""} onChange={(event) => onUpdateConfig({ reference_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Cita confirmada" />
       <NextNodeRow value={cfg.conflict_next ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(conflict_next) => onUpdateConfig({ conflict_next })} label="Horario ocupado" />

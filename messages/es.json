@@ -1893,6 +1893,7 @@
       "noNodeSelected": "Ningún nodo seleccionado",
       "noNodeDesc": "Selecciona un nodo en el lienzo para editar su configuración.",
       "form": {
+        "appointmentReferenceVariable": "Clave para guardar la referencia de la cita (opcional)",
         "advancesTo": "Avanza hacia",
         "textToCustomer": "Texto enviado al cliente",
         "promptToCustomer": "Mensaje (prompt) enviado al cliente",

@@ -95,12 +95,9 @@ async function scheduleTimezone(
   return (own?.timezone as string) || (rows[0]?.timezone as string) || 'UTC'
 }
 
-export interface BookResult {
-  ok: boolean
-  reason?: 'no_slot' | 'conflict' | 'failed'
-  appointmentId?: string
-  startsAt?: string
-}
+export type BookResult =
+  | { ok: true; appointmentId: string; startsAt: string }
+  | { ok: false; reason: 'no_slot' | 'conflict' | 'failed' }
 
 /**
  * Book the slot the customer chose. The window between the offer and the
@@ -120,7 +117,9 @@ export async function bookFlowAppointment(
 ): Promise<BookResult> {
   const startIso = String(args.vars[args.cfg.slot_var_key] ?? '')
   const start = new Date(startIso)
-  if (!startIso || Number.isNaN(start.getTime())) return { ok: false, reason: 'no_slot' }
+  if (!startIso || Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
+    return { ok: false, reason: 'no_slot' }
+  }
 
   const duration = Math.min(480, Math.max(5, args.cfg.duration_minutes ?? 30))
   const end = new Date(start.getTime() + duration * 60_000)
