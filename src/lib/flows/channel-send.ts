@@ -173,8 +173,9 @@ export function matchNumberedOption(
   const answer = normalize(reply)
   if (!answer) return null
 
-  const asNumber = Number(answer.replace(/[^\d]/g, ''))
-  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= options.length) {
+  const numericReply = /^(?:opcion\s+)?(\d+)[.)]?$/.exec(answer)
+  const asNumber = numericReply ? Number(numericReply[1]) : null
+  if (asNumber !== null && Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= options.length) {
     return options[asNumber - 1].id
   }
   return options.find((option) => normalize(option.title) === answer)?.id ?? null

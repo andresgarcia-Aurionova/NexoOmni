@@ -31,6 +31,9 @@ describe('matchNumberedOption', () => {
 
   it('returns null for an unrelated answer', () => {
     expect(matchNumberedOption('quiero hablar con alguien', options)).toBeNull()
+    expect(matchNumberedOption('quiero reservar para 2 personas', options)).toBeNull()
+    expect(matchNumberedOption('no quiero la opción 2', options)).toBeNull()
+    expect(matchNumberedOption('a las 2', options)).toBeNull()
     expect(matchNumberedOption('', options)).toBeNull()
   })
 })
