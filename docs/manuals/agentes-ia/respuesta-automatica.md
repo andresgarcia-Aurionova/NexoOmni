@@ -23,7 +23,7 @@ actives).
 ## Cómo se usa
 
 1. Ve a **Agentes IA → Configuración**.
-2. Elige el proveedor y modelo de IA, y pega tu clave de API.
+2. Confirma que el operador de la plataforma configuró el servicio de IA.
 3. Define el tono, las instrucciones y en qué canales debe responder.
 4. Dentro del mismo texto de instrucciones puedes usar dos variables
    que NexoOmni reemplaza automáticamente antes de cada respuesta:
@@ -39,6 +39,18 @@ actives).
    la respuesta).
 6. Prueba las respuestas en **Agentes IA → Playground** antes de
    activarlo con clientes reales.
+
+Para limitar la respuesta automática a una sola línea de WhatsApp conectado,
+selecciónala en **Línea de WhatsApp conectado para la respuesta automática**.
+Mantén habilitado el canal **WhatsApp (conectado)** en la selección de canales.
+Si no seleccionas una línea, el agente puede responder en todos los canales
+habilitados. Si la línea se desconecta o elimina, la selección se conserva y
+no se habilitan automáticamente otras líneas. La modificación aplica a
+mensajes posteriores; una respuesta ya en preparación podría continuar.
+
+Esta selección no integra el agente con un flujo activo: el flujo tiene
+prioridad y la respuesta automática solo interviene cuando el flujo no consume
+el mensaje. El agente no consulta ni registra citas por sí solo.
 
 ## Preguntas frecuentes
 

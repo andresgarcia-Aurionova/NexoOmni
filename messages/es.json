@@ -2530,6 +2530,11 @@
       "saveSuccess": "Moneda predeterminada actualizada"
     },
     "aiConfig": {
+      "connectedLineLabel": "Línea de WhatsApp conectado para la respuesta automática",
+      "connectedLineAll": "Todas las líneas según los canales elegidos",
+      "connectedLineUnavailable": "Línea seleccionada no disponible",
+      "connectedLineError": "No se pudieron cargar las líneas. La selección guardada no ha cambiado.",
+      "connectedLineHint": "Opcional: limita la respuesta automática a una línea conectada. Sin selección, puede responder en todos los canales elegidos. La nueva selección aplica a mensajes posteriores.",
       "title": "Configuración del Agente IA",
       "description": "Configura las instrucciones y el comportamiento del asistente de IA de tu negocio.",
       "adminOnlyConfig": "Solo los administradores y propietarios pueden cambiar la configuración de la IA.",

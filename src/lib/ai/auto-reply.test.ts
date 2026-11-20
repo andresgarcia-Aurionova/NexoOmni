@@ -51,13 +51,13 @@ vi.mock('./admin-client', () => ({
         return chain
       }
       // conversations
+      const readChain = {
+        select: () => readChain,
+        eq: () => readChain,
+        maybeSingle: () => Promise.resolve({ data: h.state.conv, error: null }),
+      }
       return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: () =>
-              Promise.resolve({ data: h.state.conv, error: null }),
-          }),
-        }),
+        select: readChain.select,
         update: (payload: Record<string, unknown>) => {
           h.state.updatePayload = payload
           return { eq: () => Promise.resolve({ error: null }) }
@@ -155,6 +155,22 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
       text: 'Hello!', senderType: 'bot', aiGenerated: true,
     })
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('only generates and sends on the explicitly selected connected line', async () => {
+    h.loadAiConfig.mockResolvedValue(aiConfig({ autoReplyConnectorId: 'line-a' }))
+    h.state.conv = { ...h.state.conv, connector_id: 'line-b' }
+    await dispatchInboundToAiReply({ ...ARGS, channelType: 'zernio_whatsapp' })
+    h.state.conv = { ...h.state.conv, connector_id: null }
+    await dispatchInboundToAiReply({ ...ARGS, channelType: 'zernio_whatsapp' })
+    h.state.conv = { ...h.state.conv, connector_id: 'line-a' }
+    await dispatchInboundToAiReply({ ...ARGS, channelType: 'whatsapp' })
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.sendOmnichannelText).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    await dispatchInboundToAiReply({ ...ARGS, channelType: 'zernio_whatsapp' })
+    expect(h.generateReply).toHaveBeenCalledTimes(1)
+    expect(h.sendOmnichannelText).toHaveBeenCalledTimes(1)
   })
 
   it('remains eligible on the next connected inbound after a bot reply', async () => {

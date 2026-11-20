@@ -82,11 +82,40 @@ const ROW = {
   system_prompt: null,
   is_active: false,
   auto_reply_enabled: false,
+  auto_reply_connector_id: null,
   auto_reply_max_per_conversation: 3,
   embeddings_api_key: null,
 };
 
 describe('loadAiConfig requireActive', () => {
+  it('loads the selected connector and fails closed if the scope column is absent', async () => {
+    const creds = { 'openai:chat': { encrypted_api_key: 'key' } };
+    mockSupabaseAdmin.mockReturnValue(dbReturning({ ...ROW, auto_reply_connector_id: 'line-a' }, creds));
+    expect((await loadAiConfig(dbReturning(null), 'acct', { requireActive: false }))?.autoReplyConnectorId).toBe('line-a');
+    const rowWithoutScope = { ...ROW } as Partial<typeof ROW>;
+    delete rowWithoutScope.auto_reply_connector_id;
+    mockSupabaseAdmin.mockReturnValue(dbReturning(rowWithoutScope, creds));
+    await expect(loadAiConfig(dbReturning(null), 'acct', { requireActive: false })).rejects.toThrow('connector scope');
+  });
+
+  it('does not drop the connector scope during a legacy-schema fallback', async () => {
+    const selects: string[] = [];
+    mockSupabaseAdmin.mockReturnValue({
+      from() {
+        const chain = {
+          select(columns: string) { selects.push(columns); return chain; },
+          eq() { return chain; },
+          maybeSingle() { return Promise.resolve({
+            data: null, error: { code: '42703', message: 'column auto_reply_connector_id does not exist' },
+          }); },
+        };
+        return chain;
+      },
+    });
+    await expect(loadAiConfig(dbReturning(null), 'acct', { requireActive: false })).rejects.toMatchObject({ code: '42703' });
+    expect(selects).toHaveLength(2);
+    expect(selects.every((columns) => columns.includes('auto_reply_connector_id'))).toBe(true);
+  });
   it('uses the server-side provider credential when it exists', async () => {
     mockSupabaseAdmin.mockReturnValue(
       dbReturning(ROW, {

@@ -100,12 +100,17 @@ export async function evaluateAutoReplyGates(
 
   const { data: conv, error: convErr } = await db
     .from('conversations')
-    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id')
     .eq('id', conversationId)
+    .eq('account_id', accountId)
     .maybeSingle();
   if (convErr || !conv) return { ok: false, reason: 'conversation_not_found' };
   if (conv.ai_autoreply_disabled)
     return { ok: false, reason: 'paused_on_this_conversation' };
+  if (config.autoReplyConnectorId &&
+      (input.channelType !== 'zernio_whatsapp' || conv.connector_id !== config.autoReplyConnectorId)) {
+    return { ok: false, reason: 'connector_out_of_scope' };
+  }
 
   // "A human owns this thread" must mean a person actually wrote in it, not
   // merely that routing put a name on it: queue auto-assignment stamps an

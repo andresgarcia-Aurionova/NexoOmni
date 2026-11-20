@@ -2542,6 +2542,11 @@
       "saveSuccess": "기본 통화가 업데이트되었습니다"
     },
     "aiConfig": {
+      "connectedLineLabel": "자동 응답용 연결된 WhatsApp 회선",
+      "connectedLineAll": "선택한 채널의 모든 회선",
+      "connectedLineUnavailable": "선택한 회선을 사용할 수 없음",
+      "connectedLineError": "회선을 불러오지 못했습니다. 저장된 선택은 변경되지 않았습니다.",
+      "connectedLineHint": "선택적으로 자동 응답을 연결된 회선 하나로 제한합니다. 선택하지 않으면 선택한 모든 채널에서 응답할 수 있습니다. 새 선택은 이후 메시지에 적용됩니다.",
       "title": "에이전트 설정",
       "description": "비즈니스 AI 어시스턴트의 지침과 동작을 설정합니다.",
       "adminOnlyConfig": "관리자와 소유자만 AI 설정을 변경할 수 있습니다.",

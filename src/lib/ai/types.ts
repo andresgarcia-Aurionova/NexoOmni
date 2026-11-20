@@ -31,6 +31,8 @@ export interface AiConfig {
   systemPrompt: string | null
   isActive: boolean
   autoReplyEnabled: boolean
+  /** null = no connector restriction; a missing connector never broadens scope. */
+  autoReplyConnectorId?: string | null
   autoReplyMaxPerConversation: number
   /** Where auto-reply hands a conversation off when the model bails: an
    *  agent's `auth.users.id`, or null to leave it unassigned (drop into

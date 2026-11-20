@@ -22,6 +22,7 @@ interface AiConfigRow {
   system_prompt: string | null;
   is_active: boolean;
   auto_reply_enabled: boolean;
+  auto_reply_connector_id: string | null;
   auto_reply_max_per_conversation: number;
   handoff_agent_id: string | null;
   handoff_target?: 'unassigned' | 'agent' | 'queue' | 'ai_queue' | null;
@@ -31,13 +32,13 @@ interface AiConfigRow {
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, analysis_model, image_analysis_model, voice_transcription_model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, timezone';
+  'provider, model, analysis_model, image_analysis_model, voice_transcription_model, system_prompt, is_active, auto_reply_enabled, auto_reply_connector_id, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, timezone';
 
 // Keep AI operational while a rolling deployment is waiting for migration 101.
 // The dedicated model columns are additive, so the existing general model is a
 // safe fallback until the database schema catches up.
 const LEGACY_CONFIG_COLUMNS =
-  'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id';
+  'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_connector_id, auto_reply_max_per_conversation, handoff_agent_id';
 
 function isMissingModelColumn(error: { code?: string; message?: string }) {
   return (
@@ -111,6 +112,9 @@ export async function loadAiConfig(
   if (!data) return null;
 
   const row = data as AiConfigRow;
+  if (row.auto_reply_connector_id !== null && typeof row.auto_reply_connector_id !== 'string') {
+    throw new Error('The AI reply connector scope is unavailable or invalid.');
+  }
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null;
@@ -185,6 +189,7 @@ export async function loadAiConfig(
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
     autoReplyEnabled: row.auto_reply_enabled,
+    autoReplyConnectorId: row.auto_reply_connector_id,
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     handoffTarget: row.handoff_target ?? 'agent',

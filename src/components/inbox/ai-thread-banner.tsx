@@ -8,46 +8,41 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
 
 // ------------------------------------------------------------
-// Account AI status is the same for every conversation, so cache it per
-// account and reuse it across thread switches instead of hitting
-// /api/ai/config every time the agent opens a chat.
-//
-// Keyed by accountId (a multi-account user switching workspaces must not
-// see the previous account's status), and only *successful* fetches are
-// cached — a transient failure returns a default without poisoning the
-// cache, so it retries on the next thread open rather than hiding the
-// banner for the whole session.
+// Refresh settings when opening a conversation so a changed line scope is
+// not hidden behind an account-wide cached status.
 // ------------------------------------------------------------
 interface AiAccountStatus {
   autoReplyOn: boolean;
   maxReplies: number;
+  connectorId: string | null;
 }
-const statusCache = new Map<string, AiAccountStatus>();
-
-async function fetchAiAccountStatus(accountId: string): Promise<AiAccountStatus> {
-  const cached = statusCache.get(accountId);
-  if (cached) return cached;
+async function fetchAiAccountStatus(): Promise<AiAccountStatus> {
   try {
     const res = await fetch("/api/ai/config", { cache: "no-store" });
-    if (!res.ok) return { autoReplyOn: false, maxReplies: 0 }; // don't cache a transient failure
+    if (!res.ok) throw new Error(`AI configuration request failed (${res.status})`);
     const j = await res.json();
+    if (j?.configured && j.auto_reply_connector_id !== null && typeof j.auto_reply_connector_id !== "string") {
+      throw new Error("Invalid AI connector scope");
+    }
     const status = {
       // AI auto-reply is "live" only when configured, the master switch
       // is on, and the inbound bot is enabled.
       autoReplyOn: !!(j?.configured && j?.is_active && j?.auto_reply_enabled),
+      connectorId: typeof j?.auto_reply_connector_id === "string" ? j.auto_reply_connector_id : null,
       maxReplies: Number.isFinite(Number(j?.auto_reply_max_per_conversation))
         ? Number(j.auto_reply_max_per_conversation)
         : 0,
     };
-    statusCache.set(accountId, status);
     return status;
-  } catch {
-    return { autoReplyOn: false, maxReplies: 0 }; // don't cache
+  } catch (error) {
+    console.error("[ai thread banner] could not load AI status:", error);
+    return { autoReplyOn: false, maxReplies: 0, connectorId: null };
   }
 }
 
 interface AiThreadBannerProps {
   conversationId: string;
+  connectorId?: string | null;
   /** `conversations.ai_autoreply_disabled` — bot paused on this thread. */
   disabled: boolean;
   /** `conversations.ai_handoff_summary` — note the bot left on handoff. */
@@ -78,6 +73,7 @@ interface AiThreadBannerProps {
  */
 export function AiThreadBanner({
   conversationId,
+  connectorId,
   disabled,
   handoffSummary,
   replyCount = 0,
@@ -87,7 +83,11 @@ export function AiThreadBanner({
 }: AiThreadBannerProps) {
   const t = useTranslations("Inbox.aiBanner");
   const { accountId } = useAuth();
-  const [aiStatus, setAiStatus] = useState<AiAccountStatus | null>(null);
+  const [aiStatus, setAiStatus] = useState<{
+    accountId: string;
+    conversationId: string;
+    status: AiAccountStatus;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [replyCountOverride, setReplyCountOverride] = useState<number | null>(null);
   // Optimistic local mirror of the pause flag so the banner flips
@@ -100,11 +100,11 @@ export function AiThreadBanner({
   useEffect(() => {
     if (!accountId) return;
     let alive = true;
-    fetchAiAccountStatus(accountId).then((status) => alive && setAiStatus(status));
+    fetchAiAccountStatus().then((status) => alive && setAiStatus({ accountId, conversationId, status }));
     return () => {
       alive = false;
     };
-  }, [accountId]);
+  }, [accountId, conversationId]);
 
   const toggle = useCallback(
     async (paused: boolean) => {
@@ -145,7 +145,10 @@ export function AiThreadBanner({
   );
 
   // Account has no auto-reply → nothing to show. (Still loading → nothing.)
-  if (!aiStatus?.autoReplyOn) return null;
+  if (!aiStatus || aiStatus.accountId !== accountId || aiStatus.conversationId !== conversationId) return null;
+  const status = aiStatus.status;
+  if (!status.autoReplyOn) return null;
+  if (status.connectorId && status.connectorId !== connectorId) return null;
 
   // Paused here (a human took over, or the model handed off).
   if (paused) {
@@ -173,12 +176,12 @@ export function AiThreadBanner({
   // Make the configured safety cap explicit so an agent understands why a
   // later inbound message did not receive another automatic reply.
   const visibleReplyCount = replyCountOverride ?? replyCount;
-  if (aiStatus.maxReplies > 0 && visibleReplyCount >= aiStatus.maxReplies) {
+  if (status.maxReplies > 0 && visibleReplyCount >= status.maxReplies) {
     return (
       <Banner tone="muted">
         <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">
-            {t("limitReached", { count: visibleReplyCount, max: aiStatus.maxReplies })}
+            {t("limitReached", { count: visibleReplyCount, max: status.maxReplies })}
           </p>
         </div>
         <BannerButton onClick={() => toggle(false)} busy={busy} icon={Undo2}>

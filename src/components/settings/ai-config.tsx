@@ -29,10 +29,12 @@ import { AiKnowledgeCard } from './ai-knowledge';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
+import { fetchConnectedWhatsAppLines, type ConnectedWhatsAppLine } from '@/lib/omnichannel/connected-whatsapp-lines';
 
 // Radix Select can't use an empty-string item value, so the "leave
 // unassigned" choice gets a sentinel that maps to null in the payload.
 const HANDOFF_QUEUE = '__queue__';
+const ALL_LINES = '__all__';
 type HandoffTarget = 'unassigned' | 'agent' | 'queue' | 'ai_queue';
 
 const AI_CHANNELS: { id: string; label: string }[] = [
@@ -60,6 +62,11 @@ export function AiConfig() {
   const [timezone, setTimezone] = useState('America/Mexico_City');
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
+  const [autoReplyConnectorId, setAutoReplyConnectorId] = useState<string | null>(null);
+  const [savedConnectorId, setSavedConnectorId] = useState<string | null>(null);
+  const [connectedLines, setConnectedLines] = useState<ConnectedWhatsAppLine[]>([]);
+  const [linesStatus, setLinesStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [linesAccountId, setLinesAccountId] = useState<string | null>(null);
   const [conversationAnalysisEnabled, setConversationAnalysisEnabled] = useState(false);
   const [analysisOnCustomerMessage, setAnalysisOnCustomerMessage] = useState(false);
   const [analysisOnTransfer, setAnalysisOnTransfer] = useState(false);
@@ -90,6 +97,7 @@ export function AiConfig() {
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
+    setConfigured(false);
     try {
       const res = await fetch('/api/ai/config');
       const data = await res.json();
@@ -97,12 +105,17 @@ export function AiConfig() {
         toast.error(data.error ?? t('loadFailed'));
         return;
       }
+      if (data.configured && data.auto_reply_connector_id !== null && typeof data.auto_reply_connector_id !== 'string') {
+        throw new Error('Invalid AI connector scope');
+      }
       setConfigured(Boolean(data.configured));
       if (data.configured) {
         setSystemPrompt(data.system_prompt ?? '');
         setTimezone(data.timezone || 'America/Mexico_City');
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
+        setAutoReplyConnectorId(data.auto_reply_connector_id ?? null);
+        setSavedConnectorId(data.auto_reply_connector_id ?? null);
         setConversationAnalysisEnabled(Boolean(data.conversation_analysis_enabled));
         setAnalysisOnCustomerMessage(Boolean(data.analysis_on_customer_message));
         setAnalysisOnTransfer(Boolean(data.analysis_on_transfer));
@@ -126,6 +139,8 @@ export function AiConfig() {
         setTimezone('America/Mexico_City');
         setIsActive(false);
         setAutoReplyEnabled(false);
+        setAutoReplyConnectorId(null);
+        setSavedConnectorId(null);
         setConversationAnalysisEnabled(false);
         setAnalysisOnCustomerMessage(false);
         setAnalysisOnTransfer(false);
@@ -158,11 +173,28 @@ export function AiConfig() {
       .catch(() => undefined);
   }, [accountId, fetchConfig]);
 
+  useEffect(() => {
+    if (!accountId || !canEdit) return;
+    const controller = new AbortController();
+    fetchConnectedWhatsAppLines(controller.signal).then((lines) => {
+      setConnectedLines(lines);
+      setLinesAccountId(accountId);
+      setLinesStatus('ready');
+    }).catch((error) => {
+      if (controller.signal.aborted) return;
+      console.error('[ai config] could not load connected lines:', error);
+      setLinesAccountId(accountId);
+      setLinesStatus('error');
+    });
+    return () => controller.abort();
+  }, [accountId, canEdit]);
+
   const buildBody = () => ({
     system_prompt: systemPrompt.trim() || null,
     timezone: timezone.trim() || 'America/Mexico_City',
     is_active: isActive,
     auto_reply_enabled: autoReplyEnabled,
+    ...(autoReplyConnectorId !== savedConnectorId ? { auto_reply_connector_id: autoReplyConnectorId } : {}),
     auto_reply_max_per_conversation: maxPerConversation,
     handoff_agent_id: handoffAgentId || null,
     handoff_target: handoffTarget,
@@ -328,6 +360,29 @@ export function AiConfig() {
                 disabled={disabled || !autoReplyEnabled}
                 className="w-20"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-connected-line">{t('connectedLineLabel')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {linesAccountId === accountId && linesStatus === 'error' ? t('connectedLineError') : t('connectedLineHint')}
+              </p>
+              <Select
+                value={autoReplyConnectorId ?? ALL_LINES}
+                onValueChange={(value) => setAutoReplyConnectorId(value === ALL_LINES ? null : value)}
+                disabled={disabled || !autoReplyEnabled || linesAccountId !== accountId || linesStatus !== 'ready'}
+              >
+                <SelectTrigger id="ai-connected-line"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_LINES}>{t('connectedLineAll')}</SelectItem>
+                  {autoReplyConnectorId && !connectedLines.some((line) => line.id === autoReplyConnectorId) && (
+                    <SelectItem value={autoReplyConnectorId}>{t('connectedLineUnavailable')}</SelectItem>
+                  )}
+                  {connectedLines.map((line) => (
+                    <SelectItem key={line.id} value={line.id}>{line.displayName} · {line.id.slice(-4)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

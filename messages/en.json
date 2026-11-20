@@ -2542,6 +2542,11 @@
       "saveSuccess": "Default currency updated"
     },
     "aiConfig": {
+      "connectedLineLabel": "Connected WhatsApp line for automatic replies",
+      "connectedLineAll": "All lines within the selected channels",
+      "connectedLineUnavailable": "Selected line unavailable",
+      "connectedLineError": "Could not load lines. The saved selection has not changed.",
+      "connectedLineHint": "Optionally restrict automatic replies to one connected line. Without a selection, the agent can reply on all selected channels. The new selection applies to subsequent messages.",
       "title": "Agent setup",
       "description": "Configure the instructions and behavior of your business's AI assistant.",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",

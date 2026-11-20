@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { fetchConnectedWhatsAppLines } from '@/lib/omnichannel/connected-whatsapp-lines';
 import { type ValidationIssue } from '@/lib/flows/validate';
 import {
   NODE_META,
@@ -347,13 +348,7 @@ function TriggerPanel({
     const controller = new AbortController();
     async function loadLines() {
       try {
-        const response = await fetch('/api/omnichannel/zernio/connectors', { signal: controller.signal });
-        if (!response.ok) throw new Error(`Connector request failed (${response.status})`);
-        const body: { connectors?: Array<{ id: string; displayName: string | null; provider: string }> } = await response.json();
-        if (!Array.isArray(body.connectors)) throw new Error('Invalid connector response');
-        setLines(body.connectors.filter((line) => line.provider === 'zernio_whatsapp').map((line) => ({
-          id: line.id, displayName: line.displayName || line.id,
-        })));
+        setLines(await fetchConnectedWhatsAppLines(controller.signal));
         setLineStatus('ready');
       } catch (error) {
         if (controller.signal.aborted) return;

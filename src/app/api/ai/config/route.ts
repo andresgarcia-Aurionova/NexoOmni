@@ -13,10 +13,10 @@ function bad(message: string) {
 }
 
 const SAFE_CONFIG_COLUMNS =
-  'system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, analysis_auto_route_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria, timezone'
+  'system_prompt, is_active, auto_reply_enabled, auto_reply_connector_id, auto_reply_max_per_conversation, handoff_agent_id, handoff_target, handoff_queue_id, channel_types, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, analysis_auto_route_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria, timezone'
 
 const LEGACY_SAFE_CONFIG_COLUMNS =
-  'system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria'
+  'system_prompt, is_active, auto_reply_enabled, auto_reply_connector_id, auto_reply_max_per_conversation, handoff_agent_id, conversation_analysis_enabled, analysis_on_customer_message, analysis_on_transfer, analysis_on_close, analysis_daily_limit, analysis_monthly_limit, analysis_max_per_conversation, analysis_images_enabled, analysis_voice_notes_enabled, media_analysis_daily_limit, qa_scoring_enabled, qa_scoring_criteria'
 
 function isMissingModelColumn(error: { code?: string; message?: string }) {
   return error.code === '42703' || /(?:analysis_model|image_analysis_model|voice_transcription_model|handoff_target|handoff_queue_id|channel_types|analysis_auto_route_enabled|timezone)/i.test(error.message ?? '')
@@ -121,6 +121,23 @@ export async function POST(request: Request) {
         : null
     const isActive = body.is_active === true
     const autoReplyEnabled = body.auto_reply_enabled === true
+    let connectorId: string | null = null
+    if ('auto_reply_connector_id' in body && body.auto_reply_connector_id !== null) {
+      if (typeof body.auto_reply_connector_id !== 'string' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.auto_reply_connector_id)) {
+        return bad('La línea seleccionada no es válida.')
+      }
+      const { data: connector, error: connectorError } = await supabase
+        .from('omnichannel_connectors')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('id', body.auto_reply_connector_id)
+        .eq('provider', 'zernio_whatsapp')
+        .maybeSingle()
+      if (connectorError) throw connectorError
+      if (!connector) return bad('La línea seleccionada no está disponible en esta cuenta.')
+      connectorId = body.auto_reply_connector_id
+    }
     const analysisEnabled = body.conversation_analysis_enabled === true
     const analysisOnCustomerMessage = body.analysis_on_customer_message === true
     const analysisOnTransfer = body.analysis_on_transfer === true
@@ -237,10 +254,11 @@ export async function POST(request: Request) {
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.
     if (handoffProvided) shared.handoff_agent_id = handoffAgentId
+    if ('auto_reply_connector_id' in body) shared.auto_reply_connector_id = connectorId
     const admin = supabaseAdmin()
     const { data: existing, error: existingError } = await admin
       .from('ai_configs')
-      .select('account_id')
+      .select('account_id, auto_reply_connector_id')
       .eq('account_id', accountId)
       .maybeSingle()
     if (existingError) throw existingError
