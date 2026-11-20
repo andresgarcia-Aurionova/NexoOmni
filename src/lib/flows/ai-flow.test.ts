@@ -1,13 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { supabaseAdmin } from "./admin-client";
-import { decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
+import { classifyFlowSentiment, decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
 import { flowSendText } from "./channel-send";
 import { dispatchInboundToFlows } from "./engine";
 import { bookFlowAppointment } from "./appointments";
 
 vi.mock("./admin-client", () => ({ supabaseAdmin: vi.fn() }));
-vi.mock("./ai-assist", () => ({ decideFlowAiTurn: vi.fn(), decideFlowAiInput: vi.fn() }));
+vi.mock("./ai-assist", () => ({ decideFlowAiTurn: vi.fn(), decideFlowAiInput: vi.fn(), classifyFlowSentiment: vi.fn() }));
 vi.mock("./appointments", async (importOriginal) => ({
   ...await importOriginal<typeof import("./appointments")>(),
   bookFlowAppointment: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock("./channel-send", () => ({
 describe("AI inside an active flow", () => {
   afterEach(() => vi.resetAllMocks());
 
-  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true, menuDate = false) {
+  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true, menuDate = false, sentiment = false, saveSuccess = true) {
     const calls: string[] = [];
     const writes: Record<string, unknown>[] = [];
     const run = {
@@ -33,8 +33,17 @@ describe("AI inside an active flow", () => {
     const nodes = collect ? [
       { node_key: "date", node_type: "collect_input", config: {
         ai_assist: true, prompt_text: "Fecha", invalid_input_text: "Elige una fecha válida de hoy en adelante.",
-        var_key: "fecha", date_not_past: true, date_timezone: "America/Mexico_City", next_node_key: "end",
+        var_key: sentiment ? "comentario" : "fecha",
+        ...(sentiment ? { ai_sentiment_var_key: "sentiment" } : { date_not_past: true, date_timezone: "America/Mexico_City" }),
+        next_node_key: sentiment ? "sentiment_check" : "end",
       } },
+      ...(sentiment ? [
+        { node_key: "sentiment_check", node_type: "condition", config: {
+          subject: "var", subject_key: "sentiment", operator: "equals",
+          value: "negative", true_next: "human", false_next: "end",
+        } },
+        { node_key: "human", node_type: "handoff", config: {} },
+      ] : []),
       { node_key: "end", node_type: "end", config: {} },
     ] : [
       { node_key: "menu", node_type: "send_buttons", config: {
@@ -68,7 +77,7 @@ describe("AI inside an active flow", () => {
         if (table === "handoff_flow_ai_turn") return Response.json(fallbackActive);
         if (table === "update_flow_run_vars_if_current") {
           writes.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-          return Response.json(true);
+          return Response.json(saveSuccess);
         }
         if (init?.body) {
           writes.push(JSON.parse(String(init.body)) as Record<string, unknown>);
@@ -95,6 +104,53 @@ describe("AI inside an active flow", () => {
     const { result, calls } = await dispatch();
     expect(result.outcome).toBe("completed");
     expect(calls).toContain("finish_flow_ai_turn");
+  });
+
+  it("persists a comment and its sentiment together before advancing", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValue("negative");
+    const { result, writes } = await dispatch("claimed", true, true, true, false, true);
+    expect(result.outcome).toBe("handed_off");
+    expect(writes).toContainEqual(expect.objectContaining({
+      p_new_vars: expect.objectContaining({ comentario: "quiero reservar", sentiment: "negative" }),
+    }));
+    expect(writes).toContainEqual(expect.objectContaining({
+      node_key: "sentiment_check",
+      payload: expect.objectContaining({ condition_result: "true", advancing_to: "human" }),
+    }));
+    expect(decideFlowAiInput).not.toHaveBeenCalled();
+  });
+
+  it("hands uncertain comments or classifier errors to the team without advancing", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValueOnce("handoff").mockRejectedValueOnce(new Error("unavailable"));
+    for (let i = 0; i < 2; i++) {
+      const { result, writes } = await dispatch("claimed", true, true, true, false, true);
+      expect(result.outcome).toBe("handed_off");
+      expect(writes.some((write) => "p_new_vars" in write)).toBe(false);
+    }
+  });
+
+  it("takes the non-negative branch only after saving the classification", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValue("positive");
+    const { result, writes } = await dispatch("claimed", true, true, true, false, true);
+    expect(result.outcome).toBe("completed");
+    expect(writes).toContainEqual(expect.objectContaining({
+      node_key: "sentiment_check",
+      payload: expect.objectContaining({ condition_result: "false", advancing_to: "end" }),
+    }));
+  });
+
+  it("does not choose a branch if the captured state became stale", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValue("negative");
+    const { result, writes } = await dispatch("claimed", true, true, false, false, true, false);
+    expect(result.outcome).toBe("stale_inbound_ignored");
+    expect(writes.some((write) => write.node_key === "sentiment_check")).toBe(false);
+  });
+
+  it("does not capture sentiment after the turn becomes stale", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValue("positive");
+    const { result, writes } = await dispatch("claimed", false, true, true, false, true);
+    expect(result.outcome).toBe("stale_inbound_ignored");
+    expect(writes.some((write) => "p_new_vars" in write)).toBe(false);
   });
 
   it("uses a date already given with the menu selection after validation", async () => {

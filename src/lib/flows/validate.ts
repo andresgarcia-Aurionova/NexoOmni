@@ -552,6 +552,9 @@ function validateNode(
         date_not_past?: boolean;
         date_timezone?: string;
         allowed_values?: unknown;
+        ai_assist?: boolean;
+        ai_sentiment_var_key?: unknown;
+        time_24h?: boolean;
       };
       if (!cfg.prompt_text?.trim()) {
         issues.push({
@@ -602,6 +605,20 @@ function validateNode(
           severity: "error", scope: "node", node_key: node.node_key,
           field: "allowed_values",
           message: "La lista necesita opciones no vacías y distintas, sin contar mayúsculas ni acentos.",
+        });
+      }
+      if (cfg.ai_sentiment_var_key !== undefined
+          && (typeof cfg.ai_sentiment_var_key !== "string"
+            || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(cfg.ai_sentiment_var_key)
+            || cfg.ai_sentiment_var_key.startsWith("__")
+            || cfg.ai_sentiment_var_key === cfg.var_key
+            || cfg.var_key?.startsWith("__")
+            || cfg.ai_assist !== true || cfg.save_contact_note || cfg.date_not_past
+            || cfg.time_24h || cfg.allowed_values !== undefined)) {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "ai_sentiment_var_key",
+          message: "El análisis de sentimiento necesita IA y una clave distinta; no puede combinarse con listas, fecha, hora ni notas.",
         });
       }
       if (!cfg.next_node_key) {

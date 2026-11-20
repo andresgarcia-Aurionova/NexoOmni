@@ -39,7 +39,7 @@ import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
 import { timeMinutes } from "./time-input";
 import { matchAllowedInput } from "./allowed-input";
-import { decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
+import { classifyFlowSentiment, decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
@@ -621,8 +621,9 @@ async function updateVarsIfCurrent(
   run: FlowRunRow,
   vars: Record<string, unknown>,
   resetReprompts: boolean,
+  requireCurrentState = false,
 ): Promise<{ saved: boolean; error: { message: string } | null }> {
-  if (run.vars.__guarded_appointments !== true) {
+  if (run.vars.__guarded_appointments !== true && !requireCurrentState) {
     const update: { vars: Record<string, unknown>; reprompt_count?: number } = { vars };
     if (resetReprompts) update.reprompt_count = 0;
     const { data, error } = await db.from("flow_runs").update(update)
@@ -1340,6 +1341,7 @@ async function handleAiFlowReply(
     let aiReplyId: string | undefined;
     let aiAnswer: string | undefined;
     let aiCapturedValue: string | undefined;
+    let aiSentiment: string | undefined;
     let aiMenuDate: string | undefined;
     let aiOfferedSlot: OfferedSlot | undefined;
     let aiConfirmedSlotId: string | undefined;
@@ -1386,21 +1388,36 @@ async function handleAiFlowReply(
         return handoff();
       }
       const cfg = node.config as unknown as CollectInputNodeConfig;
-      if (cfg.date_not_past && !cfg.date_timezone?.trim()) {
-        throw new Error("Flow AI date timezone is missing.");
+      if (cfg.ai_sentiment_var_key !== undefined) {
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(cfg.ai_sentiment_var_key)
+            || cfg.ai_sentiment_var_key.startsWith("__") || cfg.ai_sentiment_var_key === cfg.var_key
+            || cfg.var_key.startsWith("__")
+            || cfg.save_contact_note || cfg.date_not_past || cfg.time_24h || cfg.allowed_values) {
+          throw new Error("Flow sentiment configuration is invalid.");
+        }
+        aiSentiment = await classifyFlowSentiment({
+          accountId: run.account_id, conversationId: run.conversation_id,
+          turnId, text: input.message.text,
+        });
+        if (aiSentiment === "handoff") return handoff();
+        aiCapturedValue = input.message.text;
+      } else {
+        if (cfg.date_not_past && !cfg.date_timezone?.trim()) {
+          throw new Error("Flow AI date timezone is missing.");
+        }
+        const dateToday = cfg.date_not_past
+          ? new Intl.DateTimeFormat("en-GB", { timeZone: cfg.date_timezone?.trim() }).format(new Date())
+          : undefined;
+        const decision = await decideFlowAiInput({
+          accountId: run.account_id, conversationId: run.conversation_id,
+          turnId, text: input.message.text, prompt: cfg.prompt_text,
+          allowedValues: cfg.allowed_values, dateToday, time24h: cfg.time_24h,
+        });
+        if (decision.action === "handoff") return handoff();
+        if (decision.action === "answer") aiAnswer = decision.text;
+        if (decision.action === "capture") aiCapturedValue = decision.value;
+        if (decision.action === "unknown") aiCapturedValue = "";
       }
-      const dateToday = cfg.date_not_past
-        ? new Intl.DateTimeFormat("en-GB", { timeZone: cfg.date_timezone?.trim() }).format(new Date())
-        : undefined;
-      const decision = await decideFlowAiInput({
-        accountId: run.account_id, conversationId: run.conversation_id,
-        turnId, text: input.message.text, prompt: cfg.prompt_text,
-        allowedValues: cfg.allowed_values, dateToday, time24h: cfg.time_24h,
-      });
-      if (decision.action === "handoff") return handoff();
-      if (decision.action === "answer") aiAnswer = decision.text;
-      if (decision.action === "capture") aiCapturedValue = decision.value;
-      if (decision.action === "unknown") aiCapturedValue = "";
     }
     if (node.config.ai_assist === true && node.node_type === "offer_slots"
         && input.message.kind === "text") {
@@ -1519,7 +1536,7 @@ async function handleAiFlowReply(
         }
         run.vars = vars;
       }
-      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId, aiMenuDate);
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId, aiMenuDate, aiSentiment);
     }
     if (result.outcome === "processing_failed") return handoff();
     if (result.outcome === "stale_inbound_ignored") return handoff();
@@ -1547,6 +1564,7 @@ async function handleReplyForActiveRun(
   aiCapturedValue?: string,
   aiConfirmedSlotId?: string,
   aiMenuDate?: string,
+  aiSentiment?: string,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -1577,6 +1595,18 @@ async function handleReplyForActiveRun(
   if (!currentNode) {
     await endRun(db, run.id, "failed", "current_node_not_found");
     return { consumed: true, flow_run_id: run.id, outcome: "no_match" };
+  }
+  if (currentNode.node_type === "collect_input"
+      && currentNode.config.ai_sentiment_var_key !== undefined && !aiSentiment) {
+    console.error("[flows] sentiment classification was not available.");
+    if (run.conversation_id) {
+      const { error } = await db.from("conversations")
+        .update({ status: "pending", updated_at: new Date().toISOString() })
+        .eq("account_id", run.account_id).eq("id", run.conversation_id);
+      if (error) console.error("[flows] sentiment handoff failed:", error.message);
+    }
+    await endRun(db, run.id, "failed", "sentiment_unavailable");
+    return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
   }
 
   // Two ways a reply can advance:
@@ -1666,7 +1696,11 @@ async function handleReplyForActiveRun(
       (!cfg.date_not_past || isCurrentOrFutureDate(captured, typeof cfg.date_timezone === "string" ? cfg.date_timezone.trim() : ""))
     ) {
       // Persist captured value + reset reprompt count atomically.
-      const newVars = { ...run.vars, [cfg.var_key]: captured };
+      const newVars = {
+        ...run.vars,
+        [cfg.var_key]: captured,
+        ...(aiSentiment && cfg.ai_sentiment_var_key ? { [cfg.ai_sentiment_var_key]: aiSentiment } : {}),
+      };
       let capErr: { message: string } | null = null;
       if (cfg.save_contact_note === true) {
         const result = await db.rpc("capture_flow_input_with_contact_note", {
@@ -1681,12 +1715,16 @@ async function handleReplyForActiveRun(
           return { consumed: true, flow_run_id: run.id, outcome: "duplicate_inbound_ignored" };
         }
       } else {
-        const result = await updateVarsIfCurrent(db, run, newVars, true);
+        const result = await updateVarsIfCurrent(db, run, newVars, true, aiSentiment !== undefined);
         capErr = result.error;
         if (!capErr && !result.saved) {
           await logEvent(db, run.id, "error", currentNode.node_key, { reason: "stale_input_capture" });
           return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
         }
+      }
+      if (capErr && aiSentiment) {
+        console.error("[flows] sentiment capture failed:", capErr.message);
+        return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
       }
       if (capErr && (cfg.save_contact_note === true || run.vars.__guarded_appointments === true)) {
         console.error("[flows] input capture failed:", capErr.message);

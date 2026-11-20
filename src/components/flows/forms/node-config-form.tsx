@@ -144,12 +144,36 @@ export function NodeConfigForm({
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
                 checked={cfg.ai_assist === true}
-                onCheckedChange={(checked) => onUpdateConfig({ ai_assist: checked })}
+                onCheckedChange={(checked) => onUpdateConfig({
+                  ai_assist: checked,
+                  ...(!checked ? { ai_sentiment_var_key: undefined } : {}),
+                })}
               />
               {t("aiAssist")}
             </label>
             <p className="text-[10px] text-muted-foreground">{t("aiInputHelp")}</p>
           </div>
+          {cfg.ai_assist === true && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Switch
+                  checked={typeof cfg.ai_sentiment_var_key === "string"}
+                  onCheckedChange={(checked) => onUpdateConfig({ ai_sentiment_var_key: checked ? "sentiment" : undefined })}
+                />
+                {t("aiSentiment")}
+              </label>
+              {typeof cfg.ai_sentiment_var_key === "string" && (
+                <>
+                  <TextRow
+                    label={t("aiSentimentKey")}
+                    value={cfg.ai_sentiment_var_key}
+                    onChange={(v) => onUpdateConfig({ ai_sentiment_var_key: v.replace(/[^a-zA-Z0-9_]/g, "") })}
+                  />
+                  <p className="text-[10px] text-muted-foreground">{t("aiSentimentHelp")}</p>
+                </>
+              )}
+            </div>
+          )}
           <TextRow
             label={t("invalidInputText")}
             value={typeof cfg.invalid_input_text === "string" ? cfg.invalid_input_text : ""}

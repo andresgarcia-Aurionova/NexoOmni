@@ -59,6 +59,30 @@ describe("accepted input values", () => {
     }
     expect(validateFlowForActivation(validFlow, nodes(["Tabgha", "Metz"]))).toEqual([]);
   });
+
+  describe("sentiment input validation", () => {
+    const nodes = (extra: Record<string, unknown>) => [
+      { node_key: "start", node_type: "start", config: { next_node_key: "comment" } },
+      { node_key: "comment", node_type: "collect_input", config: {
+        prompt_text: "Comentario", var_key: "comment", next_node_key: "end",
+        ai_assist: true, ai_sentiment_var_key: "sentiment", ...extra,
+      } },
+      { node_key: "end", node_type: "end", config: {} },
+    ];
+    it("requires a separate key and compatible AI-only input", () => {
+      expect(validateFlowForActivation(validFlow, nodes({}))).toEqual([]);
+      for (const extra of [
+        { ai_sentiment_var_key: "comment" }, { ai_sentiment_var_key: "__internal" },
+        { var_key: "__internal" },
+        { ai_assist: false }, { save_contact_note: true }, { allowed_values: ["x"] },
+        { date_not_past: true }, { time_24h: true },
+      ]) {
+        expect(validateFlowForActivation(validFlow, nodes(extra))).toEqual(
+          expect.arrayContaining([expect.objectContaining({ field: "ai_sentiment_var_key" })]),
+        );
+      }
+    });
+  });
 });
 
 describe("preferred appointment time validation", () => {

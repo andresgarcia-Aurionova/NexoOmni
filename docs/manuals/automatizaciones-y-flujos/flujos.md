@@ -81,6 +81,21 @@ En cada pregunta puedes configurar un mensaje opcional para respuestas
 inválidas, por ejemplo «La fecha debe ser de hoy en adelante. Indica otra en
 formato DD/MM/AAAA». Si lo dejas vacío, se repite la pregunta original.
 
+### Clasificar un comentario antes de continuar
+
+En una pregunta de WhatsApp con IA, activa **Clasificar el sentimiento de un
+comentario** e indica una clave distinta de la que guarda la respuesta. El
+flujo guarda `positive`, `neutral` o `negative` en esa clave antes de continuar.
+Conecta condiciones para decidir qué hacer con cada resultado y utiliza
+únicamente respuestas aprobadas. Se pide a la IA tratar como negativo un comentario mixto;
+si hay duda, se pide atención humana o falla la IA, se transfiere al equipo.
+
+Esta clasificación consume créditos y puede equivocarse; pruébala antes de
+publicar. No sustituye el análisis completo de conversación ni crea una
+respuesta aprobada por sí sola. No se puede combinar en la misma pregunta con
+listas, fechas, horas o notas de contacto. Actívala antes de iniciar la
+conversación y confirma que el equipo puede atender las transferencias.
+
 ### Guardar una respuesta en las notas del contacto
 
 En un paso **Recopilar datos**, activa **Guardar la respuesta en Notas del
