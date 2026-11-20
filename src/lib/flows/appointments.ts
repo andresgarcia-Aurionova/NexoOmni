@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { findConflict, getAvailableSlots } from '@/lib/appointments/availability'
+import { interpolateVars } from './interpolate-vars'
 import type { BookAppointmentNodeConfig, OfferSlotsNodeConfig } from './types'
 
 /**
@@ -138,7 +139,7 @@ export async function bookFlowAppointment(
       source_conversation_id: args.conversationId,
       specialist_id: specialistId,
       title: args.cfg.title?.trim().slice(0, 160) || 'Cita agendada',
-      notes: args.cfg.notes?.trim().slice(0, 2000) || null,
+      notes: args.cfg.notes ? interpolateVars(args.cfg.notes, args.vars).trim().slice(0, 2000) || null : null,
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       timezone: await scheduleTimezone(db, args.accountId, specialistId),

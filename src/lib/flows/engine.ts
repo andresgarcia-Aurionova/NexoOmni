@@ -41,6 +41,7 @@ import {
   matchNumberedOption,
 } from "./channel-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { interpolateVars } from "./interpolate-vars";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
@@ -555,20 +556,6 @@ async function evaluateConditionNode(
     operator: cfg.operator,
     subjectValue,
     configValue: cfg.value,
-  });
-}
-
-/**
- * Tiny `{{vars.foo}}` interpolation. Used by send_message + collect_input
- * prompt text so a captured `name` can show up in the next prompt
- * ("Thanks {{vars.name}}, what's your email?"). Missing vars render as
- * empty string — the same behavior as the automations engine.
- */
-function interpolateVars(template: string, vars: Record<string, unknown>): string {
-  if (!template) return "";
-  return template.replace(/\{\{vars\.([a-zA-Z0-9_]+)\}\}/g, (_, key) => {
-    const v = vars[key];
-    return v === undefined || v === null ? "" : String(v);
   });
 }
 

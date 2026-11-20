@@ -42,6 +42,14 @@ Si no se puede guardar la nota, la ejecución se detiene y la conversación
 queda pendiente de revisión; comprueba el historial y registra el motivo
 manualmente. No se crean notas retroactivamente para respuestas anteriores.
 
+### Datos recopilados en una cita
+
+En el paso **Agendar cita**, las notas internas admiten variables recopiladas
+antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y
+`Personas: {{vars.personas}}`. Estas notas quedan en la cita vinculada al
+contacto y la conversación. La agenda de horarios no controla automáticamente
+el cupo de mesas o zonas de un restaurante.
+
 ## Preguntas frecuentes
 
 **¿Un flujo puede reemplazar completamente a un agente humano?**
