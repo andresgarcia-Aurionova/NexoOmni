@@ -138,6 +138,8 @@ export interface CollectInputNodeConfig {
   date_not_past?: boolean;
   /** IANA time zone used when checking a date against today. */
   date_timezone?: string;
+  /** Require a 24-hour time in HH:mm format. */
+  time_24h?: boolean;
   /** Optional, explicit set of accepted answers; captures the configured value. */
   allowed_values?: string[];
   /** Opt-in to copying this answer into ordinary contact notes. */
@@ -211,6 +213,8 @@ export interface OfferSlotsNodeConfig {
   var_key: string;
   /** Optional variable containing the requested date in DD/MM/YYYY format. */
   date_var_key?: string;
+  /** Optional variable containing the preferred time in HH:mm format. */
+  time_var_key?: string;
   /** Where to go once a slot is chosen. */
   next_node_key: string;
   /** Where to go when the calendar has nothing free. */

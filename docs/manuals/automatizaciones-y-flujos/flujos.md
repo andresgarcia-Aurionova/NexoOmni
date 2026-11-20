@@ -80,8 +80,15 @@ de fecha en la pregunta anterior y, en **Ofrecer horarios**, indica su clave en
 agenda. La consulta busca solo ese día, incluso si queda más allá de los
 próximos días configurados; si no hay horarios, sigue la ruta **Sin
 disponibilidad**. Si la fecha falta, es inválida o la agenda tiene zonas
-horarias inconsistentes, se transfiere para revisión. La hora preferida aún no
-filtra ni ordena las opciones: el cliente debe elegir un horario ofrecido.
+horarias inconsistentes, se transfiere para revisión.
+
+Para priorizar la hora preferida, añade una pregunta que solicite `HH:mm`
+(24 horas, por ejemplo `19:30`) y activa **Validar hora en formato de 24
+horas**. En **Ofrecer horarios**, indica la clave de esa respuesta y también
+la clave de la fecha. Se ofrecen primero los horarios disponibles más
+cercanos a la hora solicitada; si hay empate, aparece primero el más temprano.
+El cliente debe elegir una opción: pedir una hora no la reserva. Si la hora
+falta o es inválida, la conversación se transfiere para revisión.
 
 En el paso **Agendar cita**, el título y las notas internas admiten variables
 recopiladas antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y

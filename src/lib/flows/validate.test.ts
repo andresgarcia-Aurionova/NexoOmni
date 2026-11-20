@@ -61,6 +61,26 @@ describe("accepted input values", () => {
   });
 });
 
+describe("preferred appointment time validation", () => {
+  it("requires a valid time variable and a date variable", () => {
+    const nodes = (time_var_key: string, date_var_key?: string) => [
+      { node_key: "start", node_type: "start", config: { next_node_key: "slots" } },
+      { node_key: "slots", node_type: "offer_slots", config: {
+        text: "Horarios", var_key: "slot", time_var_key, date_var_key,
+        next_node_key: "end", no_availability_next: "end",
+      } },
+      { node_key: "end", node_type: "end", config: {} },
+    ];
+    expect(validateFlowForActivation(validFlow, nodes("hora"))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "date_var_key" })]),
+    );
+    expect(validateFlowForActivation(validFlow, nodes("1hora", "fecha"))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "time_var_key" })]),
+    );
+    expect(validateFlowForActivation(validFlow, nodes("hora", "fecha"))).toEqual([]);
+  });
+});
+
 describe("contact note capture validation", () => {
   const nodes = (label: string) => [
     { node_key: "start", node_type: "start", config: { next_node_key: "reason" } },

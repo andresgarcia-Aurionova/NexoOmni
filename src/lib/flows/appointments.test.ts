@@ -63,6 +63,43 @@ describe('requested date for flow appointments', () => {
     }, { fecha: '21/11/2026' })).rejects.toThrow('inconsistent time zones')
     expect(getAvailableSlots).not.toHaveBeenCalled()
   })
+
+  it('prioritizes the closest times on the requested local day, breaking ties earlier', async () => {
+    vi.useFakeTimers().setSystemTime(new Date('2026-11-20T18:00:00Z'))
+    const db = createClient('https://db.example.test', 'key', { global: {
+      fetch: async () => Response.json([{ timezone: 'America/Mexico_City', specialist_id: 'poc', agent_user_id: null }]),
+    } })
+    vi.mocked(getAvailableSlots).mockResolvedValue({
+      hasSchedule: true,
+      slots: [
+        { start: '2026-11-21T18:00:00Z', end: '2026-11-21T19:00:00Z' },
+        { start: '2026-11-22T00:00:00Z', end: '2026-11-22T01:00:00Z' },
+        { start: '2026-11-22T02:00:00Z', end: '2026-11-22T03:00:00Z' },
+        { start: '2026-11-22T07:00:00Z', end: '2026-11-22T08:00:00Z' },
+      ],
+    })
+    const result = await loadOfferedSlots(db, 'account', {
+      text: 'Horarios', specialist_id: 'poc', var_key: 'slot', date_var_key: 'fecha',
+      time_var_key: 'hora', max_options: 2, next_node_key: 'next',
+    }, { fecha: '21/11/2026', hora: '19:00' })
+    expect(result.slots.map((slot) => slot.start)).toEqual([
+      '2026-11-22T00:00:00Z', '2026-11-22T02:00:00Z',
+    ])
+    expect(result.slots.map((slot) => slot.id)).toEqual(['slot_1', 'slot_2'])
+  })
+
+  it('does not query availability for an invalid preferred time or missing date configuration', async () => {
+    const db = createClient('https://db.example.test', 'key')
+    const cfg = {
+      text: 'Horarios', var_key: 'slot', date_var_key: 'fecha', time_var_key: 'hora', next_node_key: 'next',
+    }
+    for (const hora of [undefined, '19', '7:00', '24:00', '19:60', '7pm']) {
+      expect(await loadOfferedSlots(db, 'account', cfg, { hora })).toMatchObject({ invalidPreference: true, slots: [] })
+    }
+    expect(await loadOfferedSlots(db, 'account', { ...cfg, date_var_key: undefined }, { hora: '19:00' }))
+      .toMatchObject({ invalidPreference: true, slots: [] })
+    expect(getAvailableSlots).not.toHaveBeenCalled()
+  })
 })
 
 describe('flow appointment booking', () => {

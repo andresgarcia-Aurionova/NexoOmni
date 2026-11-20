@@ -43,6 +43,7 @@ import {
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
+import { timeMinutes } from "./time-input";
 import { matchAllowedInput } from "./allowed-input";
 import {
   bookFlowAppointment,
@@ -830,8 +831,8 @@ async function advanceFromNodeKey(
       }
       const { slots, hasSchedule, invalidPreference } = availability;
       if (invalidPreference) {
-        console.error("[flows] invalid requested appointment date for run", run.id);
-        await logEvent(db, run.id, "error", node.node_key, { reason: "invalid_appointment_date" });
+        console.error("[flows] invalid appointment preference for run", run.id);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "invalid_appointment_preference" });
         await executeHandoff(db, run, node);
         return { outcome: "handed_off" };
       }
@@ -1170,6 +1171,7 @@ async function handleReplyForActiveRun(
     if (
       captured !== null && captured.length > 0 &&
       cfg.var_key &&
+      (!cfg.time_24h || timeMinutes(captured) !== null) &&
       (!cfg.date_not_past || isCurrentOrFutureDate(captured, typeof cfg.date_timezone === "string" ? cfg.date_timezone.trim() : ""))
     ) {
       // Persist captured value + reset reprompt count atomically.

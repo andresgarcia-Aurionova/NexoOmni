@@ -749,6 +749,7 @@ function validateNode(
         days_ahead?: number;
         max_options?: number;
         date_var_key?: string;
+        time_var_key?: string;
         next_node_key?: string;
         no_availability_next?: string;
       };
@@ -758,6 +759,12 @@ function validateNode(
       validateVarKey(issues, node.node_key, "var_key", cfg.var_key, "El nodo Ofrecer horarios necesita una clave para guardar el horario elegido.");
       if (cfg.date_var_key) {
         validateVarKey(issues, node.node_key, "date_var_key", cfg.date_var_key, "La clave de fecha no es válida.");
+      }
+      if (cfg.time_var_key) {
+        validateVarKey(issues, node.node_key, "time_var_key", cfg.time_var_key, "La clave de hora no es válida.");
+        if (!cfg.date_var_key) {
+          issues.push({ severity: "error", scope: "node", node_key: node.node_key, field: "date_var_key", message: "Para ordenar por hora preferida, indica también la clave de fecha." });
+        }
       }
       validateAppointmentNumber(issues, node.node_key, "duration_minutes", cfg.duration_minutes, 5, 480, "La duración debe estar entre 5 y 480 minutos.");
       validateAppointmentNumber(issues, node.node_key, "days_ahead", cfg.days_ahead, 1, 60, "El período de búsqueda debe estar entre 1 y 60 días.");

@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { findConflict, getAvailableSlots } from '@/lib/appointments/availability'
 import { zonedDayInfo } from '@/lib/appointments/slots'
 import { isCurrentOrFutureDate } from './date-input'
+import { timeMinutes } from './time-input'
 import { interpolateVars } from './interpolate-vars'
 import type { BookAppointmentNodeConfig, OfferSlotsNodeConfig } from './types'
 
@@ -60,6 +61,15 @@ export async function loadOfferedSlots(
   let to = new Date(from.getTime() + daysAhead * 86_400_000)
   let preferenceKey: string | null = null
   let timezone: string | null = null
+  let preferredTime: number | null = null
+
+  if (cfg.time_var_key) {
+    const preference = vars[cfg.time_var_key]
+    preferredTime = typeof preference === 'string' ? timeMinutes(preference) : null
+    if (!cfg.date_var_key || preferredTime === null) {
+      return { slots: [], hasSchedule: true, invalidPreference: true }
+    }
+  }
 
   if (cfg.date_var_key) {
     timezone = await preferenceScheduleTimezone(db, accountId, cfg.specialist_id ?? null)
@@ -91,6 +101,20 @@ export async function loadOfferedSlots(
   const eligible = preferenceKey
     ? slots.filter((slot) => zonedDayInfo(new Date(slot.start), timezone).key === preferenceKey)
     : slots
+
+  if (preferredTime !== null) {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    })
+    const target = preferredTime
+    eligible.sort((a, b) => {
+      const aTime = timeMinutes(formatter.format(new Date(a.start)))
+      const bTime = timeMinutes(formatter.format(new Date(b.start)))
+      if (aTime === null || bTime === null) throw new Error('Could not format appointment time.')
+      return Math.abs(aTime - target) - Math.abs(bTime - target)
+        || new Date(a.start).getTime() - new Date(b.start).getTime()
+    })
+  }
 
   return {
     hasSchedule,

@@ -206,6 +206,16 @@ export function NodeConfigForm({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
+                checked={cfg.time_24h === true}
+                onCheckedChange={(checked) => onUpdateConfig({ time_24h: checked })}
+              />
+              {t("time24h")}
+            </label>
+            {cfg.time_24h === true && <p className="text-[10px] text-muted-foreground">{t("time24hHelp")}</p>}
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
                 checked={cfg.save_contact_note === true}
                 onCheckedChange={(checked) => onUpdateConfig({ save_contact_note: checked })}
               />
@@ -436,6 +446,7 @@ interface OfferSlotsCfg {
   max_options?: number;
   var_key?: string;
   date_var_key?: string;
+  time_var_key?: string;
   next_node_key?: string;
   no_availability_next?: string;
 }
@@ -513,6 +524,7 @@ function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: Of
     </div>
     <div><label className="mb-1 block text-xs text-muted-foreground">Clave del horario elegido</label><Input value={cfg.var_key ?? "slot"} onChange={(event) => onUpdateConfig({ var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
     <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentDateVariable")}</label><Input value={cfg.date_var_key ?? ""} onChange={(event) => onUpdateConfig({ date_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /><p className="mt-1 text-[10px] text-muted-foreground">{t("appointmentDateVariableHelp")}</p></div>
+    <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentTimeVariable")}</label><Input value={cfg.time_var_key ?? ""} onChange={(event) => onUpdateConfig({ time_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /><p className="mt-1 text-[10px] text-muted-foreground">{t("appointmentTimeVariableHelp")}</p></div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Al elegir un horario" />
       <NextNodeRow value={cfg.no_availability_next ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(no_availability_next) => onUpdateConfig({ no_availability_next })} label="Sin disponibilidad" />
