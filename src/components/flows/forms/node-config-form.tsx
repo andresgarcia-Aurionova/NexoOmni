@@ -140,6 +140,22 @@ export function NodeConfigForm({
             onChange={(v) => onUpdateConfig({ prompt_text: v })}
             rows={2}
           />
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                checked={cfg.ai_assist === true}
+                onCheckedChange={(checked) => onUpdateConfig({ ai_assist: checked })}
+              />
+              {t("aiAssist")}
+            </label>
+            <p className="text-[10px] text-muted-foreground">{t("aiInputHelp")}</p>
+          </div>
+          <TextRow
+            label={t("invalidInputText")}
+            value={typeof cfg.invalid_input_text === "string" ? cfg.invalid_input_text : ""}
+            onChange={(v) => onUpdateConfig({ invalid_input_text: v })}
+            rows={2}
+          />
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">
               {t("varKeyLabel")}

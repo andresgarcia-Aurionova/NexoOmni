@@ -61,6 +61,20 @@ simultáneos mientras se procesa un turno o este se interrumpe, la conversación
 puede transferirse para revisión. El equipo debe comprobar el historial: un
 mensaje cuyo envío se interrumpió podría llegar tarde.
 
+También puedes activar **Interpretar respuestas con IA** en **Recopilar
+datos**. La IA intenta entender el dato solicitado, por ejemplo una fecha
+expresada de otra forma, o responder con información autorizada. Las fechas,
+horas y opciones configuradas siguen sujetas a las validaciones del flujo;
+revisa siempre los datos y la oferta antes de confirmar una cita. Si una
+respuesta es ambigua, el flujo vuelve a preguntar; ante una solicitud de
+atención humana o falta de información autorizada puede transferir al equipo.
+La interpretación puede equivocarse y consume créditos. No activa la
+respuesta automática general ni completa automáticamente otros procesos.
+
+En cada pregunta puedes configurar un mensaje opcional para respuestas
+inválidas, por ejemplo «La fecha debe ser de hoy en adelante. Indica otra en
+formato DD/MM/AAAA». Si lo dejas vacío, se repite la pregunta original.
+
 ### Guardar una respuesta en las notas del contacto
 
 En un paso **Recopilar datos**, activa **Guardar la respuesta en Notas del

@@ -39,7 +39,7 @@ import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
 import { timeMinutes } from "./time-input";
 import { matchAllowedInput } from "./allowed-input";
-import { decideFlowAiTurn } from "./ai-assist";
+import { decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
@@ -1323,6 +1323,7 @@ async function handleAiFlowReply(
     }
     let aiReplyId: string | undefined;
     let aiAnswer: string | undefined;
+    let aiCapturedValue: string | undefined;
     if (node.config.ai_assist === true && input.message.kind === "text"
         && (node.node_type === "send_buttons" || node.node_type === "send_list")) {
       if (input.channelType !== "whatsapp" && input.channelType !== "zernio_whatsapp") {
@@ -1343,6 +1344,29 @@ async function handleAiFlowReply(
         if (decision.action === "route") aiReplyId = decision.reply_id;
       }
     }
+    if (node.config.ai_assist === true && node.node_type === "collect_input"
+        && input.message.kind === "text") {
+      if (input.channelType !== "whatsapp" && input.channelType !== "zernio_whatsapp") {
+        console.error("[flows] AI assistance is restricted to WhatsApp.");
+        return handoff();
+      }
+      const cfg = node.config as unknown as CollectInputNodeConfig;
+      if (cfg.date_not_past && !cfg.date_timezone?.trim()) {
+        throw new Error("Flow AI date timezone is missing.");
+      }
+      const dateToday = cfg.date_not_past
+        ? new Intl.DateTimeFormat("en-GB", { timeZone: cfg.date_timezone?.trim() }).format(new Date())
+        : undefined;
+      const decision = await decideFlowAiInput({
+        accountId: run.account_id, conversationId: run.conversation_id,
+        turnId, text: input.message.text, prompt: cfg.prompt_text,
+        allowedValues: cfg.allowed_values, dateToday, time24h: cfg.time_24h,
+      });
+      if (decision.action === "handoff") return handoff();
+      if (decision.action === "answer") aiAnswer = decision.text;
+      if (decision.action === "capture") aiCapturedValue = decision.value;
+      if (decision.action === "unknown") aiCapturedValue = "";
+    }
     const active = await db.rpc("is_flow_ai_turn_active", {
       p_account_id: run.account_id, p_run_id: run.id,
       p_turn_id: turnId, p_node_key: turnNode,
@@ -1360,8 +1384,10 @@ async function handleAiFlowReply(
       });
       result = { consumed: true, flow_run_id: run.id, outcome: "advanced" };
     } else {
-      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId);
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue);
     }
+    if (result.outcome === "processing_failed") return handoff();
+    if (result.outcome === "stale_inbound_ignored") return handoff();
     const finished = await db.rpc("finish_flow_ai_turn", {
       p_account_id: run.account_id, p_run_id: run.id,
       p_turn_id: turnId, p_node_key: turnNode,
@@ -1383,6 +1409,7 @@ async function handleReplyForActiveRun(
   message: ParsedInbound,
   nodes: Map<string, FlowNodeRow>,
   aiReplyId?: string,
+  aiCapturedValue?: string,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -1492,7 +1519,7 @@ async function handleReplyForActiveRun(
     currentNode.node_type === "collect_input"
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
-    const captured = matchAllowedInput(message.text.trim(), cfg.allowed_values);
+    const captured = matchAllowedInput((aiCapturedValue ?? message.text).trim(), cfg.allowed_values);
     if (
       captured !== null && captured.length > 0 &&
       cfg.var_key &&
@@ -1596,10 +1623,23 @@ async function handleReplyForActiveRun(
     if (action.type === "handoff") return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
     if (action.type === "end") return { consumed: true, flow_run_id: run.id, outcome: "completed" };
   } else {
-    await db
+    let update = db
       .from("flow_runs")
       .update({ reprompt_count: newReprompts })
       .eq("id", run.id);
+    if (run.vars.__flow_ai_enabled === true) {
+      update = update.eq("status", "active").eq("current_node_key", run.current_node_key);
+      const { data, error } = await update.select("id");
+      if (error) {
+        console.error("[flows] AI fallback update failed:", error.message);
+        return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+      }
+      if (!data?.length) {
+        return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
+      }
+    } else {
+      await update;
+    }
     await logEvent(db, run.id, "fallback_fired", run.current_node_key, {
       action: action.type,
       reprompt_count: newReprompts,
@@ -1625,13 +1665,18 @@ async function handleReplyForActiveRun(
           userId: run.user_id,
           conversationId: run.conversation_id!,
           contactId: run.contact_id!,
-          text: interpolateVars(cfg.prompt_text, run.vars),
+          text: interpolateVars(
+            typeof cfg.invalid_input_text === "string" && cfg.invalid_input_text.trim()
+              ? cfg.invalid_input_text : cfg.prompt_text,
+            run.vars,
+          ),
         });
       } catch (err) {
         await logEvent(db, run.id, "error", currentNode.node_key, {
           reason: "reprompt_send_failed",
           detail: err instanceof Error ? err.message : String(err),
         });
+        if (run.vars.__flow_ai_enabled === true) throw err;
       }
     } else if (currentNode.node_type === "offer_slots") {
       const cfg = currentNode.config as unknown as OfferSlotsNodeConfig;
@@ -1710,7 +1755,7 @@ async function startNewRun(
             && (node.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true,
         ) ? { __guarded_appointments: true } : {}),
         ...(Array.from(nodes.values()).some((node) =>
-          (node.node_type === "send_buttons" || node.node_type === "send_list")
+          (node.node_type === "send_buttons" || node.node_type === "send_list" || node.node_type === "collect_input")
             && node.config.ai_assist === true,
         ) ? { __flow_ai_enabled: true } : {}),
       },

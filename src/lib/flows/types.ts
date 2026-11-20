@@ -123,6 +123,8 @@ export interface HandoffNodeConfig {
 export interface CollectInputNodeConfig {
   /** Prompt text sent to the customer before they reply. */
   prompt_text: string;
+  ai_assist?: boolean;
+  invalid_input_text?: string;
   /**
    * Key under which to store the captured text in
    * `flow_runs.vars`. Stable identifier — used by downstream

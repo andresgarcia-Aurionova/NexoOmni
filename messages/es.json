@@ -1915,6 +1915,8 @@
         "varKeyHelp": "Interpola en prompts subsiguientes y notas de transferencia con",
         "aiAssist": "Interpretar respuestas con IA",
         "aiAssistHelp": "Solo WhatsApp. La IA elige entre las opciones o responde con información autorizada; si no puede hacerlo, transfiere al equipo.",
+        "aiInputHelp": "Solo WhatsApp. La IA interpreta la respuesta; el flujo sigue validando los datos. Puede responder con información autorizada o transferir al equipo.",
+        "invalidInputText": "Mensaje si la respuesta no es válida (opcional)",
         "allowedValues": "Aceptar solo respuestas de una lista",
         "allowedValuesLabel": "Respuestas aceptadas (una por línea)",
         "allowedValuesHelp": "Indica las opciones en la pregunta. Se ignoran mayúsculas y acentos; una respuesta no reconocida sigue la regla de reintentos.",
