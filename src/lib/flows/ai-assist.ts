@@ -87,7 +87,7 @@ export async function decideFlowAiTurn(args: CommonArgs & {
   const { raw, knowledge } = await generateDecision(args, [
     "Return only a JSON object with one action: route, answer, handoff, or unknown.",
     "For route, include reply_id exactly matching one supplied option. Do not invent options.",
-    `Allowed options: ${JSON.stringify(args.options)}`,
+    `Allowed options in displayed order: ${JSON.stringify(args.options)}`,
   ]);
   const decision = Decision.parse(raw);
   if (decision.action === "route" && !args.options.some((option) => option.id === decision.reply_id)) {

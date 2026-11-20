@@ -219,6 +219,10 @@ export interface OfferSlotsNodeConfig {
   date_var_key?: string;
   /** Optional variable containing the preferred time in HH:mm format. */
   time_var_key?: string;
+  /** Interpret a protected offer with AI, then confirm the explicit date and time. */
+  ai_assist?: boolean;
+  /** Message containing {{vars.offer_date}} and {{vars.offer_time}}. */
+  ai_confirmation_text?: string;
   /** Where to go once a slot is chosen. */
   next_node_key: string;
   /** Where to go when the calendar has nothing free. */

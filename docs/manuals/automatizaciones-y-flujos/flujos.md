@@ -158,6 +158,25 @@ en **Clave para guardar la referencia de la cita**. Un mensaje posterior puede
 incluir `{{vars.referencia_cita}}`. La referencia identifica la cita en
 NexoOmni; no reemplaza un folio comercial con formato acordado.
 
+### Elegir horarios con IA
+
+En **Ofrecer horarios**, activa **Interpretar selección de horario con IA**
+solo para WhatsApp y conecta directamente una cita con protección contra
+duplicados. Configura también la clave de fecha solicitada, para usar una zona
+horaria inequívoca de la agenda. La IA interpreta una elección como «la primera opción» y después
+pide confirmar la fecha y hora. Configura el mensaje de confirmación con
+`{{vars.offer_date}}` y `{{vars.offer_time}}`, por ejemplo: «Elegiste
+{{vars.offer_date}} a las {{vars.offer_time}}. Para confirmar, responde:
+Confirmo {{vars.offer_date}} {{vars.offer_time}}».
+
+La respuesta debe contener la fecha completa `DD/MM/AAAA` y la hora `HH:mm`,
+por ejemplo «Confirmo 21/11/2026 19:30». Un simple «sí» no agenda. Comprueba
+siempre el horario antes de confirmar: la IA puede interpretar una opción
+incorrectamente. La disponibilidad se comprueba al agendar y el uso de IA
+consume créditos. La protección evita citas duplicadas, pero una confirmación
+antigua con la misma fecha y hora podría coincidir con una oferta nueva.
+Esta opción no comprueba cupos reales por sede, zona o mesa.
+
 ## Preguntas frecuentes
 
 **¿Un flujo puede reemplazar completamente a un agente humano?**

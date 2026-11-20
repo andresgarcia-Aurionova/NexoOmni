@@ -24,19 +24,22 @@ vi.mock("./channel-send", () => ({
 describe("requested-date offer handling", () => {
   afterEach(() => vi.clearAllMocks());
 
-  async function runOffer(failOfferSave = false, guarded = false) {
+  async function runOffer(failOfferSave = false, guarded = false, natural = false) {
     const writes: { table: string; body: Record<string, unknown> }[] = [];
     const steps: string[] = [];
     const run = {
       id: "run", flow_id: "flow", account_id: "account", user_id: "user",
       contact_id: "contact", conversation_id: "conversation", status: "active",
-      current_node_key: "date", vars: guarded ? { __guarded_appointments: true } : {}, reprompt_count: 0,
+      current_node_key: "date", vars: guarded ? {
+        __guarded_appointments: true, ...(natural ? { __flow_ai_enabled: true } : {}),
+      } : {}, reprompt_count: 0,
     };
     const nodes = [
       { node_key: "date", node_type: "collect_input", config: { var_key: "fecha", next_node_key: "offer" } },
       { node_key: "offer", node_type: "offer_slots", config: {
         text: "Horarios", date_var_key: "fecha", var_key: "slot",
         next_node_key: guarded ? "book" : "end", no_availability_next: "unavailable",
+        ...(natural ? { ai_assist: true, ai_confirmation_text: "Confirma {{vars.offer_date}} {{vars.offer_time}}" } : {}),
       } },
       ...(guarded ? [{ node_key: "book", node_type: "book_appointment", config: { idempotent_booking: true } }] : []),
       { node_key: "unavailable", node_type: "send_message", config: { text: "Sin horarios", next_node_key: "end" } },
@@ -53,6 +56,10 @@ describe("requested-date offer handling", () => {
         if (init?.method === "HEAD" && table === "flow_run_events") {
           return new Response(null, { headers: { "content-range": "*/0" } });
         }
+        if (table === "claim_flow_ai_turn") {
+          return Response.json([{ outcome: "claimed", turn_id: "turn", turn_node_key: "date" }]);
+        }
+        if (table === "is_flow_ai_turn_active" || table === "finish_flow_ai_turn") return Response.json(true);
         if (table === "update_flow_run_vars_if_current") {
           const args = JSON.parse(String(init?.body)) as { p_new_vars: Record<string, unknown>; p_reset_reprompts: boolean };
           writes.push({ table: "flow_runs", body: { vars: args.p_new_vars, ...(args.p_reset_reprompts ? { reprompt_count: 0 } : {}) } });
@@ -159,6 +166,30 @@ describe("requested-date offer handling", () => {
       && typeof write.body.vars === "object" && write.body.vars !== null
       && "__offer_token_offer" in write.body.vars && !("__offer_pending_offer" in write.body.vars));
     expect(recorded).toBeDefined();
+  });
+
+  it("sends a natural-selection offer without displaying a code", async () => {
+    vi.mocked(loadOfferedSlots).mockResolvedValue({
+      hasSchedule: true,
+      slots: [{ id: "slot_1", title: "18:00", start: "2035-01-01T18:00:00Z", end: "2035-01-01T18:30:00Z", localDate: "01/01/2035", localTime: "18:00" }],
+    });
+    const { result } = await runOffer(false, true, true);
+    expect(result.outcome).toBe("advanced");
+    expect(flowSendText).toHaveBeenCalledWith(expect.objectContaining({ text: "Horarios\n\n1. 18:00" }));
+  });
+
+  it("does not offer two distinct instants with the same local date and time", async () => {
+    vi.mocked(loadOfferedSlots).mockResolvedValue({
+      hasSchedule: true,
+      slots: [
+        { id: "slot_1", title: "01:30", start: "2035-11-04T05:30:00Z", end: "2035-11-04T06:00:00Z", localDate: "04/11/2035", localTime: "01:30" },
+        { id: "slot_2", title: "01:30", start: "2035-11-04T06:30:00Z", end: "2035-11-04T07:00:00Z", localDate: "04/11/2035", localTime: "01:30" },
+      ],
+    });
+    const { result } = await runOffer(false, true, true);
+    expect(result.outcome).toBe("handed_off");
+    expect(flowSendText).not.toHaveBeenCalled();
+    vi.mocked(flowSendText).mockReset().mockResolvedValue({ message_id: "sent" });
   });
 
   it.each([false, true])("accepts a selection before offer send returns, send fails: %s", async (sendFails) => {

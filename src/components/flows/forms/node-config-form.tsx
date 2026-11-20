@@ -458,6 +458,8 @@ function SendButtonsForm({
 
 interface OfferSlotsCfg {
   text?: string;
+  ai_assist?: boolean;
+  ai_confirmation_text?: string;
   specialist_id?: string;
   duration_minutes?: number;
   days_ahead?: number;
@@ -544,6 +546,11 @@ function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: Of
     <div><label className="mb-1 block text-xs text-muted-foreground">Clave del horario elegido</label><Input value={cfg.var_key ?? "slot"} onChange={(event) => onUpdateConfig({ var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
     <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentDateVariable")}</label><Input value={cfg.date_var_key ?? ""} onChange={(event) => onUpdateConfig({ date_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /><p className="mt-1 text-[10px] text-muted-foreground">{t("appointmentDateVariableHelp")}</p></div>
     <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentTimeVariable")}</label><Input value={cfg.time_var_key ?? ""} onChange={(event) => onUpdateConfig({ time_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /><p className="mt-1 text-[10px] text-muted-foreground">{t("appointmentTimeVariableHelp")}</p></div>
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.ai_assist === true} onCheckedChange={(checked) => onUpdateConfig({ ai_assist: checked })} />{t("appointmentNaturalSelection")}</label>
+      <p className="text-[10px] text-muted-foreground">{t("appointmentNaturalSelectionHelp")}</p>
+      {cfg.ai_assist === true && <TextRow label={t("appointmentConfirmationText")} value={cfg.ai_confirmation_text ?? ""} onChange={(ai_confirmation_text) => onUpdateConfig({ ai_confirmation_text })} rows={3} />}
+    </div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Al elegir un horario" />
       <NextNodeRow value={cfg.no_availability_next ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(no_availability_next) => onUpdateConfig({ no_availability_next })} label="Sin disponibilidad" />

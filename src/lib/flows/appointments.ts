@@ -20,6 +20,8 @@ export interface OfferedSlot {
   title: string
   start: string
   end: string
+  localDate?: string
+  localTime?: string
 }
 
 /** Where the offered slots are parked while the run waits for the answer. */
@@ -37,6 +39,19 @@ export function offerClaimVarKey(nodeKey: string): string {
 
 export function offerPendingVarKey(nodeKey: string): string {
   return `__offer_pending_${nodeKey}`
+}
+
+export function offerConfirmationVarKey(nodeKey: string): string {
+  return `__offer_confirmation_${nodeKey}`
+}
+
+export function matchOfferConfirmation(
+  text: string,
+  date: string,
+  time: string,
+): boolean {
+  const match = /^(?:(?:confirmo|confirmar|sí|si|confirm|yes|확인)\s*[,.:]?\s*)?(\d{2}\/\d{2}\/\d{4})\s*(?:(?:a las|at)\s*)?(\d{2}:\d{2})[.!]?$/iu.exec(text.trim())
+  return match?.[1] === date && match[2] === time
 }
 
 export function secureOfferCode(token: string): string {
@@ -89,6 +104,10 @@ export async function loadOfferedSlots(
   let preferenceKey: string | null = null
   let timezone: string | null = null
   let preferredTime: number | null = null
+
+  if (cfg.ai_assist === true && !cfg.date_var_key) {
+    return { slots: [], hasSchedule: true, invalidPreference: true }
+  }
 
   if (cfg.time_var_key) {
     const preference = vars[cfg.time_var_key]
@@ -150,6 +169,12 @@ export async function loadOfferedSlots(
       title: labelFor(slot.start, slot.end, timezone),
       start: slot.start,
       end: slot.end,
+      localDate: new Intl.DateTimeFormat('en-GB', {
+        timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric',
+      }).format(new Date(slot.start)),
+      localTime: new Intl.DateTimeFormat('en-GB', {
+        timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).format(new Date(slot.start)),
     })),
   }
 }

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findConflict, getAvailableSlots } from '@/lib/appointments/availability'
-import { bookFlowAppointment, loadOfferedSlots, matchSecureOffer } from './appointments'
+import { bookFlowAppointment, loadOfferedSlots, matchOfferConfirmation, matchSecureOffer } from './appointments'
 
 vi.mock('@/lib/appointments/availability', () => ({
   findConflict: vi.fn().mockResolvedValue(false),
@@ -33,6 +33,9 @@ describe('requested date for flow appointments', () => {
     }, { fecha: '21/11/2026' })
     expect(result.slots.map((slot) => slot.start)).toEqual([
       '2026-11-21T18:00:00Z', '2026-11-22T05:00:00Z',
+    ])
+    expect(result.slots.map(({ localDate, localTime }) => [localDate, localTime])).toEqual([
+      ['21/11/2026', '12:00'], ['21/11/2026', '23:00'],
     ])
     expect(getAvailableSlots).toHaveBeenCalledWith(db, expect.objectContaining({
       from: new Date('2026-11-20T00:00:00Z'), to: new Date('2026-11-23T00:00:00Z'),
@@ -202,6 +205,15 @@ describe('protected slot selection', () => {
     expect(matchSecureOffer('1 ABCDEF123456', slots, token)).toEqual(slots[0])
     for (const text of ['1', '1 ABCDEF123457', '2 ABCDEF123456', '1 ABCDEF123456 extra']) {
       expect(matchSecureOffer(text, slots, token)).toBeNull()
+    }
+  })
+
+  it('requires an affirmative exact local date and time for natural confirmation', () => {
+    for (const text of ['Confirmo 21/11/2026 19:30', 'sí, 21/11/2026 a las 19:30', '21/11/2026 19:30']) {
+      expect(matchOfferConfirmation(text, '21/11/2026', '19:30')).toBe(true)
+    }
+    for (const text of ['sí', 'no confirmo 21/11/2026 19:30', '21/11/2026 18:00', '22/11/2026 19:30', '21/11/2026 19:30 no']) {
+      expect(matchOfferConfirmation(text, '21/11/2026', '19:30')).toBe(false)
     }
   })
 })

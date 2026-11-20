@@ -1900,6 +1900,9 @@
       "form": {
         "appointmentReferenceVariable": "Variable for the appointment reference (optional)",
         "appointmentPreventDuplicates": "Prevent duplicate appointments at this step",
+        "appointmentNaturalSelection": "Interpret appointment choice with AI",
+        "appointmentNaturalSelectionHelp": "WhatsApp and protected bookings only; configure the requested date key. Confirmation requires date and time; an old confirmation with identical details could match a new offer. Include vars.offer_date and vars.offer_time in double braces in the message and ask for a reply such as “Confirm 21/11/2026 19:30”.",
+        "appointmentConfirmationText": "Date and time confirmation message",
         "appointmentPreventDuplicatesHelp": "Connect Offer slots directly to this step and ask customers to reply with the number and displayed code, for example 1 ABC123DEF456. Only one appointment is created per run.",
         "appointmentDateVariable": "Requested date variable key (optional)",
         "appointmentDateVariableHelp": "Use the key of a question that captures a date in DD/MM/YYYY format. Only slots on that day in the calendar's time zone will be offered.",

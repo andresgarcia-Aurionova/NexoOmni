@@ -1900,6 +1900,9 @@
       "form": {
         "appointmentReferenceVariable": "예약 참조를 저장할 변수 (선택)",
         "appointmentPreventDuplicates": "이 단계에서 중복 예약 방지",
+        "appointmentNaturalSelection": "AI로 예약 시간 선택 해석",
+        "appointmentNaturalSelectionHelp": "WhatsApp과 보호된 예약에서만 사용할 수 있으며 요청 날짜 키를 설정해야 합니다. 날짜와 시간으로 확인하며, 동일한 이전 확인이 새 제안과 일치할 수 있습니다. 메시지에 vars.offer_date와 vars.offer_time을 이중 중괄호로 묶어 포함하고 “확인 21/11/2026 19:30”처럼 답하도록 안내하세요.",
+        "appointmentConfirmationText": "날짜 및 시간 확인 메시지",
         "appointmentPreventDuplicatesHelp": "시간대 제공 단계를 여기에 직접 연결하고 고객에게 번호와 표시된 코드(예: 1 ABC123DEF456)로 답하도록 안내하세요. 실행당 예약 하나만 생성됩니다.",
         "appointmentDateVariable": "요청 날짜의 변수 키 (선택)",
         "appointmentDateVariableHelp": "DD/MM/YYYY 형식으로 날짜를 수집한 질문의 키를 사용하세요. 일정 시간대에서 해당 날짜의 시간만 제공됩니다.",

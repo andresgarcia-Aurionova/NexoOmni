@@ -43,8 +43,10 @@ import { decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
+  matchOfferConfirmation,
   matchSecureOffer,
   offerClaimVarKey,
+  offerConfirmationVarKey,
   offerPendingVarKey,
   offerTokenVarKey,
   secureOfferCode,
@@ -931,6 +933,16 @@ async function advanceFromNodeKey(
       const nextNode = nodes.get(cfg.next_node_key);
       const secureOffer = nextNode?.node_type === "book_appointment"
         && (nextNode.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true;
+      const localTimes = new Set(slots.map((slot) => `${slot.localDate} ${slot.localTime}`));
+      if (cfg.ai_assist === true && (!secureOffer || run.vars.__flow_ai_enabled !== true
+          || !cfg.ai_confirmation_text?.includes("{{vars.offer_date}}")
+          || !cfg.ai_confirmation_text.includes("{{vars.offer_time}}")
+          || slots.some((slot) => !slot.localDate || !slot.localTime)
+          || localTimes.size !== slots.length)) {
+        console.error("[flows] natural appointment selection is not configured safely.");
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
       if (secureOffer && run.vars.__guarded_appointments !== true) {
         console.error("[flows] protected booking requires a newly started guarded run:", run.id);
         await logEvent(db, run.id, "error", node.node_key, { reason: "unguarded_appointment_run" });
@@ -946,7 +958,10 @@ async function advanceFromNodeKey(
           [offerPendingVarKey(node.node_key)]: offerToken,
         } : {}),
       };
-      if (secureOffer) delete vars[offerClaimVarKey(node.node_key)];
+      if (secureOffer) {
+        delete vars[offerClaimVarKey(node.node_key)];
+        delete vars[offerConfirmationVarKey(node.node_key)];
+      }
       let savedOffer: boolean;
       let saveOfferError: { message: string } | null;
       if (secureOffer) {
@@ -989,7 +1004,7 @@ async function advanceFromNodeKey(
               accountId: run.account_id, userId: run.user_id,
               conversationId: run.conversation_id!, contactId: run.contact_id!,
               text: `${common.bodyText}\n\n${slots.map((slot, index) =>
-                `${index + 1}. ${slot.title} (${secureOfferCode(offerToken)})`,
+                `${index + 1}. ${slot.title}${cfg.ai_assist === true ? "" : ` (${secureOfferCode(offerToken)})`}`,
               ).join("\n")}`,
             })
           : slots.length <= 3
@@ -1324,6 +1339,8 @@ async function handleAiFlowReply(
     let aiReplyId: string | undefined;
     let aiAnswer: string | undefined;
     let aiCapturedValue: string | undefined;
+    let aiOfferedSlot: OfferedSlot | undefined;
+    let aiConfirmedSlotId: string | undefined;
     if (node.config.ai_assist === true && input.message.kind === "text"
         && (node.node_type === "send_buttons" || node.node_type === "send_list")) {
       if (input.channelType !== "whatsapp" && input.channelType !== "zernio_whatsapp") {
@@ -1367,6 +1384,53 @@ async function handleAiFlowReply(
       if (decision.action === "capture") aiCapturedValue = decision.value;
       if (decision.action === "unknown") aiCapturedValue = "";
     }
+    if (node.config.ai_assist === true && node.node_type === "offer_slots"
+        && input.message.kind === "text") {
+      if (input.channelType !== "whatsapp" && input.channelType !== "zernio_whatsapp") {
+        throw new Error("Natural appointment selection is restricted to WhatsApp.");
+      }
+      const cfg = node.config as unknown as OfferSlotsNodeConfig;
+      const next = nodes.get(cfg.next_node_key);
+      const token = run.vars[offerTokenVarKey(nodeKey)];
+      const slots = run.vars[slotsVarKey(nodeKey)];
+      if (run.vars.__guarded_appointments !== true || next?.node_type !== "book_appointment"
+          || (next.config as unknown as BookAppointmentNodeConfig).idempotent_booking !== true
+          || typeof token !== "string" || !Array.isArray(slots)
+          || run.vars[offerPendingVarKey(nodeKey)] === token
+          || !cfg.ai_confirmation_text?.includes("{{vars.offer_date}}")
+          || !cfg.ai_confirmation_text.includes("{{vars.offer_time}}")) {
+        throw new Error("Natural appointment offer is unavailable or incomplete.");
+      }
+      const offered: OfferedSlot[] = slots;
+      const pending = run.vars[offerConfirmationVarKey(nodeKey)];
+      if (pending && typeof pending === "object" && !Array.isArray(pending)) {
+        const selected = pending as Record<string, unknown>;
+        const slot = offered.find((item) => item.id === selected.slotId);
+        if (selected.token === token && slot && slot.localDate === selected.date
+            && slot.localTime === selected.time
+            && typeof slot.localDate === "string" && typeof slot.localTime === "string"
+            && matchOfferConfirmation(input.message.text, slot.localDate, slot.localTime)) {
+          aiConfirmedSlotId = slot.id;
+        }
+      }
+      if (!aiConfirmedSlotId) {
+        const options = offered.map((slot) => ({ id: slot.id, title: slot.title }));
+        const direct = matchNumberedOption(input.message.text, options);
+        const decision = direct ? { action: "route" as const, reply_id: direct }
+          : await decideFlowAiTurn({
+            accountId: run.account_id, conversationId: run.conversation_id,
+            turnId, text: input.message.text, prompt: cfg.text, options,
+          });
+        if (decision.action === "handoff") return handoff();
+        if (decision.action === "answer") aiAnswer = decision.text;
+        if (decision.action === "route") {
+          aiOfferedSlot = offered.find((slot) => slot.id === decision.reply_id);
+          if (!aiOfferedSlot?.localDate || !aiOfferedSlot.localTime) {
+            throw new Error("Selected appointment option has no local date or time.");
+          }
+        }
+      }
+    }
     const active = await db.rpc("is_flow_ai_turn_active", {
       p_account_id: run.account_id, p_run_id: run.id,
       p_turn_id: turnId, p_node_key: turnNode,
@@ -1377,14 +1441,55 @@ async function handleAiFlowReply(
     }
     if (!active.data) return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
     let result: DispatchInboundResult;
-    if (aiAnswer !== undefined) {
+    if (aiOfferedSlot) {
+      const cfg = node.config as unknown as OfferSlotsNodeConfig;
+      const vars = {
+        ...run.vars,
+        [offerConfirmationVarKey(nodeKey)]: {
+          token: run.vars[offerTokenVarKey(nodeKey)], slotId: aiOfferedSlot.id,
+          date: aiOfferedSlot.localDate, time: aiOfferedSlot.localTime,
+        },
+      };
+      const saved = await updateVarsIfCurrent(db, run, vars, true);
+      if (saved.error || !saved.saved) {
+        console.error("[flows] natural appointment selection save failed:", saved.error?.message ?? "stale state");
+        return handoff();
+      }
+      run.vars = vars;
+      run.reprompt_count = 0;
+      const stillActive = await db.rpc("is_flow_ai_turn_active", {
+        p_account_id: run.account_id, p_run_id: run.id,
+        p_turn_id: turnId, p_node_key: turnNode,
+      });
+      if (stillActive.error || typeof stillActive.data !== "boolean") {
+        console.error("[flows] natural appointment turn verification failed:", stillActive.error?.message ?? "invalid result");
+        return handoff();
+      }
+      if (!stillActive.data) return handoff();
+      await logEvent(db, run.id, "reply_received", nodeKey, {
+        meta_message_id: input.message.meta_message_id,
+        reply_kind: input.message.kind,
+        text_length: input.message.kind === "text" ? input.message.text.length : null,
+      });
+      const sent = await flowSendText({
+        accountId: run.account_id, userId: run.user_id,
+        conversationId: run.conversation_id, contactId: run.contact_id,
+        text: interpolateVars(cfg.ai_confirmation_text!, {
+          ...run.vars, offer_date: aiOfferedSlot.localDate, offer_time: aiOfferedSlot.localTime,
+        }),
+      });
+      await logEvent(db, run.id, "message_sent", nodeKey, {
+        node_type: "offer_confirmation", whatsapp_message_id: sent.message_id,
+      });
+      result = { consumed: true, flow_run_id: run.id, outcome: "advanced" };
+    } else if (aiAnswer !== undefined) {
       await flowSendText({
         accountId: run.account_id, userId: run.user_id,
         conversationId: run.conversation_id, contactId: run.contact_id, text: aiAnswer,
       });
       result = { consumed: true, flow_run_id: run.id, outcome: "advanced" };
     } else {
-      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue);
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId);
     }
     if (result.outcome === "processing_failed") return handoff();
     if (result.outcome === "stale_inbound_ignored") return handoff();
@@ -1410,6 +1515,7 @@ async function handleReplyForActiveRun(
   nodes: Map<string, FlowNodeRow>,
   aiReplyId?: string,
   aiCapturedValue?: string,
+  aiConfirmedSlotId?: string,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -1467,7 +1573,9 @@ async function handleReplyForActiveRun(
         : matchNumberedOption(message.text, offered.map((slot) => ({ id: slot.id, title: slot.title })));
     const chosen = secureOffer
       ? message.kind === "text" && typeof token === "string"
-        ? matchSecureOffer(message.text, offered, token)
+        ? cfg.ai_assist === true
+          ? offered.find((slot) => slot.id === aiConfirmedSlotId) ?? null
+          : matchSecureOffer(message.text, offered, token)
         : null
       : offered.find((slot) => slot.id === replyId);
     if (chosen) {
@@ -1691,7 +1799,7 @@ async function handleReplyForActiveRun(
             accountId: run.account_id, userId: run.user_id,
             conversationId: run.conversation_id!, contactId: run.contact_id!,
             text: `${interpolateVars(cfg.text, run.vars)}\n\n${offered.map((slot, index) =>
-              `${index + 1}. ${slot.title} (${secureOfferCode(token)})`,
+              `${index + 1}. ${slot.title}${cfg.ai_assist === true ? "" : ` (${secureOfferCode(token)})`}`,
             ).join("\n")}`,
           });
         } catch (error) {
@@ -1755,7 +1863,7 @@ async function startNewRun(
             && (node.config as unknown as BookAppointmentNodeConfig).idempotent_booking === true,
         ) ? { __guarded_appointments: true } : {}),
         ...(Array.from(nodes.values()).some((node) =>
-          (node.node_type === "send_buttons" || node.node_type === "send_list" || node.node_type === "collect_input")
+          (node.node_type === "send_buttons" || node.node_type === "send_list" || node.node_type === "collect_input" || node.node_type === "offer_slots")
             && node.config.ai_assist === true,
         ) ? { __flow_ai_enabled: true } : {}),
       },
