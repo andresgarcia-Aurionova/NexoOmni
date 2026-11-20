@@ -81,6 +81,14 @@ En cada pregunta puedes configurar un mensaje opcional para respuestas
 inválidas, por ejemplo «La fecha debe ser de hoy en adelante. Indica otra en
 formato DD/MM/AAAA». Si lo dejas vacío, se repite la pregunta original.
 
+En **Formato que debe cumplir la respuesta** puedes validar una fecha real en
+formato `DD/MM/AAAA`, correo, forma de RFC mexicano, código postal de cinco
+dígitos o monto positivo con hasta dos decimales. Estas comprobaciones son de
+formato: no verifican RFC, régimen fiscal, uso de CFDI ni obligaciones ante el
+SAT. Una pregunta también puede aceptar una imagen de WhatsApp; la imagen queda
+en la conversación para que la revise el equipo y no se analiza automáticamente.
+No combines la captura de imagen o un formato con una lista de respuestas.
+
 ### Clasificar un comentario antes de continuar
 
 En una pregunta de WhatsApp con IA, activa **Clasificar el sentimiento de un
@@ -95,6 +103,18 @@ publicar. No sustituye el análisis completo de conversación ni crea una
 respuesta aprobada por sí sola. No se puede combinar en la misma pregunta con
 listas, fechas, horas o notas de contacto. Actívala antes de iniciar la
 conversación y confirma que el equipo puede atender las transferencias.
+
+Al transferir una ejecución, si el análisis de conversaciones está habilitado
+y la política de análisis al transferir está activa, el flujo pone el análisis
+en la cola sin los dos minutos de espera de los mensajes normales. El worker
+procesa la cola periódicamente; por eso el resultado no necesariamente aparece
+antes de que una persona abra la conversación.
+
+En el nodo **Transferir a un agente**, puedes guardar la nota interna como nota
+privada de la conversación. Admite variables como `{{vars.sede}}`; solo el
+equipo la ve, nunca se envía al cliente y admite hasta 2000 caracteres. Úsala
+para entregar un resumen breve. La nota aparece con la identidad propietaria
+del flujo; evita recopilar datos reales sensibles en demostraciones.
 
 ### Guardar una respuesta en las notas del contacto
 

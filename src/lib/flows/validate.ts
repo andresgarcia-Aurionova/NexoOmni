@@ -555,6 +555,8 @@ function validateNode(
         ai_assist?: boolean;
         ai_sentiment_var_key?: unknown;
         time_24h?: boolean;
+        capture_format?: unknown;
+        accept_image?: boolean;
       };
       if (!cfg.prompt_text?.trim()) {
         issues.push({
@@ -607,6 +609,22 @@ function validateNode(
           message: "La lista necesita opciones no vacías y distintas, sin contar mayúsculas ni acentos.",
         });
       }
+      if (cfg.capture_format !== undefined
+          && (!["date_ddmmyyyy", "email", "mx_rfc", "mx_postal_code", "positive_amount"].includes(String(cfg.capture_format))
+            || cfg.allowed_values !== undefined || cfg.accept_image === true)) {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "capture_format",
+          message: "El formato debe ser válido y no puede combinarse con listas ni captura de fotos.",
+        });
+      }
+      if (cfg.accept_image === true && cfg.allowed_values !== undefined) {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "accept_image",
+          message: "La captura de fotos no puede combinarse con una lista de respuestas.",
+        });
+      }
       if (cfg.ai_sentiment_var_key !== undefined
           && (typeof cfg.ai_sentiment_var_key !== "string"
             || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(cfg.ai_sentiment_var_key)
@@ -614,7 +632,8 @@ function validateNode(
             || cfg.ai_sentiment_var_key === cfg.var_key
             || cfg.var_key?.startsWith("__")
             || cfg.ai_assist !== true || cfg.save_contact_note || cfg.date_not_past
-            || cfg.time_24h || cfg.allowed_values !== undefined)) {
+            || cfg.time_24h || cfg.allowed_values !== undefined || cfg.capture_format !== undefined
+            || cfg.accept_image)) {
         issues.push({
           severity: "error", scope: "node", node_key: node.node_key,
           field: "ai_sentiment_var_key",
@@ -813,7 +832,24 @@ function validateNode(
       break;
     }
 
-    case "handoff":
+    case "handoff": {
+      const cfg = node.config as { note?: unknown; save_note_to_conversation?: unknown };
+      if (cfg.save_note_to_conversation !== undefined && typeof cfg.save_note_to_conversation !== "boolean") {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "save_note_to_conversation",
+          message: "La opción de nota interna debe ser verdadera o falsa.",
+        });
+      } else if (cfg.save_note_to_conversation === true
+          && (typeof cfg.note !== "string" || !cfg.note.trim() || cfg.note.length > 2000)) {
+        issues.push({
+          severity: "error", scope: "node", node_key: node.node_key,
+          field: "save_note_to_conversation",
+          message: "La nota interna debe tener entre 1 y 2000 caracteres.",
+        });
+      }
+      break;
+    }
     case "end":
       // Terminal nodes have no outgoing edges; nothing to validate
       // beyond their existence.

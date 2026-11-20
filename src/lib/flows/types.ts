@@ -106,6 +106,8 @@ export interface SendMediaNodeConfig {
 export interface HandoffNodeConfig {
   /** Optional internal note written to flow_run_events.payload.note. */
   note?: string;
+  /** Also save the interpolated note as a private note on the conversation. */
+  save_note_to_conversation?: boolean;
   /**
    * Optional agent user_id to assign on the conversation when this
    * node fires. Leave unset to flip the status without assignment.
@@ -127,6 +129,8 @@ export interface CollectInputNodeConfig {
   prompt_text: string;
   ai_assist?: boolean;
   ai_sentiment_var_key?: string;
+  capture_format?: "date_ddmmyyyy" | "email" | "mx_rfc" | "mx_postal_code" | "positive_amount";
+  accept_image?: boolean;
   invalid_input_text?: string;
   /**
    * Key under which to store the captured text in
@@ -408,6 +412,10 @@ export type ParsedInbound =
       reply_id: string;
       /** The visible title of the tapped option (for logging). */
       reply_title: string;
+      meta_message_id: string;
+    }
+  | {
+      kind: "image";
       meta_message_id: string;
     };
 

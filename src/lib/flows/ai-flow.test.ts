@@ -19,9 +19,13 @@ vi.mock("./channel-send", () => ({
 }));
 
 describe("AI inside an active flow", () => {
-  afterEach(() => vi.resetAllMocks());
+  let analysisEnabled = false;
+  afterEach(() => {
+    analysisEnabled = false;
+    vi.resetAllMocks();
+  });
 
-  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true, menuDate = false, sentiment = false, saveSuccess = true) {
+  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true, menuDate = false, sentiment = false, saveSuccess = true, image = false, captureFormat?: string, text = "quiero reservar", saveHandoffNote = false) {
     const calls: string[] = [];
     const writes: Record<string, unknown>[] = [];
     const run = {
@@ -34,7 +38,9 @@ describe("AI inside an active flow", () => {
       { node_key: "date", node_type: "collect_input", config: {
         ai_assist: true, prompt_text: "Fecha", invalid_input_text: "Elige una fecha válida de hoy en adelante.",
         var_key: sentiment ? "comentario" : "fecha",
-        ...(sentiment ? { ai_sentiment_var_key: "sentiment" } : { date_not_past: true, date_timezone: "America/Mexico_City" }),
+        ...(image ? { var_key: "ticket", accept_image: true } : {}),
+        ...(captureFormat ? { var_key: "value", capture_format: captureFormat } : {}),
+        ...(sentiment ? { ai_sentiment_var_key: "sentiment" } : !captureFormat && !image ? { date_not_past: true, date_timezone: "America/Mexico_City" } : {}),
         next_node_key: sentiment ? "sentiment_check" : "end",
       } },
       ...(sentiment ? [
@@ -42,7 +48,9 @@ describe("AI inside an active flow", () => {
           subject: "var", subject_key: "sentiment", operator: "equals",
           value: "negative", true_next: "human", false_next: "end",
         } },
-        { node_key: "human", node_type: "handoff", config: {} },
+        { node_key: "human", node_type: "handoff", config: saveHandoffNote
+          ? { note: "Comentario: {{vars.comentario}}", save_note_to_conversation: true }
+          : {} },
       ] : []),
       { node_key: "end", node_type: "end", config: {} },
     ] : [
@@ -66,6 +74,10 @@ describe("AI inside an active flow", () => {
         }
         if (table === "flow_nodes") return Response.json(nodes);
         if (table === "flows") return Response.json({ fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2 } });
+        if (table === "ai_configs") return Response.json({
+          conversation_analysis_enabled: analysisEnabled,
+          analysis_on_transfer: analysisEnabled,
+        });
         if (table === "flow_run_events" && init?.method === "HEAD") {
           return new Response(null, { headers: { "content-range": "*/0" } });
         }
@@ -75,6 +87,7 @@ describe("AI inside an active flow", () => {
         if (table === "is_flow_ai_turn_active") return Response.json(active);
         if (table === "finish_flow_ai_turn") return Response.json(true);
         if (table === "handoff_flow_ai_turn") return Response.json(fallbackActive);
+        if (table === "queue_ai_analysis_job") return Response.json(null);
         if (table === "update_flow_run_vars_if_current") {
           writes.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
           return Response.json(saveSuccess);
@@ -93,7 +106,9 @@ describe("AI inside an active flow", () => {
     const result = await dispatchInboundToFlows({
       accountId: "account", userId: "user", contactId: "contact", conversationId: "conversation",
       channelType: "zernio_whatsapp", isFirstInboundMessage: false,
-      message: { kind: "text", text: "quiero reservar", meta_message_id: "message" },
+      message: image
+        ? { kind: "image", meta_message_id: "message" }
+        : { kind: "text", text, meta_message_id: "message" },
     });
 
     return { result, calls, writes };
@@ -120,6 +135,19 @@ describe("AI inside an active flow", () => {
     expect(decideFlowAiInput).not.toHaveBeenCalled();
   });
 
+  it("saves an interpolated handoff summary as an internal conversation note", async () => {
+    vi.mocked(classifyFlowSentiment).mockResolvedValue("negative");
+    const { result, writes } = await dispatch("claimed", true, true, true, false, true, true, false, undefined, "necesito ayuda", true);
+    expect(result.outcome).toBe("handed_off");
+    expect(writes).toContainEqual(expect.objectContaining({
+      account_id: "account",
+      conversation_id: "conversation",
+      author_user_id: "user",
+      body: "Comentario: necesito ayuda",
+      kind: "note",
+    }));
+  });
+
   it("hands uncertain comments or classifier errors to the team without advancing", async () => {
     vi.mocked(classifyFlowSentiment).mockResolvedValueOnce("handoff").mockRejectedValueOnce(new Error("unavailable"));
     for (let i = 0; i < 2; i++) {
@@ -127,6 +155,14 @@ describe("AI inside an active flow", () => {
       expect(result.outcome).toBe("handed_off");
       expect(writes.some((write) => "p_new_vars" in write)).toBe(false);
     }
+  });
+
+  it("queues transfer context without the normal message delay when enabled", async () => {
+    analysisEnabled = true;
+    vi.mocked(decideFlowAiInput).mockResolvedValue({ action: "handoff" });
+    const { result, calls } = await dispatch("claimed", true, true);
+    expect(result.outcome).toBe("handed_off");
+    expect(calls).toContain("queue_ai_analysis_job");
   });
 
   it("takes the non-negative branch only after saving the classification", async () => {
@@ -144,6 +180,23 @@ describe("AI inside an active flow", () => {
     const { result, writes } = await dispatch("claimed", true, true, false, false, true, false);
     expect(result.outcome).toBe("stale_inbound_ignored");
     expect(writes.some((write) => write.node_key === "sentiment_check")).toBe(false);
+  });
+
+  it("captures an inbound photo only when the question accepts images", async () => {
+    const { result, writes } = await dispatch("claimed", true, true, true, false, false, true, true);
+    expect(result.outcome).toBe("completed");
+    expect(writes).toContainEqual(expect.objectContaining({
+      p_new_vars: expect.objectContaining({ ticket: "Foto adjunta en esta conversación" }),
+    }));
+  });
+
+  it("applies deterministic formats to captured answers before advancing", async () => {
+    vi.mocked(decideFlowAiInput).mockResolvedValue({ action: "capture", value: "125,50" });
+    const { result, writes } = await dispatch("claimed", true, true, true, false, false, true, false, "positive_amount", "125,50");
+    expect(result.outcome).toBe("completed");
+    expect(writes).toContainEqual(expect.objectContaining({
+      p_new_vars: expect.objectContaining({ value: "125.50" }),
+    }));
   });
 
   it("does not capture sentiment after the turn becomes stale", async () => {

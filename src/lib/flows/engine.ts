@@ -39,6 +39,7 @@ import { interpolateVars } from "./interpolate-vars";
 import { isCurrentOrFutureDate } from "./date-input";
 import { timeMinutes } from "./time-input";
 import { matchAllowedInput } from "./allowed-input";
+import { normalizeFlowCapture } from "./input-validation";
 import { classifyFlowSentiment, decideFlowAiInput, decideFlowAiTurn } from "./ai-assist";
 import {
   bookFlowAppointment,
@@ -495,12 +496,50 @@ async function sendListAndSuspend(
   return { outcome: "advanced", node_key: node.node_key };
 }
 
+async function queueImmediateHandoffAnalysis(db: AdminClient, run: FlowRunRow): Promise<void> {
+  if (!run.conversation_id) return;
+  const { data: config, error: configError } = await db.from("ai_configs")
+    .select("conversation_analysis_enabled, analysis_on_transfer")
+    .eq("account_id", run.account_id).maybeSingle();
+  if (configError) {
+    console.error("[flows] could not read handoff analysis policy:", configError.message);
+    return;
+  }
+  if (!config?.conversation_analysis_enabled || !config.analysis_on_transfer) return;
+  const { error } = await db.rpc("queue_ai_analysis_job", {
+    p_account_id: run.account_id,
+    p_conversation_id: run.conversation_id,
+    p_trigger: "transfer",
+    p_delay: "0 minutes",
+  });
+  if (error) console.error("[flows] immediate handoff analysis enqueue failed:", error.message);
+}
+
 async function executeHandoff(
   db: AdminClient,
   run: FlowRunRow,
   node: FlowNodeRow,
 ): Promise<void> {
-  const cfg = node.config as { assign_to?: string; note?: string };
+  const cfg = node.config as { assign_to?: string; note?: string; save_note_to_conversation?: boolean };
+  if (cfg.save_note_to_conversation === true) {
+    const body = typeof cfg.note === "string" ? interpolateVars(cfg.note, run.vars).trim() : "";
+    if (!run.conversation_id || !body || body.length > 2000) {
+      console.error("[flows] handoff conversation note is missing a conversation, empty, or too long.");
+      await logEvent(db, run.id, "error", node.node_key, { reason: "handoff_conversation_note_invalid" });
+    } else {
+      const { error } = await db.from("conversation_internal_notes").insert({
+        account_id: run.account_id,
+        conversation_id: run.conversation_id,
+        author_user_id: run.user_id,
+        body,
+        kind: "note",
+      });
+      if (error) {
+        console.error("[flows] could not save handoff conversation note:", error.message);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "handoff_conversation_note_failed" });
+      }
+    }
+  }
   const convUpdate: Record<string, unknown> = {
     status: "pending",
     updated_at: new Date().toISOString(),
@@ -513,6 +552,7 @@ async function executeHandoff(
       .eq("account_id", run.account_id)
       .eq("id", run.conversation_id);
     if (error) console.error("[flows] handoff conversation update failed:", error.message);
+    else await queueImmediateHandoffAnalysis(db, run);
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ?? null,
@@ -613,6 +653,7 @@ async function applyGuardedOfferFallback(
     console.error("[flows] guarded offer action failed:", error?.message ?? "invalid result");
     return "failed";
   }
+  if (data && action === "handoff") await queueImmediateHandoffAnalysis(db, run);
   return data ? "applied" : "stale";
 }
 
@@ -1242,7 +1283,7 @@ export async function dispatchInboundToFlows(
           return { consumed: true, flow_run_id: activeRun.id, outcome: "processing_failed" };
         }
       }
-      return handleReplyForActiveRun(db, activeRun, input.message, nodes);
+      return handleReplyForActiveRun(db, activeRun, input.message, nodes, input.channelType);
     }
 
     // Outside configured business hours, existing runs may finish, but no
@@ -1329,6 +1370,7 @@ async function handleAiFlowReply(
       console.error("[flows] AI handoff failed:", result.error?.message ?? "invalid result");
       return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
     }
+    if (result.data) await queueImmediateHandoffAnalysis(db, run);
     return { consumed: true, flow_run_id: run.id,
       outcome: result.data ? "handed_off" : "stale_inbound_ignored" };
   };
@@ -1392,7 +1434,8 @@ async function handleAiFlowReply(
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(cfg.ai_sentiment_var_key)
             || cfg.ai_sentiment_var_key.startsWith("__") || cfg.ai_sentiment_var_key === cfg.var_key
             || cfg.var_key.startsWith("__")
-            || cfg.save_contact_note || cfg.date_not_past || cfg.time_24h || cfg.allowed_values) {
+            || cfg.save_contact_note || cfg.date_not_past || cfg.time_24h || cfg.allowed_values
+            || cfg.capture_format || cfg.accept_image) {
           throw new Error("Flow sentiment configuration is invalid.");
         }
         aiSentiment = await classifyFlowSentiment({
@@ -1536,7 +1579,7 @@ async function handleAiFlowReply(
         }
         run.vars = vars;
       }
-      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId, aiMenuDate, aiSentiment);
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, input.channelType, aiReplyId, aiCapturedValue, aiConfirmedSlotId, aiMenuDate, aiSentiment);
     }
     if (result.outcome === "processing_failed") return handoff();
     if (result.outcome === "stale_inbound_ignored") return handoff();
@@ -1560,6 +1603,7 @@ async function handleReplyForActiveRun(
   run: FlowRunRow,
   message: ParsedInbound,
   nodes: Map<string, FlowNodeRow>,
+  channelType?: ChannelType,
   aiReplyId?: string,
   aiCapturedValue?: string,
   aiConfirmedSlotId?: string,
@@ -1604,6 +1648,7 @@ async function handleReplyForActiveRun(
         .update({ status: "pending", updated_at: new Date().toISOString() })
         .eq("account_id", run.account_id).eq("id", run.conversation_id);
       if (error) console.error("[flows] sentiment handoff failed:", error.message);
+      else await queueImmediateHandoffAnalysis(db, run);
     }
     await endRun(db, run.id, "failed", "sentiment_unavailable");
     return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
@@ -1628,10 +1673,11 @@ async function handleReplyForActiveRun(
       await logEvent(db, run.id, "error", currentNode.node_key, { reason: "appointment_offer_already_claimed" });
       return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
     }
-    const replyId =
-      message.kind === "interactive_reply"
-        ? message.reply_id
-        : matchNumberedOption(message.text, offered.map((slot) => ({ id: slot.id, title: slot.title })));
+    const replyId = message.kind === "interactive_reply"
+      ? message.reply_id
+      : message.kind === "text"
+        ? matchNumberedOption(message.text, offered.map((slot) => ({ id: slot.id, title: slot.title })))
+        : null;
     const chosen = secureOffer
       ? message.kind === "text" && typeof token === "string"
         ? cfg.ai_assist === true
@@ -1684,11 +1730,22 @@ async function handleReplyForActiveRun(
     const replyId = matchNumberedOption(message.text, menuOptions(currentNode));
     matched = replyId ? matchReplyId(currentNode, replyId) : null;
   } else if (
-    message.kind === "text" &&
-    currentNode.node_type === "collect_input"
+    currentNode.node_type === "collect_input" &&
+    (message.kind === "text" || (
+      message.kind === "image" && currentNode.config.accept_image === true
+      && (channelType === "whatsapp" || channelType === "zernio_whatsapp")
+    ))
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
-    const captured = matchAllowedInput((aiCapturedValue ?? message.text).trim(), cfg.allowed_values);
+    const rawCapture = message.kind === "text"
+      ? (aiCapturedValue ?? message.text).trim()
+      : message.kind === "image" && cfg.accept_image
+        ? "Foto adjunta en esta conversación"
+        : "";
+    const matchedCapture = message.kind === "image"
+      ? rawCapture
+      : matchAllowedInput(rawCapture, cfg.allowed_values);
+    const captured = matchedCapture === null ? null : normalizeFlowCapture(matchedCapture, cfg.capture_format);
     if (
       captured !== null && captured.length > 0 &&
       cfg.var_key &&
@@ -1715,15 +1772,18 @@ async function handleReplyForActiveRun(
           return { consumed: true, flow_run_id: run.id, outcome: "duplicate_inbound_ignored" };
         }
       } else {
-        const result = await updateVarsIfCurrent(db, run, newVars, true, aiSentiment !== undefined);
+        const result = await updateVarsIfCurrent(
+          db, run, newVars, true,
+          aiSentiment !== undefined || cfg.capture_format !== undefined || cfg.accept_image === true,
+        );
         capErr = result.error;
         if (!capErr && !result.saved) {
           await logEvent(db, run.id, "error", currentNode.node_key, { reason: "stale_input_capture" });
           return { consumed: true, flow_run_id: run.id, outcome: "stale_inbound_ignored" };
         }
       }
-      if (capErr && aiSentiment) {
-        console.error("[flows] sentiment capture failed:", capErr.message);
+      if (capErr && (aiSentiment || cfg.capture_format !== undefined || cfg.accept_image === true)) {
+        console.error("[flows] validated input capture failed:", capErr.message);
         return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
       }
       if (capErr && (cfg.save_contact_note === true || run.vars.__guarded_appointments === true)) {
@@ -1738,6 +1798,7 @@ async function handleReplyForActiveRun(
             .update({ status: "pending", updated_at: new Date().toISOString() })
             .eq("account_id", run.account_id).eq("id", run.conversation_id);
           if (error) console.error("[flows] contact note handoff failed:", error.message);
+          else await queueImmediateHandoffAnalysis(db, run);
         }
         return { consumed: true, flow_run_id: run.id, outcome: "completed" };
       }
@@ -1910,10 +1971,12 @@ async function handleReplyForActiveRun(
   }
   if (action.type === "handoff") {
     if (run.conversation_id) {
-      await db
+      const { error } = await db
         .from("conversations")
         .update({ status: "pending", updated_at: new Date().toISOString() })
-        .eq("id", run.conversation_id);
+        .eq("account_id", run.account_id).eq("id", run.conversation_id);
+      if (error) console.error("[flows] fallback handoff failed:", error.message);
+      else await queueImmediateHandoffAnalysis(db, run);
     }
     await logEvent(db, run.id, "handoff", run.current_node_key, {
       reason: "fallback_exhausted",

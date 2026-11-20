@@ -82,6 +82,59 @@ describe("accepted input values", () => {
         );
       }
     });
+
+    describe("formatted input validation", () => {
+      const nodes = (extra: Record<string, unknown>) => [
+        { node_key: "start", node_type: "start", config: { next_node_key: "input" } },
+        { node_key: "input", node_type: "collect_input", config: {
+          prompt_text: "Dato", var_key: "dato", next_node_key: "end", ...extra,
+        } },
+        { node_key: "end", node_type: "end", config: {} },
+      ];
+      it("accepts supported formats and rejects incompatible image/list settings", () => {
+        for (const capture_format of ["date_ddmmyyyy", "email", "mx_rfc", "mx_postal_code", "positive_amount"]) {
+          expect(validateFlowForActivation(validFlow, nodes({ capture_format }))).toEqual([]);
+        }
+        expect(validateFlowForActivation(validFlow, nodes({ capture_format: "unknown" }))).toEqual(
+          expect.arrayContaining([expect.objectContaining({ field: "capture_format" })]),
+        );
+        expect(validateFlowForActivation(validFlow, nodes({ accept_image: true }))).toEqual([]);
+        expect(validateFlowForActivation(validFlow, nodes({ accept_image: true, allowed_values: ["x"] }))).toEqual(
+          expect.arrayContaining([expect.objectContaining({ field: "accept_image" })]),
+        );
+        expect(validateFlowForActivation(validFlow, nodes({ accept_image: true, capture_format: "email" }))).toEqual(
+          expect.arrayContaining([expect.objectContaining({ field: "capture_format" })]),
+        );
+      });
+    });
+  });
+});
+
+describe("handoff internal conversation note validation", () => {
+  const nodes = (config: Record<string, unknown>) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "handoff" } },
+    { node_key: "handoff", node_type: "handoff", config },
+  ];
+
+  it("requires a non-empty note of at most 2000 characters when saving it to the conversation", () => {
+    expect(validateFlowForActivation(validFlow, nodes({
+      note: "Sede: {{vars.sede}}",
+      save_note_to_conversation: true,
+    }))).toEqual([]);
+    for (const note of ["", "  ", "x".repeat(2001)]) {
+      expect(validateFlowForActivation(validFlow, nodes({
+        note,
+        save_note_to_conversation: true,
+      }))).toEqual(expect.arrayContaining([
+        expect.objectContaining({ field: "save_note_to_conversation" }),
+      ]));
+    }
+    expect(validateFlowForActivation(validFlow, nodes({
+      note: "Resumen",
+      save_note_to_conversation: "true",
+    }))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "save_note_to_conversation" }),
+    ]));
   });
 });
 

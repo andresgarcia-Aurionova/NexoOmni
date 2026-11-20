@@ -970,7 +970,9 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
             contactId,
             conversationId: conversationRow.id,
             channelType: typed.provider as ChannelType,
-            message: { kind: 'text', text: content, meta_message_id: messageId },
+            message: contentType === 'image' && mediaUrl
+              ? { kind: 'image', meta_message_id: messageId }
+              : { kind: 'text', text: content, meta_message_id: messageId },
             isFirstInboundMessage: isFirstInboundMessage || deferred,
             allowNewRuns,
           })

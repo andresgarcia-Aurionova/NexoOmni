@@ -705,6 +705,11 @@ async function processMessage(
             reply_title: contentText ?? '',
             meta_message_id: message.id,
           }
+        : contentType === 'image' && mediaUrl
+          ? {
+              kind: 'image',
+              meta_message_id: message.id,
+            }
         : {
             kind: 'text',
             text: contentText ?? message.text?.body ?? '',

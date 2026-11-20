@@ -153,6 +153,33 @@ export function NodeConfigForm({
             </label>
             <p className="text-[10px] text-muted-foreground">{t("aiInputHelp")}</p>
           </div>
+          <div className="space-y-2">
+            <label className="block text-xs text-muted-foreground">{t("captureFormatLabel")}</label>
+            <Select
+              value={typeof cfg.capture_format === "string" ? cfg.capture_format : "__none__"}
+              onValueChange={(value) => onUpdateConfig({ capture_format: value === "__none__" ? undefined : value })}
+            >
+              <SelectTrigger className="bg-muted"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t("captureFormatNone")}</SelectItem>
+                <SelectItem value="date_ddmmyyyy">{t("captureDateFormat")}</SelectItem>
+                <SelectItem value="email">{t("captureEmailFormat")}</SelectItem>
+                <SelectItem value="mx_rfc">{t("captureRfcFormat")}</SelectItem>
+                <SelectItem value="mx_postal_code">{t("capturePostalCodeFormat")}</SelectItem>
+                <SelectItem value="positive_amount">{t("captureAmountFormat")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                checked={cfg.accept_image === true}
+                onCheckedChange={(checked) => onUpdateConfig({ accept_image: checked })}
+              />
+              {t("captureImage")}
+            </label>
+            {cfg.accept_image === true && <p className="text-[10px] text-muted-foreground">{t("captureImageHelp")}</p>}
+          </div>
           {cfg.ai_assist === true && (
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -326,12 +353,24 @@ export function NodeConfigForm({
 
     case "handoff":
       return (
-        <TextRow
-          label={t("internalNote")}
-          value={(cfg as { note?: string }).note ?? ""}
-          onChange={(v) => onUpdateConfig({ note: v })}
-          rows={2}
-        />
+        <div className="space-y-3">
+          <TextRow
+            label={t("internalNote")}
+            value={(cfg as { note?: string }).note ?? ""}
+            onChange={(v) => onUpdateConfig({ note: v })}
+            rows={2}
+          />
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                checked={(cfg as { save_note_to_conversation?: boolean }).save_note_to_conversation === true}
+                onCheckedChange={(checked) => onUpdateConfig({ save_note_to_conversation: checked })}
+              />
+              {t("handoffSaveNote")}
+            </label>
+            <p className="text-[10px] text-muted-foreground">{t("handoffSaveNoteHelp")}</p>
+          </div>
+        </div>
       );
 
     case "end":
