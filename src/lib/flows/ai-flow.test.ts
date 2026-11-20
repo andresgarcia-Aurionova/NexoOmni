@@ -21,13 +21,14 @@ vi.mock("./channel-send", () => ({
 describe("AI inside an active flow", () => {
   afterEach(() => vi.resetAllMocks());
 
-  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true) {
+  async function dispatch(claimOutcome = "claimed", active = true, collect = false, fallbackActive = true, menuDate = false) {
     const calls: string[] = [];
     const writes: Record<string, unknown>[] = [];
     const run = {
       id: "run", flow_id: "flow", account_id: "account", user_id: "user",
       contact_id: "contact", conversation_id: "conversation", status: "active",
-      current_node_key: collect ? "date" : "menu", vars: { __flow_ai_enabled: true }, reprompt_count: 0,
+      current_node_key: collect ? "date" : "menu",
+      vars: { __flow_ai_enabled: true, ...(menuDate ? { __guarded_appointments: true } : {}) }, reprompt_count: 0,
     };
     const nodes = collect ? [
       { node_key: "date", node_type: "collect_input", config: {
@@ -37,9 +38,13 @@ describe("AI inside an active flow", () => {
       { node_key: "end", node_type: "end", config: {} },
     ] : [
       { node_key: "menu", node_type: "send_buttons", config: {
-        ai_assist: true, text: "¿Qué necesitas?",
-        buttons: [{ reply_id: "book", title: "Reservar", next_node_key: "end" }],
+        ai_assist: true, ai_capture_next_date: menuDate, text: "¿Qué necesitas?",
+        buttons: [{ reply_id: "book", title: "Reservar", next_node_key: menuDate ? "date" : "end" }],
       } },
+      ...(menuDate ? [{ node_key: "date", node_type: "collect_input", config: {
+        ai_assist: true, prompt_text: "Fecha", var_key: "fecha", date_not_past: true,
+        date_timezone: "America/Mexico_City", next_node_key: "end",
+      } }] : []),
       { node_key: "end", node_type: "end", config: {} },
     ];
     const db = createClient("https://db.example.test", "key", { global: {
@@ -61,6 +66,10 @@ describe("AI inside an active flow", () => {
         if (table === "is_flow_ai_turn_active") return Response.json(active);
         if (table === "finish_flow_ai_turn") return Response.json(true);
         if (table === "handoff_flow_ai_turn") return Response.json(fallbackActive);
+        if (table === "update_flow_run_vars_if_current") {
+          writes.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+          return Response.json(true);
+        }
         if (init?.body) {
           writes.push(JSON.parse(String(init.body)) as Record<string, unknown>);
           if (table === "flow_runs" && url.searchParams.has("select")) {
@@ -86,6 +95,32 @@ describe("AI inside an active flow", () => {
     const { result, calls } = await dispatch();
     expect(result.outcome).toBe("completed");
     expect(calls).toContain("finish_flow_ai_turn");
+  });
+
+  it("uses a date already given with the menu selection after validation", async () => {
+    vi.useFakeTimers().setSystemTime(new Date("2026-11-20T18:00:00Z"));
+    try {
+      vi.mocked(decideFlowAiTurn).mockResolvedValue({ action: "route", reply_id: "book", requested_date: "21/11/2026" });
+      const { result, writes } = await dispatch("claimed", true, false, true, true);
+      expect(result.outcome).toBe("completed");
+      expect(writes).toContainEqual(expect.objectContaining({
+        p_new_vars: expect.objectContaining({ fecha: "21/11/2026" }),
+      }));
+      expect(flowSendText).not.toHaveBeenCalledWith(expect.objectContaining({ text: "Fecha" }));
+      expect(decideFlowAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        dateOptions: [{ id: "book", today: "20/11/2026" }],
+      }));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("asks the date normally if the interpreted date is past", async () => {
+    vi.useFakeTimers().setSystemTime(new Date("2026-11-20T18:00:00Z"));
+    try {
+      vi.mocked(decideFlowAiTurn).mockResolvedValue({ action: "route", reply_id: "book", requested_date: "19/11/2026" });
+      const { writes } = await dispatch("claimed", true, false, true, true);
+      expect(writes.some((write) => "p_new_vars" in write)).toBe(false);
+      expect(flowSendText).toHaveBeenCalledWith(expect.objectContaining({ text: "Fecha" }));
+    } finally { vi.useRealTimers(); }
   });
 
   it("hands off a concurrent message without calling the model again", async () => {
@@ -174,7 +209,7 @@ describe("AI inside an active flow", () => {
 describe("natural protected appointment selection", () => {
   afterEach(() => vi.resetAllMocks());
 
-  function fixture(options: { pendingOffer?: boolean; rejectSave?: boolean } = {}) {
+  function fixture(options: { pendingOffer?: boolean; rejectSave?: boolean; shortConfirmation?: boolean } = {}) {
     const token = "abcdef12-3456-7890-abcd-ef1234567890";
     const run = {
       id: "run", flow_id: "flow", account_id: "account", user_id: "user",
@@ -193,6 +228,7 @@ describe("natural protected appointment selection", () => {
       { node_key: "offer", node_type: "offer_slots", config: {
         text: "Elige un horario", ai_assist: true, var_key: "slot", next_node_key: "book",
         ai_confirmation_text: "Confirma {{vars.offer_date}} {{vars.offer_time}}",
+        ai_allow_short_confirmation: options.shortConfirmation,
       } },
       { node_key: "book", node_type: "book_appointment", config: { slot_var_key: "slot", idempotent_booking: true, next_node_key: "end" } },
       { node_key: "end", node_type: "end", config: {} },
@@ -260,6 +296,44 @@ describe("natural protected appointment selection", () => {
     await answer("la primera");
     await answer("no confirmo 21/11/2035 19:30");
     await answer("confirmo 22/11/2035 19:30");
+    expect(bookFlowAppointment).not.toHaveBeenCalled();
+  });
+
+  it("accepts a short affirmative only when explicitly enabled and a selection is pending", async () => {
+    const { answer } = fixture({ shortConfirmation: true });
+    vi.mocked(decideFlowAiTurn).mockResolvedValueOnce({ action: "route", reply_id: "slot_1" })
+      .mockResolvedValue({ action: "unknown" });
+    await answer("la primera");
+    await answer("confirmado gracias");
+    expect(bookFlowAppointment).toHaveBeenCalledOnce();
+  });
+
+  it("clears the pending selection after a negative response before reoffering slots", async () => {
+    const { answer } = fixture({ shortConfirmation: true });
+    vi.mocked(decideFlowAiTurn).mockResolvedValueOnce({ action: "route", reply_id: "slot_1" })
+      .mockResolvedValue({ action: "unknown" });
+    await answer("la primera");
+    await answer("no confirmado gracias");
+    await answer("sí");
+    expect(bookFlowAppointment).not.toHaveBeenCalled();
+  });
+
+  it("keeps requiring date and time by default", async () => {
+    const { answer } = fixture();
+    vi.mocked(decideFlowAiTurn).mockResolvedValueOnce({ action: "route", reply_id: "slot_1" })
+      .mockResolvedValue({ action: "unknown" });
+    await answer("la primera");
+    await answer("confirmado gracias");
+    expect(bookFlowAppointment).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a short confirmation for a previous offer", async () => {
+    const { answer, run } = fixture({ shortConfirmation: true });
+    vi.mocked(decideFlowAiTurn).mockResolvedValueOnce({ action: "route", reply_id: "slot_1" })
+      .mockResolvedValue({ action: "unknown" });
+    await answer("la primera");
+    run.vars.__offer_token_offer = "different-offer";
+    await answer("confirmado gracias");
     expect(bookFlowAppointment).not.toHaveBeenCalled();
   });
 

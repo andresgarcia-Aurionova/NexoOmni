@@ -54,6 +54,10 @@ export function matchOfferConfirmation(
   return match?.[1] === date && match[2] === time
 }
 
+export function matchShortOfferConfirmation(text: string): boolean {
+  return /^(?:sí|si|confirmo|confirmado|confirmada|de acuerdo|correcto|correcta|yes|confirmed|네|확인)(?:\s*[,!.]?\s*(?:por favor|gracias|muchas gracias))?[.!]?$/iu.test(text.trim())
+}
+
 export function secureOfferCode(token: string): string {
   return token.replaceAll('-', '').slice(0, 12).toUpperCase()
 }

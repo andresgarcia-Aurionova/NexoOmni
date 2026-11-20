@@ -6,7 +6,7 @@ import { logAiUsage } from "@/lib/ai/usage";
 import { supabaseAdmin } from "./admin-client";
 
 const Decision = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("route"), reply_id: z.string().min(1) }).strict(),
+  z.object({ action: z.literal("route"), reply_id: z.string().min(1), requested_date: z.string().optional() }).strict(),
   z.object({ action: z.literal("answer"), excerpt_index: z.number().int().nonnegative() }).strict(),
   z.object({ action: z.literal("handoff") }).strict(),
   z.object({ action: z.literal("unknown") }).strict(),
@@ -83,15 +83,23 @@ function authorizedAnswer(knowledge: string[], index: number): string {
 
 export async function decideFlowAiTurn(args: CommonArgs & {
   options: { id: string; title: string }[];
+  dateOptions?: { id: string; today: string }[];
 }): Promise<FlowAiDecision> {
   const { raw, knowledge } = await generateDecision(args, [
     "Return only a JSON object with one action: route, answer, handoff, or unknown.",
     "For route, include reply_id exactly matching one supplied option. Do not invent options.",
     `Allowed options in displayed order: ${JSON.stringify(args.options)}`,
+    args.dateOptions?.length
+      ? `For route only, include requested_date in DD/MM/YYYY only if the customer explicitly specifies a date for the selected option; resolve relative dates using its today. Omit it if unclear or absent. Date-enabled options and their local today: ${JSON.stringify(args.dateOptions)}`
+      : "Do not include requested_date.",
   ]);
   const decision = Decision.parse(raw);
   if (decision.action === "route" && !args.options.some((option) => option.id === decision.reply_id)) {
     throw new Error("Flow AI returned an unknown route.");
+  }
+  if (decision.action === "route" && decision.requested_date
+      && !args.dateOptions?.some((option) => option.id === decision.reply_id)) {
+    throw new Error("Flow AI returned a date for an unsupported route.");
   }
   if (decision.action === "answer") {
     return { action: "answer", text: authorizedAnswer(knowledge, decision.excerpt_index) };

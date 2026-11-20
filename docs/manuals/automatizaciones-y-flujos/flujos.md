@@ -48,6 +48,12 @@ puede responder preguntas con un fragmento de la base de conocimiento autorizada
 si no encuentra información suficiente o el cliente solicita atención humana,
 la conversación se transfiere al equipo.
 
+Opcionalmente, en un flujo de reserva protegida el menú puede aprovechar una
+fecha que el cliente mencione al elegir una opción. Funciona cuando esa opción
+lleva directamente a una pregunta de fecha con IA y validación de fechas
+futuras. Si la fecha es ambigua o
+inválida, se pregunta normalmente. Comprueba el resultado antes de confirmar.
+
 Esta opción es solo para WhatsApp y requiere IA activa, créditos y el
 mantenimiento periódico de flujos funcionando. Configura y revisa primero la
 base de conocimiento y limita el disparador a la línea que corresponda. Se cobra
@@ -176,6 +182,12 @@ incorrectamente. La disponibilidad se comprueba al agendar y el uso de IA
 consume créditos. La protección evita citas duplicadas, pero una confirmación
 antigua con la misma fecha y hora podría coincidir con una oferta nueva.
 Esta opción no comprueba cupos reales por sede, zona o mesa.
+
+Opcionalmente, **Aceptar confirmación breve** permite responder «sí» o
+«confirmado gracias» después de mostrar la fecha y hora. Esto reduce la
+protección frente a mensajes antiguos o retrasados, que podrían confirmar otra
+oferta pendiente; actívalo solo si aceptas ese riesgo. La disponibilidad y la
+protección contra duplicados siguen comprobándose al agendar.
 
 ## Preguntas frecuentes
 

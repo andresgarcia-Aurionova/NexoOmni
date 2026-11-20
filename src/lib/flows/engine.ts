@@ -44,6 +44,7 @@ import {
   bookFlowAppointment,
   loadOfferedSlots,
   matchOfferConfirmation,
+  matchShortOfferConfirmation,
   matchSecureOffer,
   offerClaimVarKey,
   offerConfirmationVarKey,
@@ -1339,6 +1340,7 @@ async function handleAiFlowReply(
     let aiReplyId: string | undefined;
     let aiAnswer: string | undefined;
     let aiCapturedValue: string | undefined;
+    let aiMenuDate: string | undefined;
     let aiOfferedSlot: OfferedSlot | undefined;
     let aiConfirmedSlotId: string | undefined;
     if (node.config.ai_assist === true && input.message.kind === "text"
@@ -1350,15 +1352,31 @@ async function handleAiFlowReply(
       const options = menuOptions(node);
       const directMatch = matchNumberedOption(input.message.text, options);
       if (!directMatch) {
+        const dateOptions = node.config.ai_capture_next_date === true && run.vars.__guarded_appointments === true
+          ? options.flatMap((option) => {
+            const target = nodes.get(matchReplyId(node, option.id) ?? "");
+            if (target?.node_type !== "collect_input") return [];
+            const cfg = target.config as unknown as CollectInputNodeConfig;
+            if (!cfg.ai_assist || !cfg.date_not_past || cfg.time_24h || !cfg.date_timezone?.trim()
+                || !cfg.var_key || cfg.save_contact_note) return [];
+            return [{
+              id: option.id,
+              today: new Intl.DateTimeFormat("en-GB", { timeZone: cfg.date_timezone.trim() }).format(new Date()),
+            }];
+          })
+          : [];
         const decision = await decideFlowAiTurn({
           accountId: run.account_id, conversationId: run.conversation_id,
           turnId, text: input.message.text,
           prompt: typeof node.config.text === "string" ? node.config.text : "",
-          options,
+          options, ...(dateOptions.length ? { dateOptions } : {}),
         });
         if (decision.action === "handoff") return handoff();
         if (decision.action === "answer") aiAnswer = decision.text;
-        if (decision.action === "route") aiReplyId = decision.reply_id;
+        if (decision.action === "route") {
+          aiReplyId = decision.reply_id;
+          aiMenuDate = decision.requested_date;
+        }
       }
     }
     if (node.config.ai_assist === true && node.node_type === "collect_input"
@@ -1409,7 +1427,8 @@ async function handleAiFlowReply(
         if (selected.token === token && slot && slot.localDate === selected.date
             && slot.localTime === selected.time
             && typeof slot.localDate === "string" && typeof slot.localTime === "string"
-            && matchOfferConfirmation(input.message.text, slot.localDate, slot.localTime)) {
+            && (matchOfferConfirmation(input.message.text, slot.localDate, slot.localTime)
+              || (cfg.ai_allow_short_confirmation === true && matchShortOfferConfirmation(input.message.text)))) {
           aiConfirmedSlotId = slot.id;
         }
       }
@@ -1489,7 +1508,18 @@ async function handleAiFlowReply(
       });
       result = { consumed: true, flow_run_id: run.id, outcome: "advanced" };
     } else {
-      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId);
+      if (node.node_type === "offer_slots" && node.config.ai_allow_short_confirmation === true
+          && !aiConfirmedSlotId && run.vars[offerConfirmationVarKey(nodeKey)] !== undefined) {
+        const vars = { ...run.vars };
+        delete vars[offerConfirmationVarKey(nodeKey)];
+        const saved = await updateVarsIfCurrent(db, run, vars, false);
+        if (saved.error || !saved.saved) {
+          console.error("[flows] pending confirmation reset failed:", saved.error?.message ?? "stale state");
+          return handoff();
+        }
+        run.vars = vars;
+      }
+      result = await handleReplyForActiveRun(db, run, input.message, nodes, aiReplyId, aiCapturedValue, aiConfirmedSlotId, aiMenuDate);
     }
     if (result.outcome === "processing_failed") return handoff();
     if (result.outcome === "stale_inbound_ignored") return handoff();
@@ -1516,6 +1546,7 @@ async function handleReplyForActiveRun(
   aiReplyId?: string,
   aiCapturedValue?: string,
   aiConfirmedSlotId?: string,
+  aiMenuDate?: string,
 ): Promise<DispatchInboundResult> {
   // Note: we intentionally do NOT persist the raw customer text. A
   // `collect_input` prompt that asks "what's your card number?" would
@@ -1688,6 +1719,28 @@ async function handleReplyForActiveRun(
   }
 
   if (matched) {
+    const next = nodes.get(matched);
+    if (aiMenuDate && run.vars.__guarded_appointments === true && currentNode.config.ai_capture_next_date === true
+        && next?.node_type === "collect_input") {
+      const cfg = next.config as unknown as CollectInputNodeConfig;
+      if (cfg.ai_assist === true && cfg.date_not_past === true && !cfg.time_24h && cfg.var_key
+          && !cfg.save_contact_note && cfg.date_timezone?.trim()
+          && matchAllowedInput(aiMenuDate, cfg.allowed_values) === aiMenuDate
+          && isCurrentOrFutureDate(aiMenuDate, cfg.date_timezone.trim())) {
+        const vars = { ...run.vars, [cfg.var_key]: aiMenuDate };
+        const saved = await updateVarsIfCurrent(db, run, vars, true);
+        if (saved.error || !saved.saved) {
+          console.error("[flows] menu date capture failed:", saved.error?.message ?? "stale state");
+          return { consumed: true, flow_run_id: run.id, outcome: "processing_failed" };
+        }
+        run.vars = vars;
+        run.reprompt_count = 0;
+        await logEvent(db, run.id, "node_entered", next.node_key, {
+          captured_key: cfg.var_key, captured_length: aiMenuDate.length,
+        });
+        matched = cfg.next_node_key;
+      }
+    }
     // Reset reprompt count on a successful match. Skip the write when
     // already 0 — the collect_input capture branch above already
     // zeroed it, and interactive-reply matches against a fresh run

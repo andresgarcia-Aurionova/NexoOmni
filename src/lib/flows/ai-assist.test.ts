@@ -51,6 +51,15 @@ describe("flow AI decisions", () => {
     await expect(decideFlowAiTurn(args)).rejects.toThrow("debit failed");
   });
 
+  it("rejects a date attached to a route that does not support date capture", async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({
+      text: '{"action":"route","reply_id":"booking","requested_date":"21/11/2026"}',
+      provider: "openai", model: "test", latencyMs: 1,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    });
+    await expect(decideFlowAiTurn(args)).rejects.toThrow("unsupported route");
+  });
+
   it("does not invent free-text values not present in the message", async () => {
     vi.mocked(generateText).mockResolvedValueOnce({
       text: '{"action":"capture","value":"Inventado"}', provider: "openai", model: "test", latencyMs: 1,

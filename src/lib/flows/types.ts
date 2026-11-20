@@ -39,6 +39,7 @@ export interface SendMessageNodeConfig {
 export interface SendButtonsNodeConfig {
   text: string;
   ai_assist?: boolean;
+  ai_capture_next_date?: boolean;
   /** Optional header / footer lines around the buttons. */
   header_text?: string;
   footer_text?: string;
@@ -56,6 +57,7 @@ export interface SendButtonsNodeConfig {
 export interface SendListNodeConfig {
   text: string;
   ai_assist?: boolean;
+  ai_capture_next_date?: boolean;
   /** Label of the tap-to-expand button on the message bubble. */
   button_label: string;
   header_text?: string;
@@ -223,6 +225,7 @@ export interface OfferSlotsNodeConfig {
   ai_assist?: boolean;
   /** Message containing {{vars.offer_date}} and {{vars.offer_time}}. */
   ai_confirmation_text?: string;
+  ai_allow_short_confirmation?: boolean;
   /** Where to go once a slot is chosen. */
   next_node_key: string;
   /** Where to go when the calendar has nothing free. */

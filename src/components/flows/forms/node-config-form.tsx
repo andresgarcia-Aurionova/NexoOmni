@@ -326,6 +326,7 @@ export function NodeConfigForm({
 interface SendButtonsCfg {
   text?: string;
   ai_assist?: boolean;
+  ai_capture_next_date?: boolean;
   footer_text?: string;
   buttons?: Array<{ reply_id: string; title: string; next_node_key: string }>;
 }
@@ -382,6 +383,7 @@ function SendButtonsForm({
         onChange={(v) => onUpdateConfig({ footer_text: v })}
       />
       <AiAssistSwitch checked={cfg.ai_assist === true} onChange={(v) => onUpdateConfig({ ai_assist: v })} t={t} />
+      {cfg.ai_assist === true && <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.ai_capture_next_date === true} onCheckedChange={(checked) => onUpdateConfig({ ai_capture_next_date: checked })} />{t("aiCaptureNextDate")}</label>}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <label className="text-xs text-muted-foreground">
@@ -460,6 +462,7 @@ interface OfferSlotsCfg {
   text?: string;
   ai_assist?: boolean;
   ai_confirmation_text?: string;
+  ai_allow_short_confirmation?: boolean;
   specialist_id?: string;
   duration_minutes?: number;
   days_ahead?: number;
@@ -550,6 +553,7 @@ function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: Of
       <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.ai_assist === true} onCheckedChange={(checked) => onUpdateConfig({ ai_assist: checked })} />{t("appointmentNaturalSelection")}</label>
       <p className="text-[10px] text-muted-foreground">{t("appointmentNaturalSelectionHelp")}</p>
       {cfg.ai_assist === true && <TextRow label={t("appointmentConfirmationText")} value={cfg.ai_confirmation_text ?? ""} onChange={(ai_confirmation_text) => onUpdateConfig({ ai_confirmation_text })} rows={3} />}
+      {cfg.ai_assist === true && <><label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.ai_allow_short_confirmation === true} onCheckedChange={(checked) => onUpdateConfig({ ai_allow_short_confirmation: checked })} />{t("appointmentShortConfirmation")}</label><p className="text-[10px] text-muted-foreground">{t("appointmentShortConfirmationHelp")}</p></>}
     </div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Al elegir un horario" />
@@ -589,6 +593,7 @@ function BookAppointmentForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cf
 interface SendListCfg {
   text?: string;
   ai_assist?: boolean;
+  ai_capture_next_date?: boolean;
   button_label?: string;
   footer_text?: string;
   sections?: Array<{
@@ -700,6 +705,7 @@ function SendListForm({
         rows={3}
       />
       <AiAssistSwitch checked={cfg.ai_assist === true} onChange={(v) => onUpdateConfig({ ai_assist: v })} t={t} />
+      {cfg.ai_assist === true && <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={cfg.ai_capture_next_date === true} onCheckedChange={(checked) => onUpdateConfig({ ai_capture_next_date: checked })} />{t("aiCaptureNextDate")}</label>}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <TextRow
           label={t("buttonLabel")}
