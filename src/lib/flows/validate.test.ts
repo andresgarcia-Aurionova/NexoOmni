@@ -46,6 +46,24 @@ describe("contact note capture validation", () => {
     expect(validateFlowForActivation(validFlow, nodes("Motivo (flujo automático)"))).toEqual([])
   })
 
+  describe("date input validation", () => {
+    it("requires a valid time zone only when date validation is enabled", () => {
+      const nodes = (date_not_past: boolean, date_timezone: string) => [
+        { node_key: "start", node_type: "start", config: { next_node_key: "date" } },
+        { node_key: "date", node_type: "collect_input", config: {
+          prompt_text: "Fecha DD/MM/AAAA", var_key: "fecha", next_node_key: "end",
+          date_not_past, date_timezone,
+        } },
+        { node_key: "end", node_type: "end", config: {} },
+      ];
+      expect(validateFlowForActivation(validFlow, nodes(true, "bad-zone"))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: "date_timezone" })]),
+      );
+      expect(validateFlowForActivation(validFlow, nodes(true, "America/Mexico_City"))).toEqual([]);
+      expect(validateFlowForActivation(validFlow, nodes(false, ""))).toEqual([]);
+    });
+  });
+
   describe("appointment reference validation", () => {
     it("rejects a malformed optional reference variable", () => {
       const nodes = [

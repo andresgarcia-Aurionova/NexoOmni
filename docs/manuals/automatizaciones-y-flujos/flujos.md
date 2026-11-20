@@ -47,6 +47,17 @@ Si no se puede guardar la nota, la ejecución se detiene y la conversación
 queda pendiente de revisión; comprueba el historial y registra el motivo
 manualmente. No se crean notas retroactivamente para respuestas anteriores.
 
+### Evitar fechas anteriores a hoy
+
+En **Recopilar datos**, activa **Aceptar solo fechas de hoy en adelante** y
+escribe la zona horaria IANA del negocio, por ejemplo `America/Mexico_City`.
+En la pregunta pide una fecha en formato `DD/MM/AAAA`. Las fechas inválidas o
+pasadas no se guardan y se aplica la regla de reintentos del flujo.
+
+Esta opción permite el día actual: no comprueba la hora ni la disponibilidad,
+y no adapta por sí sola los horarios ofrecidos a la fecha solicitada.
+Las preguntas existentes no cambian hasta activar esta opción.
+
 ### Datos recopilados en una cita
 
 En el paso **Agendar cita**, el título y las notas internas admiten variables

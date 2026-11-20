@@ -167,6 +167,25 @@ export function NodeConfigForm({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
+                checked={cfg.date_not_past === true}
+                onCheckedChange={(checked) => onUpdateConfig({ date_not_past: checked })}
+              />
+              {t("dateNotPast")}
+            </label>
+            {cfg.date_not_past === true && (
+              <>
+                <TextRow
+                  label={t("dateTimezone")}
+                  value={typeof cfg.date_timezone === "string" ? cfg.date_timezone : ""}
+                  onChange={(v) => onUpdateConfig({ date_timezone: v.trim() })}
+                />
+                <p className="text-[10px] text-muted-foreground">{t("dateNotPastHelp")}</p>
+              </>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch
                 checked={cfg.save_contact_note === true}
                 onCheckedChange={(checked) => onUpdateConfig({ save_contact_note: checked })}
               />

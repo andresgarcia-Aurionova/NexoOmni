@@ -24,6 +24,7 @@
  */
 
 import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
+import { isValidTimeZone } from "./date-input";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -539,6 +540,8 @@ function validateNode(
         next_node_key?: string;
         save_contact_note?: boolean;
         contact_note_label?: string;
+        date_not_past?: boolean;
+        date_timezone?: string;
       };
       if (!cfg.prompt_text?.trim()) {
         issues.push({
@@ -573,6 +576,15 @@ function validateNode(
           node_key: node.node_key,
           field: "contact_note_label",
           message: "La nota automática necesita una etiqueta de hasta 100 caracteres.",
+        });
+      }
+      if (cfg.date_not_past && (typeof cfg.date_timezone !== "string" || !cfg.date_timezone.trim() || !isValidTimeZone(cfg.date_timezone.trim()))) {
+        issues.push({
+          severity: "error",
+          scope: "node",
+          node_key: node.node_key,
+          field: "date_timezone",
+          message: "La validación de fecha necesita una zona horaria IANA válida.",
         });
       }
       if (!cfg.next_node_key) {

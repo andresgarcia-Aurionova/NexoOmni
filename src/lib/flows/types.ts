@@ -134,6 +134,10 @@ export interface CollectInputNodeConfig {
   validation?: "any" | "email" | "phone" | "regex";
   /** Used only when `validation === 'regex'`. */
   regex?: string;
+  /** Opt-in calendar date validation, independent of legacy validation. */
+  date_not_past?: boolean;
+  /** IANA time zone used when checking a date against today. */
+  date_timezone?: string;
   /** Opt-in to copying this answer into ordinary contact notes. */
   save_contact_note?: boolean;
   /** Identifies the automatic note to the team. */

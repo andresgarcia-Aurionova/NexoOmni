@@ -42,6 +42,7 @@ import {
 } from "./channel-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { interpolateVars } from "./interpolate-vars";
+import { isCurrentOrFutureDate } from "./date-input";
 import {
   bookFlowAppointment,
   loadOfferedSlots,
@@ -1135,7 +1136,11 @@ async function handleReplyForActiveRun(
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
     const captured = message.text.trim();
-    if (captured.length > 0 && cfg.var_key) {
+    if (
+      captured.length > 0 &&
+      cfg.var_key &&
+      (!cfg.date_not_past || isCurrentOrFutureDate(captured, typeof cfg.date_timezone === "string" ? cfg.date_timezone.trim() : ""))
+    ) {
       // Persist captured value + reset reprompt count atomically.
       const newVars = { ...run.vars, [cfg.var_key]: captured };
       let capErr: { message: string } | null = null;
