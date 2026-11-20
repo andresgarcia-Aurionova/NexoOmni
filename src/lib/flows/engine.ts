@@ -804,7 +804,22 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "offer_slots") {
       const cfg = node.config as unknown as OfferSlotsNodeConfig;
-      const { slots, hasSchedule } = await loadOfferedSlots(db, run.account_id, cfg);
+      let availability: Awaited<ReturnType<typeof loadOfferedSlots>>;
+      try {
+        availability = await loadOfferedSlots(db, run.account_id, cfg, run.vars);
+      } catch (error) {
+        console.error("[flows] could not load appointment availability:", error);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "availability_load_failed" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
+      const { slots, hasSchedule, invalidPreference } = availability;
+      if (invalidPreference) {
+        console.error("[flows] invalid requested appointment date for run", run.id);
+        await logEvent(db, run.id, "error", node.node_key, { reason: "invalid_appointment_date" });
+        await executeHandoff(db, run, node);
+        return { outcome: "handed_off" };
+      }
       if (slots.length === 0) {
         await logEvent(db, run.id, "node_entered", node.node_key, {
           node_type: "offer_slots",

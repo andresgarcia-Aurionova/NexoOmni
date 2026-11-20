@@ -415,6 +415,7 @@ interface OfferSlotsCfg {
   days_ahead?: number;
   max_options?: number;
   var_key?: string;
+  date_var_key?: string;
   next_node_key?: string;
   no_availability_next?: string;
 }
@@ -479,6 +480,7 @@ function AppointmentNumberField({ label, value, min, max, onChange }: { label: s
 }
 
 function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: OfferSlotsCfg; allNodes: BuilderNode[]; currentKey: string; onUpdateConfig: (patch: Record<string, unknown>) => void }) {
+  const t = useTranslations("Flows.builder.form");
   return <>
     <TextRow label="Mensaje para el cliente" value={cfg.text ?? ""} onChange={(text) => onUpdateConfig({ text })} rows={2} />
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -490,6 +492,7 @@ function OfferSlotsForm({ cfg, allNodes, currentKey, onUpdateConfig }: { cfg: Of
       <AppointmentNumberField label="Horarios a mostrar" value={cfg.max_options ?? 6} min={1} max={10} onChange={(max_options) => onUpdateConfig({ max_options })} />
     </div>
     <div><label className="mb-1 block text-xs text-muted-foreground">Clave del horario elegido</label><Input value={cfg.var_key ?? "slot"} onChange={(event) => onUpdateConfig({ var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /></div>
+    <div><label className="mb-1 block text-xs text-muted-foreground">{t("appointmentDateVariable")}</label><Input value={cfg.date_var_key ?? ""} onChange={(event) => onUpdateConfig({ date_var_key: event.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} className="bg-muted font-mono text-xs" /><p className="mt-1 text-[10px] text-muted-foreground">{t("appointmentDateVariableHelp")}</p></div>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <NextNodeRow value={cfg.next_node_key ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(next_node_key) => onUpdateConfig({ next_node_key })} label="Al elegir un horario" />
       <NextNodeRow value={cfg.no_availability_next ?? ""} allNodes={allNodes} currentKey={currentKey} onChange={(no_availability_next) => onUpdateConfig({ no_availability_next })} label="Sin disponibilidad" />

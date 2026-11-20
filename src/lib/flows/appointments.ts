@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { findConflict, getAvailableSlots } from '@/lib/appointments/availability'
+import { zonedDayInfo } from '@/lib/appointments/slots'
+import { isCurrentOrFutureDate } from './date-input'
 import { interpolateVars } from './interpolate-vars'
 import type { BookAppointmentNodeConfig, OfferSlotsNodeConfig } from './types'
 
@@ -50,11 +52,29 @@ export async function loadOfferedSlots(
   db: SupabaseClient,
   accountId: string,
   cfg: OfferSlotsNodeConfig,
-): Promise<{ slots: OfferedSlot[]; hasSchedule: boolean }> {
+  vars: Record<string, unknown> = {},
+): Promise<{ slots: OfferedSlot[]; hasSchedule: boolean; invalidPreference?: boolean }> {
   const duration = Math.min(480, Math.max(5, cfg.duration_minutes ?? 30))
   const daysAhead = Math.min(60, Math.max(1, cfg.days_ahead ?? 7))
-  const from = new Date()
-  const to = new Date(from.getTime() + daysAhead * 86_400_000)
+  let from = new Date()
+  let to = new Date(from.getTime() + daysAhead * 86_400_000)
+  let preferenceKey: string | null = null
+  let timezone: string | null = null
+
+  if (cfg.date_var_key) {
+    timezone = await preferenceScheduleTimezone(db, accountId, cfg.specialist_id ?? null)
+    if (!timezone) return { slots: [], hasSchedule: false }
+    const preference = vars[cfg.date_var_key]
+    if (typeof preference !== 'string' || !isCurrentOrFutureDate(preference, timezone)) {
+      return { slots: [], hasSchedule: true, invalidPreference: true }
+    }
+    const [day, month, year] = preference.split('/')
+    preferenceKey = `${year}-${month}-${day}`
+    const midnightUtc = new Date(`${preferenceKey}T00:00:00Z`).getTime()
+    // Cover every possible IANA offset, then filter by local calendar day.
+    from = new Date(midnightUtc - 86_400_000)
+    to = new Date(midnightUtc + 2 * 86_400_000)
+  }
 
   const { slots, hasSchedule } = await getAvailableSlots(db, {
     accountId,
@@ -67,17 +87,40 @@ export async function loadOfferedSlots(
   // Meta caps a list at 10 rows; more than a handful is unreadable on any
   // channel anyway.
   const max = Math.min(10, Math.max(1, cfg.max_options ?? 6))
-  const timezone = await scheduleTimezone(db, accountId, cfg.specialist_id ?? null)
+  timezone ??= await scheduleTimezone(db, accountId, cfg.specialist_id ?? null)
+  const eligible = preferenceKey
+    ? slots.filter((slot) => zonedDayInfo(new Date(slot.start), timezone).key === preferenceKey)
+    : slots
 
   return {
     hasSchedule,
-    slots: slots.slice(0, max).map((slot, index) => ({
+    slots: eligible.slice(0, max).map((slot, index) => ({
       id: `slot_${index + 1}`,
       title: labelFor(slot.start, slot.end, timezone),
       start: slot.start,
       end: slot.end,
     })),
   }
+}
+
+async function preferenceScheduleTimezone(
+  db: SupabaseClient,
+  accountId: string,
+  specialistId: string | null,
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('appointment_schedules')
+    .select('timezone, specialist_id, agent_user_id')
+    .eq('account_id', accountId)
+    .eq('is_active', true)
+  if (error) throw error
+  const rows = data ?? []
+  const own = specialistId ? rows.filter((row) => row.specialist_id === specialistId) : []
+  const source = own.length ? own : rows.filter((row) => !row.specialist_id && !row.agent_user_id)
+  if (!source.length) return null
+  const zones = new Set(source.map((row) => typeof row.timezone === 'string' ? row.timezone : ''))
+  if (zones.size !== 1 || zones.has('')) throw new Error('The appointment schedule has inconsistent time zones.')
+  return [...zones][0]
 }
 
 async function scheduleTimezone(

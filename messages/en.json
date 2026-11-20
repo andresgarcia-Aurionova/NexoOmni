@@ -1894,6 +1894,8 @@
       "noNodeDesc": "Select a node on the canvas to edit its configuration.",
       "form": {
         "appointmentReferenceVariable": "Variable for the appointment reference (optional)",
+        "appointmentDateVariable": "Requested date variable key (optional)",
+        "appointmentDateVariableHelp": "Use the key of a question that captures a date in DD/MM/YYYY format. Only slots on that day in the calendar's time zone will be offered.",
         "advancesTo": "Advances to",
         "textToCustomer": "Text sent to the customer",
         "promptToCustomer": "Prompt sent to the customer",

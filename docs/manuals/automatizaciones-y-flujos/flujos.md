@@ -54,11 +54,19 @@ escribe la zona horaria IANA del negocio, por ejemplo `America/Mexico_City`.
 En la pregunta pide una fecha en formato `DD/MM/AAAA`. Las fechas inválidas o
 pasadas no se guardan y se aplica la regla de reintentos del flujo.
 
-Esta opción permite el día actual: no comprueba la hora ni la disponibilidad,
-y no adapta por sí sola los horarios ofrecidos a la fecha solicitada.
+Esta opción permite el día actual: no comprueba la hora ni la disponibilidad.
 Las preguntas existentes no cambian hasta activar esta opción.
 
 ### Datos recopilados en una cita
+
+Para ofrecer únicamente horarios de una fecha solicitada, activa la validación
+de fecha en la pregunta anterior y, en **Ofrecer horarios**, indica su clave en
+**Clave de la fecha solicitada**. Usa la misma zona horaria en la pregunta y la
+agenda. La consulta busca solo ese día, incluso si queda más allá de los
+próximos días configurados; si no hay horarios, sigue la ruta **Sin
+disponibilidad**. Si la fecha falta, es inválida o la agenda tiene zonas
+horarias inconsistentes, se transfiere para revisión. La hora preferida aún no
+filtra ni ordena las opciones: el cliente debe elegir un horario ofrecido.
 
 En el paso **Agendar cita**, el título y las notas internas admiten variables
 recopiladas antes en el flujo, por ejemplo `Sede: {{vars.sede}}` y

@@ -1894,6 +1894,8 @@
       "noNodeDesc": "Selecciona un nodo en el lienzo para editar su configuración.",
       "form": {
         "appointmentReferenceVariable": "Clave para guardar la referencia de la cita (opcional)",
+        "appointmentDateVariable": "Clave de la fecha solicitada (opcional)",
+        "appointmentDateVariableHelp": "Usa la clave de una pregunta que capture la fecha en formato DD/MM/AAAA. Solo se ofrecerán horarios de ese día en la zona de la agenda.",
         "advancesTo": "Avanza hacia",
         "textToCustomer": "Texto enviado al cliente",
         "promptToCustomer": "Mensaje (prompt) enviado al cliente",

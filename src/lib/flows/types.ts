@@ -207,6 +207,8 @@ export interface OfferSlotsNodeConfig {
   max_options?: number;
   /** Key under which the chosen ISO start time is stored. */
   var_key: string;
+  /** Optional variable containing the requested date in DD/MM/YYYY format. */
+  date_var_key?: string;
   /** Where to go once a slot is chosen. */
   next_node_key: string;
   /** Where to go when the calendar has nothing free. */
