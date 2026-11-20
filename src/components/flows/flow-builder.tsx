@@ -341,6 +341,33 @@ function TriggerPanel({
   triggerIssues: ValidationIssue[];
   t: ReturnType<typeof useTranslations>;
 }) {
+  const [lines, setLines] = useState<Array<{ id: string; displayName: string }>>([]);
+  const [lineStatus, setLineStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadLines() {
+      try {
+        const response = await fetch('/api/omnichannel/zernio/connectors', { signal: controller.signal });
+        if (!response.ok) throw new Error(`Connector request failed (${response.status})`);
+        const body: { connectors?: Array<{ id: string; displayName: string | null; provider: string }> } = await response.json();
+        if (!Array.isArray(body.connectors)) throw new Error('Invalid connector response');
+        setLines(body.connectors.filter((line) => line.provider === 'zernio_whatsapp').map((line) => ({
+          id: line.id, displayName: line.displayName || line.id,
+        })));
+        setLineStatus('ready');
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error('[flows] could not load connected lines:', error);
+        setLineStatus('error');
+      }
+    }
+    void loadLines();
+    return () => controller.abort();
+  }, []);
+
+  const selectedLine = typeof state.trigger_config.connector_id === 'string'
+    ? state.trigger_config.connector_id
+    : '__all__';
   return (
     <section className="border-border bg-card rounded-lg border p-4">
       <h2 className="text-foreground mb-3 text-sm font-semibold">{t('triggerTitle')}</h2>
@@ -355,8 +382,12 @@ function TriggerPanel({
               setState((s) => ({
                 ...s,
                 trigger_type: v as BuilderState['trigger_type'],
-                trigger_config:
-                  v === 'keyword' ? { keywords: [] } : v === 'manual' ? {} : {},
+                trigger_config: {
+                  ...(v === 'keyword' ? { keywords: [] } : {}),
+                  ...(s.trigger_config.connector_id !== undefined
+                    ? { connector_id: s.trigger_config.connector_id }
+                    : {}),
+                },
               }))
             }
           >
@@ -407,6 +438,31 @@ function TriggerPanel({
           onChange={(channels) => setState((s) => ({ ...s, channel_types: channels }))}
           t={t}
         />
+      </div>
+      <div className="mt-3">
+        <label className="text-muted-foreground mb-1 block text-xs">{t('connectedLineLabel')}</label>
+        <Select
+          value={selectedLine}
+          disabled={lineStatus !== 'ready'}
+          onValueChange={(value) => setState((s) => {
+            const config = { ...s.trigger_config };
+            if (value === '__all__') delete config.connector_id;
+            else config.connector_id = value;
+            return { ...s, trigger_config: config };
+          })}
+        >
+          <SelectTrigger className="bg-muted"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">{t('connectedLineAll')}</SelectItem>
+            {selectedLine !== '__all__' && !lines.some((line) => line.id === selectedLine) && (
+              <SelectItem value={selectedLine}>{t('connectedLineUnavailable')}</SelectItem>
+            )}
+            {lines.map((line) => <SelectItem key={line.id} value={line.id}>{line.displayName} · {line.id.slice(-4)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-muted-foreground mt-1 text-[11px]">
+          {lineStatus === 'error' ? t('connectedLineError') : t('connectedLineHint')}
+        </p>
       </div>
       {triggerIssues.length > 0 && (
         <div className="mt-3 flex flex-col gap-1">

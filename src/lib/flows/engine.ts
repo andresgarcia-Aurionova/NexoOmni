@@ -114,6 +114,11 @@ export function flowMatchesChannel(
   return channelTypes.includes(channelType);
 }
 
+export function flowMatchesConnector(configured: unknown, actual: string | null): boolean {
+  if (configured === undefined) return true;
+  return typeof configured === "string" && configured.length > 0 && configured === actual;
+}
+
 /**
  * The options of a menu node, in the order they were rendered — which is
  * the order a numbered plain-text fallback used on channels without
@@ -358,6 +363,7 @@ async function findEntryFlow(
   message: ParsedInbound,
   isFirstInbound: boolean,
   channelType: ChannelType | undefined,
+  conversationId: string,
 ): Promise<FlowRow | null> {
   // Only text messages can match an entry trigger. Interactive replies
   // are responses to existing prompts; they never start a new flow.
@@ -375,19 +381,27 @@ async function findEntryFlow(
   if (error || !flows) return null;
 
   const typed = flows as FlowRow[];
+  let connector: string | null | undefined;
   for (const flow of typed) {
     if (!flowMatchesChannel(flow.channel_types, channelType)) continue;
-    if (flow.trigger_type === "keyword") {
-      if (matchesKeywordTrigger(
-        message.text,
-        flow.trigger_config as KeywordTriggerConfig,
-      )) {
-        return flow;
-      }
-    } else if (flow.trigger_type === "first_inbound_message" && isFirstInbound) {
-      return flow;
+    const matchesTrigger = flow.trigger_type === "keyword"
+      ? matchesKeywordTrigger(message.text, flow.trigger_config as KeywordTriggerConfig)
+      : flow.trigger_type === "first_inbound_message" && isFirstInbound;
+    if (!matchesTrigger) continue;
+    const config = flow.trigger_config as Record<string, unknown>;
+    const configuredConnector = config?.connector_id;
+    if (configuredConnector !== undefined && connector === undefined) {
+      const { data: conversation, error: conversationError } = await db
+        .from("conversations")
+        .select("connector_id")
+        .eq("account_id", accountId)
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (conversationError) throw conversationError;
+      connector = typeof conversation?.connector_id === "string" ? conversation.connector_id : null;
     }
-    // 'manual' triggers do not auto-start from inbound messages.
+    if (!flowMatchesConnector(configuredConnector, connector ?? null)) continue;
+    return flow;
   }
   return null;
 }
@@ -1049,6 +1063,7 @@ export async function dispatchInboundToFlows(
       input.message,
       input.isFirstInboundMessage,
       input.channelType,
+      input.conversationId,
     );
     if (!flow || !flow.entry_node_id) {
       return { consumed: false, outcome: "no_match" };

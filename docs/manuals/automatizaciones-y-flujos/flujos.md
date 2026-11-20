@@ -33,6 +33,12 @@ mantiene su propio flujo. Una respuesta o intervención del equipo en una línea
 no detiene el flujo de otra. Los datos guardados en la ficha de contacto, como
 etiquetas y notas, siguen siendo compartidos.
 
+Para limitar los nuevos inicios a una sola línea de WhatsApp conectado, elige
+esa línea en el disparador del flujo y comprueba también los canales elegidos.
+Sin línea seleccionada, el flujo puede iniciarse en todos los canales elegidos.
+Las ejecuciones ya iniciadas no se detienen al cambiar esta selección. Esta
+opción limita el inicio del flujo, no la respuesta automática general de IA.
+
 ### Guardar una respuesta en las notas del contacto
 
 En un paso **Recopilar datos**, activa **Guardar la respuesta en Notas del

@@ -6,7 +6,19 @@ import {
   isSuspending,
   isTerminal,
   evaluateConditionPredicate,
+  flowMatchesConnector,
 } from "./engine";
+
+describe("flow connector scope", () => {
+  it("allows legacy unscoped flows but fails closed for invalid or unknown lines", () => {
+    expect(flowMatchesConnector(undefined, null)).toBe(true);
+    expect(flowMatchesConnector("line-a", "line-a")).toBe(true);
+    expect(flowMatchesConnector("line-a", "line-b")).toBe(false);
+    expect(flowMatchesConnector("line-a", null)).toBe(false);
+    expect(flowMatchesConnector(null, null)).toBe(false);
+    expect(flowMatchesConnector("", null)).toBe(false);
+  });
+});
 
 describe("matchReplyId", () => {
   it("returns null for nodes without options", () => {

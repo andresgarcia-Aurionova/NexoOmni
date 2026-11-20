@@ -145,6 +145,14 @@ function validateTrigger(
   trigger_config: Record<string, unknown>,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  if (trigger_config.connector_id !== undefined &&
+      (typeof trigger_config.connector_id !== "string" ||
+       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trigger_config.connector_id))) {
+    issues.push({
+      severity: "error", scope: "trigger", field: "trigger_config.connector_id",
+      message: "La línea conectada seleccionada no es válida.",
+    });
+  }
 
   if (trigger_type === "keyword") {
     const keywords = Array.isArray(trigger_config.keywords)

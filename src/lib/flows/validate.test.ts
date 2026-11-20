@@ -30,6 +30,19 @@ describe("validateFlowForActivation — happy path", () => {
   });
 });
 
+describe("connected line validation", () => {
+  it("rejects malformed connector identifiers while preserving unscoped flows", () => {
+    expect(validateFlowForActivation({
+      ...validFlow, trigger_config: { keywords: ["support"], connector_id: "bad" },
+    }, validNodes)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "trigger_config.connector_id" }),
+    ]));
+    expect(validateFlowForActivation({
+      ...validFlow, trigger_config: { keywords: ["support"], connector_id: "12345678-1234-1234-1234-123456789012" },
+    }, validNodes)).toEqual([]);
+  });
+});
+
 describe("contact note capture validation", () => {
   const nodes = (label: string) => [
     { node_key: "start", node_type: "start", config: { next_node_key: "reason" } },
