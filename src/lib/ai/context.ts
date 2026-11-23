@@ -44,6 +44,12 @@ export async function buildConversationContext(
       if (m.content_type === 'document' && (m.media_analysis_status === 'failed' || m.media_analysis_status === 'skipped')) {
         return { role: m.sender_type === 'customer' ? 'user' as const : 'assistant' as const, content: '[Documento PDF recibido pero no se pudo validar automáticamente. Solicita un PDF legible o una fotografía nítida y no confirmes que está listo para facturar.]' }
       }
+      if (m.content_type === 'image' && m.media_analysis_status === 'completed' && m.media_description?.trim()) {
+        return { role: m.sender_type === 'customer' ? 'user' as const : 'assistant' as const, content: `[Imagen validada: ${m.media_description.trim()}]` }
+      }
+      if (m.content_type === 'image' && (m.media_analysis_status === 'failed' || m.media_analysis_status === 'skipped')) {
+        return { role: m.sender_type === 'customer' ? 'user' as const : 'assistant' as const, content: '[Imagen recibida pero no se pudo analizar automáticamente. Solicita una fotografía nítida y no confirmes que está lista para facturar.]' }
+      }
       // Zernio-sourced media messages with no real caption store the
       // literal "no text" placeholder in content_text — treat that the
       // same as "no text" so it doesn't shadow the media analysis below.

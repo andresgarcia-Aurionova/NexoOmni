@@ -81,4 +81,21 @@ describe('buildConversationContext', () => {
     )
     expect(out[0]?.content).toContain('no se pudo validar automáticamente')
   })
+
+  it('prioritizes invoice image validation over its caption', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{
+        sender_type: 'customer',
+        content_type: 'image',
+        content_text: 'Mi constancia',
+        media_analysis_status: 'completed',
+        media_description: 'tipo=constancia de situación fiscal; legible=sí; completo=no; faltantes=régimen fiscal',
+      }]),
+      'conv-1',
+    )
+    expect(out).toEqual([{
+      role: 'user',
+      content: '[Imagen validada: tipo=constancia de situación fiscal; legible=sí; completo=no; faltantes=régimen fiscal]',
+    }])
+  })
 })

@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { downloadZernioInboundMedia, type ZernioChannel } from '@/lib/zernio/server'
-import { analyzeInvoicePdfWithOpenAi, describeImageWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
+import { analyzeInvoiceImageWithOpenAi, analyzeInvoicePdfWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import type { ChannelType } from '@/types'
@@ -567,7 +567,7 @@ async function analyzeMedia(
   }
   if (job.kind === 'voice_note') return transcribeAudioWithOpenAi(args)
   if (job.kind === 'document') return analyzeInvoicePdfWithOpenAi({ ...args, fileName })
-  return describeImageWithOpenAi(args)
+  return analyzeInvoiceImageWithOpenAi(args)
 }
 
 async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
@@ -652,7 +652,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       const message = cause instanceof Error ? cause.message.slice(0, 500) : 'Error desconocido'
       await db.from('ai_media_analysis_jobs').update({ status: 'failed', error_message: message }).eq('id', job.id)
       await db.from('messages').update({ media_analysis_status: 'failed', media_analysis_error: message }).eq('id', job.message_id)
-      if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
+      if (job.kind === 'image' || job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
       failed++
     }
   }
@@ -677,7 +677,7 @@ async function completeMediaJob(
   if (messageError) throw messageError
   await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
   await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
-  if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
+  if (job.kind === 'image' || job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
 }
 
 async function dispatchDocumentAutoReplySafely(
@@ -688,7 +688,7 @@ async function dispatchDocumentAutoReplySafely(
     await dispatchDocumentAutoReply(db, job)
   } catch (error) {
     console.error(
-      `[ai media] PDF analysis completed but the auto-reply could not resume for message ${job.message_id}:`,
+      `[ai media] Media analysis completed but the auto-reply could not resume for message ${job.message_id}:`,
       error,
     )
   }
@@ -736,5 +736,5 @@ async function finishMediaJob(
 ) {
   await db.from('ai_media_analysis_jobs').update({ status, error_message: error }).eq('id', job.id)
   await db.from('messages').update({ media_analysis_status: messageStatus, media_analysis_error: error }).eq('id', job.message_id)
-  if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
+  if (job.kind === 'image' || job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
 }

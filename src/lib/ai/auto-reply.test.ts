@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
     conv: null as Record<string, unknown> | null,
     autoResponders: [] as { id: string }[],
     humanMessages: 0,
+    pendingMedia: 0,
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
@@ -46,6 +47,7 @@ vi.mock('./admin-client', () => ({
         const chain = {
           select: () => chain,
           eq: () => chain,
+          in: () => Promise.resolve({ count: h.state.pendingMedia, error: null }),
           not: () => Promise.resolve({ count: h.state.humanMessages, error: null }),
         }
         return chain
@@ -105,6 +107,7 @@ beforeEach(() => {
   }
   h.state.autoResponders = []
   h.state.humanMessages = 0
+  h.state.pendingMedia = 0
   h.state.claim = true
   h.state.updatePayload = null
   h.state.rpcCalls = []
@@ -254,6 +257,13 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
 
   it('skips when there is nothing to reply to', async () => {
     h.buildConversationContext.mockResolvedValue([])
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('waits for pending media validation before replying', async () => {
+    h.state.pendingMedia = 1
     await dispatchInboundToAiReply(ARGS)
     expect(h.generateReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()

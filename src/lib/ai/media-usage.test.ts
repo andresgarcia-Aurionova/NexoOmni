@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  analyzeInvoiceImageWithOpenAi,
   analyzeInvoicePdfWithOpenAi,
   describeImageWithOpenAi,
   transcribeAudioWithOpenAi,
@@ -117,6 +118,61 @@ describe('media usage reporting', () => {
       model: 'gpt-6-luna',
       usage: { promptTokens: 500, completionTokens: 40, totalTokens: 540 },
     });
+  });
+
+  it('validates an invoice document sent as an image', async () => {
+    mockFetchJson({
+      model: 'gpt-6-luna',
+      choices: [{ message: { content: JSON.stringify({
+        document_type: 'receipt',
+        readable: true,
+        complete: false,
+        present_fields: ['comercio', 'fecha', 'importe total'],
+        missing_fields: ['folio'],
+        issues: ['La parte inferior está cortada'],
+        description: '',
+      }) } }],
+      usage: { prompt_tokens: 800, completion_tokens: 55, total_tokens: 855 },
+    });
+    const onUsage = vi.fn();
+    const result = await analyzeInvoiceImageWithOpenAi({
+      ...baseArgs,
+      bytes: Buffer.from('image'),
+      mimeType: 'image/jpeg',
+      model: 'gpt-6-luna',
+      onUsage,
+    });
+    expect(result).toContain('tipo=ticket o comprobante de consumo')
+    expect(result).toContain('faltantes=folio')
+    expect(result).not.toContain('XAXX')
+    expect(onUsage).toHaveBeenCalledWith({
+      model: 'gpt-6-luna',
+      usage: { promptTokens: 800, completionTokens: 55, totalTokens: 855 },
+    });
+  });
+
+  it('keeps a normal image description', async () => {
+    mockFetchJson({
+      model: 'gpt-6-luna',
+      choices: [{ message: { content: JSON.stringify({
+        document_type: 'other',
+        readable: true,
+        complete: false,
+        present_fields: [],
+        missing_fields: [],
+        issues: [],
+        description: 'Fotografía de una mesa de restaurante con dos platillos.',
+      }) } }],
+      usage: { prompt_tokens: 300, completion_tokens: 20, total_tokens: 320 },
+    });
+    const result = await analyzeInvoiceImageWithOpenAi({
+      ...baseArgs,
+      bytes: Buffer.from('image'),
+      mimeType: 'image/jpeg',
+      model: 'gpt-6-luna',
+      onUsage: vi.fn(),
+    });
+    expect(result).toBe('Fotografía de una mesa de restaurante con dos platillos.')
   });
 
   it('reports embedding usage per batch', async () => {

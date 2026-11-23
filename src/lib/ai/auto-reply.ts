@@ -98,6 +98,15 @@ export async function evaluateAutoReplyGates(
     }
   }
 
+  const { count: pendingMediaCount } = await db
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+    .in('media_analysis_status', ['queued', 'processing'])
+  if ((pendingMediaCount ?? 0) > 0)
+    return { ok: false, reason: 'media_analysis_pending' };
+
   const { data: conv, error: convErr } = await db
     .from('conversations')
     .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id')
