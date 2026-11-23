@@ -4,9 +4,12 @@ import { aiContextMessageLimit } from './defaults'
 
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
+  content_type: string
   content_text: string | null
+  media_analysis_status: 'queued' | 'processing' | 'completed' | 'skipped' | 'failed' | null
   media_transcript: string | null
   media_description: string | null
+  media_analysis_error: string | null
 }
 
 /**
@@ -25,7 +28,7 @@ export async function buildConversationContext(
 ): Promise<ChatMessage[]> {
   const { data, error } = await db
     .from('messages')
-    .select('sender_type, content_text, media_transcript, media_description')
+    .select('sender_type, content_type, content_text, media_analysis_status, media_transcript, media_description, media_analysis_error')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -35,6 +38,12 @@ export async function buildConversationContext(
   const rows = ((data ?? []) as DbMessage[]).reverse()
   return rows
     .map((m) => {
+      if (m.content_type === 'document' && m.media_analysis_status === 'completed' && m.media_description?.trim()) {
+        return { role: m.sender_type === 'customer' ? 'user' as const : 'assistant' as const, content: `[PDF validado: ${m.media_description.trim()}]` }
+      }
+      if (m.content_type === 'document' && (m.media_analysis_status === 'failed' || m.media_analysis_status === 'skipped')) {
+        return { role: m.sender_type === 'customer' ? 'user' as const : 'assistant' as const, content: '[Documento PDF recibido pero no se pudo validar automáticamente. Solicita un PDF legible o una fotografía nítida y no confirmes que está listo para facturar.]' }
+      }
       // Zernio-sourced media messages with no real caption store the
       // literal "no text" placeholder in content_text — treat that the
       // same as "no text" so it doesn't shadow the media analysis below.

@@ -50,4 +50,35 @@ describe('buildConversationContext', () => {
     )
     expect(out).toEqual([{ role: 'user', content: 'real' }])
   })
+
+  it('uses completed PDF validation instead of the filename', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{
+        sender_type: 'customer',
+        content_type: 'document',
+        content_text: 'constancia.pdf',
+        media_analysis_status: 'completed',
+        media_description: 'tipo=constancia de situación fiscal; legible=sí; completo=sí; faltantes=ninguno',
+      }]),
+      'conv-1',
+    )
+    expect(out).toEqual([{
+      role: 'user',
+      content: '[PDF validado: tipo=constancia de situación fiscal; legible=sí; completo=sí; faltantes=ninguno]',
+    }])
+  })
+
+  it('does not treat an unreadable PDF as validated', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{
+        sender_type: 'customer',
+        content_type: 'document',
+        content_text: 'ticket.pdf',
+        media_analysis_status: 'failed',
+        media_analysis_error: 'provider error',
+      }]),
+      'conv-1',
+    )
+    expect(out[0]?.content).toContain('no se pudo validar automáticamente')
+  })
 })

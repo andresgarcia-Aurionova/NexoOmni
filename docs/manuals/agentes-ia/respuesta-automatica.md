@@ -4,7 +4,7 @@ description: "Configura al agente de IA para que responda solo en WhatsApp, con 
 section: "agentes-ia"
 role: ["admin", "owner"]
 plan: ["crecimiento", "premium"]
-updated: "2026-10-04"
+updated: "2026-11-23"
 ---
 
 ## ¿Qué es?
@@ -100,6 +100,19 @@ de enviarlo?**
 Sí — desde el compositor del Inbox, el botón de redacción con IA
 sugiere una respuesta que puedes editar antes de enviar, sin que se
 envíe sola.
+
+**¿Puede revisar constancias fiscales y tickets enviados en PDF?**
+Sí. Activa **Analizar imágenes y documentos PDF** en la configuración
+del análisis automático. La auto-respuesta espera el resultado antes de
+contestar. Para una constancia fiscal comprueba legibilidad, RFC, nombre
+o razón social, código postal fiscal y régimen. Para un ticket comprueba
+comercio, fecha, importe total y folio. Solo informa qué campos están
+presentes o faltan; no copia sus valores al contexto de la conversación.
+
+Si el PDF está protegido, borroso, vacío o no es el tipo esperado, la IA
+no lo marca como válido y solicita una copia legible o una fotografía
+nítida. El uso de CFDI debe confirmarse directamente con el cliente,
+porque normalmente no aparece en la constancia fiscal.
 
 ## Ver también
 

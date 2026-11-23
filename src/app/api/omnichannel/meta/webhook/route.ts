@@ -586,7 +586,7 @@ async function ingestMessage(db: ReturnType<typeof admin>, connector: Connector,
     isFirstInboundMessage,
     flowConsumed,
   })
-  if (!flowConsumed && contentText.trim()) {
+  if (!flowConsumed && contentType !== 'document' && contentText.trim()) {
     await dispatchInboundToAiReply({
       accountId: connector.account_id,
       conversationId: conversation.id,

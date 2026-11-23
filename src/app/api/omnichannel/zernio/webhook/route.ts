@@ -1015,7 +1015,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
             isFirstInboundMessage,
             flowConsumed,
           })
-          if (!flowConsumed && content.trim()) {
+          if (!flowConsumed && contentType !== 'document' && content.trim()) {
             await dispatchInboundToAiReply({
               accountId: typed.account_id,
               conversationId: conversationRow.id,

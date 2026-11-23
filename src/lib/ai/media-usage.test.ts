@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  analyzeInvoicePdfWithOpenAi,
   describeImageWithOpenAi,
   transcribeAudioWithOpenAi,
 } from './media-analysis';
@@ -84,6 +85,37 @@ describe('media usage reporting', () => {
     expect(onUsage).toHaveBeenCalledWith({
       model: 'gpt-4.1-mini-2025-04-14',
       usage: { promptTokens: 300, completionTokens: 12, totalTokens: 312 },
+    });
+  });
+
+  it('validates PDF fields without returning their values', async () => {
+    mockFetchJson({
+      model: 'gpt-6-luna',
+      output_text: JSON.stringify({
+        document_type: 'tax_certificate',
+        readable: true,
+        complete: false,
+        present_fields: ['RFC', 'razón social', 'código postal fiscal'],
+        missing_fields: ['régimen fiscal'],
+        issues: [],
+      }),
+      usage: { input_tokens: 500, output_tokens: 40, total_tokens: 540 },
+    });
+    const onUsage = vi.fn();
+    const result = await analyzeInvoicePdfWithOpenAi({
+      ...baseArgs,
+      bytes: Buffer.from('%PDF-1.7 test'),
+      mimeType: 'application/pdf',
+      fileName: 'constancia.pdf',
+      model: 'gpt-6-luna',
+      onUsage,
+    });
+    expect(result).toContain('tipo=constancia de situación fiscal')
+    expect(result).toContain('faltantes=régimen fiscal')
+    expect(result).not.toContain('XAXX')
+    expect(onUsage).toHaveBeenCalledWith({
+      model: 'gpt-6-luna',
+      usage: { promptTokens: 500, completionTokens: 40, totalTokens: 540 },
     });
   });
 

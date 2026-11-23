@@ -9,7 +9,11 @@ import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { downloadZernioInboundMedia, type ZernioChannel } from '@/lib/zernio/server'
-import { describeImageWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
+import { analyzeInvoicePdfWithOpenAi, describeImageWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
+import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { resolveAuditUserId } from '@/lib/api/v1/contacts'
+import type { ChannelType } from '@/types'
+import { getClosure } from '@/lib/business-hours/inbound'
 import { MIN_DAILY_ANALYSES_PER_CONVERSATION, ANALYSIS_MAX_OUTPUT_TOKENS, aiRequestTimeoutMs } from '@/lib/ai/defaults'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { syncGoogleCalendarChanges } from '@/lib/appointments/google-calendar'
@@ -41,7 +45,7 @@ const TASK_REMINDER_LEAD_MINUTES = 10
 export const maxDuration = 120
 
 type Job = { id: string; account_id: string; conversation_id: string; attempts: number; conversation: { contact_id: string } | { contact_id: string }[] | null }
-type MediaJob = { id: string; account_id: string; conversation_id: string; message_id: string; kind: 'image' | 'voice_note'; conversation: { channel_type: string | null } | { channel_type: string | null }[] | null }
+type MediaJob = { id: string; account_id: string; conversation_id: string; message_id: string; kind: 'image' | 'voice_note' | 'document'; conversation: { channel_type: string | null } | { channel_type: string | null }[] | null }
 type AppointmentReminderJob = {
   id: string
   account_id: string
@@ -540,8 +544,9 @@ async function analyzeMedia(
   config: NonNullable<Awaited<ReturnType<typeof loadAiConfig>>>,
   bytes: Buffer,
   mimeType: string,
+  fileName?: string,
 ): Promise<string> {
-  const task = job.kind === 'image' ? 'image_description' : 'voice_transcription'
+  const task = job.kind === 'voice_note' ? 'voice_transcription' : 'image_description'
   const args = {
     accountId: job.account_id,
     apiKey: config.providerKeys?.openai ?? (config.provider === 'openai' ? config.apiKey : ''),
@@ -560,7 +565,9 @@ async function analyzeMedia(
       })
     },
   }
-  return job.kind === 'image' ? describeImageWithOpenAi(args) : transcribeAudioWithOpenAi(args)
+  if (job.kind === 'voice_note') return transcribeAudioWithOpenAi(args)
+  if (job.kind === 'document') return analyzeInvoicePdfWithOpenAi({ ...args, fileName })
+  return describeImageWithOpenAi(args)
 }
 
 async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
@@ -595,7 +602,7 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
         await finishMediaJob(db, job, 'skipped_limit', 'Límite diario de análisis de medios alcanzado.', 'skipped')
         skipped++; continue
       }
-      const { data: message } = await db.from('messages').select('id, media_url, sender_type')
+      const { data: message } = await db.from('messages').select('id, media_url, sender_type, content_text')
         .eq('id', job.message_id).eq('conversation_id', job.conversation_id).maybeSingle()
       const match = typeof message?.media_url === 'string' ? message.media_url.match(/^\/api\/whatsapp\/media\/([^/?#]+)$/) : null
       const storagePath = chatMediaStoragePath(message?.media_url)
@@ -611,43 +618,25 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       }
       if (zernioChannel && ['whatsapp', 'facebook', 'instagram'].includes(zernioChannel)) {
         const downloaded = await downloadZernioInboundMedia(message.media_url!, zernioChannel)
-        const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType)
-        const messagePatch = job.kind === 'image'
-          ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-          : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-        const { error: messageError } = await db.from('messages').update(messagePatch).eq('id', job.message_id)
-        if (messageError) throw messageError
-        await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
-        await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
+        const mimeType = downloaded.mimeType || fallbackMediaType(job.kind)
+        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType, message.content_text)
+        await completeMediaJob(db, job, value)
         completed++; continue
       }
       if (directCdnChannel) {
         const downloaded = await downloadPublicMedia(message.media_url!)
-        const mimeType = downloaded.mimeType || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType)
-        const messagePatch = job.kind === 'image'
-          ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-          : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-        const { error: messageError } = await db.from('messages').update(messagePatch).eq('id', job.message_id)
-        if (messageError) throw messageError
-        await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
-        await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
+        const mimeType = downloaded.mimeType || fallbackMediaType(job.kind)
+        const value = await analyzeMedia(db, job, config, downloaded.bytes, mimeType, message.content_text)
+        await completeMediaJob(db, job, value)
         completed++; continue
       }
       if (storagePath) {
         const { data: blob, error: storageError } = await db.storage.from('chat-media').download(storagePath)
         if (storageError || !blob) throw storageError ?? new Error('No se pudo recuperar la imagen guardada.')
         const bytes = Buffer.from(await blob.arrayBuffer())
-        const mimeType = blob.type || (job.kind === 'image' ? 'image/jpeg' : 'audio/ogg')
-        const value = await analyzeMedia(db, job, config, bytes, mimeType)
-        const messagePatch = job.kind === 'image'
-          ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-          : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-        const { error: messageError } = await db.from('messages').update(messagePatch).eq('id', job.message_id)
-        if (messageError) throw messageError
-        await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
-        await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
+        const mimeType = blob.type || fallbackMediaType(job.kind)
+        const value = await analyzeMedia(db, job, config, bytes, mimeType, message.content_text)
+        await completeMediaJob(db, job, value)
         completed++; continue
       }
       const { data: whatsapp } = await db.from('whatsapp_config').select('access_token').eq('account_id', job.account_id).maybeSingle()
@@ -656,25 +645,86 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
       const media = await getMediaUrl({ mediaId: match![1], accessToken: token })
       const downloaded = await downloadMedia({ downloadUrl: media.url, accessToken: token })
       const mimeType = downloaded.contentType || media.mimeType
-      const value = await analyzeMedia(db, job, config, downloaded.buffer, mimeType)
-      const messagePatch = job.kind === 'image'
-        ? { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-        : { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
-      const { error: messageError } = await db.from('messages').update(messagePatch).eq('id', job.message_id)
-      if (messageError) throw messageError
-      await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
-      // Refresh the conversation intelligence from the safely-derived text,
-      // never from the original binary attachment.
-      await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
+      const value = await analyzeMedia(db, job, config, downloaded.buffer, mimeType, message.content_text)
+      await completeMediaJob(db, job, value)
       completed++
     } catch (cause) {
       const message = cause instanceof Error ? cause.message.slice(0, 500) : 'Error desconocido'
       await db.from('ai_media_analysis_jobs').update({ status: 'failed', error_message: message }).eq('id', job.id)
       await db.from('messages').update({ media_analysis_status: 'failed', media_analysis_error: message }).eq('id', job.message_id)
+      if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
       failed++
     }
   }
   return { completed, skipped, failed }
+}
+
+function fallbackMediaType(kind: MediaJob['kind']) {
+  if (kind === 'voice_note') return 'audio/ogg'
+  if (kind === 'document') return 'application/pdf'
+  return 'image/jpeg'
+}
+
+async function completeMediaJob(
+  db: ReturnType<typeof supabaseAdmin>,
+  job: MediaJob,
+  value: string,
+) {
+  const messagePatch = job.kind === 'voice_note'
+    ? { media_analysis_status: 'completed', media_transcript: value, media_description: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
+    : { media_analysis_status: 'completed', media_description: value, media_transcript: null, media_analyzed_at: new Date().toISOString(), media_analysis_error: null }
+  const { error: messageError } = await db.from('messages').update(messagePatch).eq('id', job.message_id)
+  if (messageError) throw messageError
+  await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
+  await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
+  if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
+}
+
+async function dispatchDocumentAutoReplySafely(
+  db: ReturnType<typeof supabaseAdmin>,
+  job: MediaJob,
+) {
+  try {
+    await dispatchDocumentAutoReply(db, job)
+  } catch (error) {
+    console.error(
+      `[ai media] PDF analysis completed but the auto-reply could not resume for message ${job.message_id}:`,
+      error,
+    )
+  }
+}
+
+async function dispatchDocumentAutoReply(
+  db: ReturnType<typeof supabaseAdmin>,
+  job: MediaJob,
+) {
+  const { data: conversation } = await db
+    .from('conversations')
+    .select('contact_id, channel_type, connector_id')
+    .eq('id', job.conversation_id)
+    .maybeSingle()
+  if (!conversation?.contact_id) return
+  const { data: activeRun } = await db
+    .from('flow_runs')
+    .select('id')
+    .eq('account_id', job.account_id)
+    .eq('conversation_id', job.conversation_id)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  if (activeRun) return
+  if (conversation.connector_id) {
+    const closure = await getClosure(db, job.account_id, conversation.connector_id, new Date())
+    if (closure) return
+  }
+  const configOwnerUserId = await resolveAuditUserId(db, job.account_id)
+  await dispatchInboundToAiReply({
+    accountId: job.account_id,
+    conversationId: job.conversation_id,
+    contactId: conversation.contact_id,
+    configOwnerUserId,
+    channelType: conversation.channel_type as ChannelType,
+  })
 }
 
 async function finishMediaJob(
@@ -686,4 +736,5 @@ async function finishMediaJob(
 ) {
   await db.from('ai_media_analysis_jobs').update({ status, error_message: error }).eq('id', job.id)
   await db.from('messages').update({ media_analysis_status: messageStatus, media_analysis_error: error }).eq('id', job.message_id)
+  if (job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
 }

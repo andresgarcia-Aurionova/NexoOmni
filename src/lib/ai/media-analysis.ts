@@ -26,6 +26,7 @@ function tokenUsage(raw: unknown): AiUsage | null {
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_TRANSCRIPT_URL = 'https://api.openai.com/v1/audio/transcriptions'
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024
 // Media models are independent from the account's chat model. This avoids
 // breaking image/audio processing when an account chooses another text model.
@@ -55,6 +56,150 @@ function assertSize(bytes: Buffer) {
   if (bytes.length > MAX_MEDIA_BYTES) {
     throw new AiError('El archivo supera el máximo de 15 MB para análisis.', { code: 'media_too_large', status: 400 })
   }
+}
+
+export type InvoicePdfValidation = {
+  documentType: 'tax_certificate' | 'receipt' | 'other' | 'unreadable'
+  readable: boolean
+  complete: boolean
+  presentFields: string[]
+  missingFields: string[]
+  issues: string[]
+}
+
+function responsesText(data: unknown): string {
+  const value = data as {
+    output_text?: string
+    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+  } | null
+  if (value?.output_text?.trim()) return value.output_text.trim()
+  const text = (value?.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part.type === 'output_text')
+    .map((part) => part.text ?? '')
+    .join('')
+    .trim()
+  if (!text) throw new AiError('OpenAI no devolvió el resultado del análisis del PDF.', { code: 'empty_response' })
+  return text
+}
+
+export function parseInvoicePdfValidation(raw: string): InvoicePdfValidation {
+  let parsed: unknown
+  try {
+    const jsonStart = raw.indexOf('{')
+    const jsonEnd = raw.lastIndexOf('}')
+    parsed = JSON.parse(jsonStart >= 0 && jsonEnd >= jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : raw)
+  } catch {
+    throw new AiError('El análisis del PDF no devolvió un resultado estructurado válido.', { code: 'invalid_pdf_analysis' })
+  }
+  const value = parsed as Record<string, unknown>
+  const allowedTypes = new Set<InvoicePdfValidation['documentType']>([
+    'tax_certificate',
+    'receipt',
+    'other',
+    'unreadable',
+  ])
+  const documentType = allowedTypes.has(value.document_type as InvoicePdfValidation['documentType'])
+    ? value.document_type as InvoicePdfValidation['documentType']
+    : 'unreadable'
+  const strings = (field: unknown) => Array.isArray(field)
+    ? field.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 20)
+    : []
+  return {
+    documentType,
+    readable: value.readable === true,
+    complete: value.complete === true,
+    presentFields: strings(value.present_fields),
+    missingFields: strings(value.missing_fields),
+    issues: strings(value.issues),
+  }
+}
+
+export function formatInvoicePdfValidation(validation: InvoicePdfValidation): string {
+  const labels: Record<InvoicePdfValidation['documentType'], string> = {
+    tax_certificate: 'constancia de situación fiscal',
+    receipt: 'ticket o comprobante de consumo',
+    other: 'otro tipo de archivo',
+    unreadable: 'PDF no legible o protegido',
+  }
+  const parts = [
+    `tipo=${labels[validation.documentType]}`,
+    `legible=${validation.readable ? 'sí' : 'no'}`,
+    `completo=${validation.complete ? 'sí' : 'no'}`,
+  ]
+  if (validation.presentFields.length > 0) parts.push(`campos_detectados=${validation.presentFields.join(', ')}`)
+  if (validation.missingFields.length > 0) parts.push(`faltantes=${validation.missingFields.join(', ')}`)
+  if (validation.issues.length > 0) parts.push(`observaciones=${validation.issues.join('; ')}`)
+  return parts.join('; ')
+}
+
+export async function analyzeInvoicePdfWithOpenAi(args: {
+  accountId: string
+  apiKey: string
+  model: string
+  bytes: Buffer
+  mimeType: string
+  fileName?: string
+  timeoutMs: number
+  onUsage: MediaUsageReport
+}): Promise<string> {
+  assertSize(args.bytes)
+  if (!/application\/pdf/i.test(args.mimeType) && !args.bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+    throw new AiError('El documento enviado no es un PDF. Solicita un archivo PDF o una fotografía legible.', { code: 'unsupported_document_type', status: 415 })
+  }
+  const model = args.model || IMAGE_ANALYSIS_MODEL
+  await assertAiBillingReady(supabaseAdmin(), 'openai', model, args.accountId)
+  const prompt = `Analiza este PDF para apoyar una solicitud de facturación en México. Devuelve SOLO JSON válido con esta forma:
+{"document_type":"tax_certificate|receipt|other|unreadable","readable":true|false,"complete":true|false,"present_fields":[],"missing_fields":[],"issues":[]}
+
+Clasificación y reglas:
+- tax_certificate: constancia de situación fiscal. Deben estar legibles RFC, razón social/nombre, código postal fiscal y régimen fiscal. "complete" solo es true si todos aparecen.
+- receipt: ticket o comprobante de consumo. Deben estar legibles comercio/restaurante, fecha, importe total y folio/referencia. "complete" solo es true si todos aparecen.
+- other: es legible pero no corresponde a ninguno de los dos documentos.
+- unreadable: no se puede leer, está protegido, vacío o es demasiado borroso.
+
+No devuelvas los valores personales o fiscales encontrados. Enumera únicamente nombres de campos detectados o faltantes, por ejemplo "RFC", "razón social", "código postal fiscal", "régimen fiscal", "comercio", "fecha", "importe total" y "folio". Si el documento es una constancia, "uso de CFDI" no debe aparecer como campo detectable: ese dato normalmente se confirma con el cliente.`
+  let response: Response
+  try {
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${args.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        input: [{
+          role: 'user',
+          content: [
+            {
+              type: 'input_file',
+              filename: args.fileName?.trim() || 'documento.pdf',
+              file_data: `data:application/pdf;base64,${args.bytes.toString('base64')}`,
+              detail: 'high',
+            },
+            { type: 'input_text', text: prompt },
+          ],
+        }],
+        max_output_tokens: 700,
+      }),
+      signal: AbortSignal.timeout(args.timeoutMs),
+    })
+  } catch (error) {
+    throw new AiError(error instanceof Error ? error.message : 'No se pudo analizar el PDF.', { code: 'network_error' })
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    const detail = payload?.error?.message?.trim().slice(0, 300)
+    throw new AiError(`OpenAI rechazó el análisis del PDF (${response.status})${detail ? `: ${detail}` : '.'}`, { code: 'provider_error', status: response.status })
+  }
+  const data = await response.json().catch(() => null) as { model?: string; usage?: unknown } | null
+  const result = parseInvoicePdfValidation(responsesText(data))
+  const usage = tokenUsage(data?.usage)
+  if (!usage) {
+    throw new AiBillingError(
+      'OpenAI PDF analysis did not report billable token usage; its output was blocked.'
+    )
+  }
+  await args.onUsage({ model: data?.model || model, usage })
+  return formatInvoicePdfValidation(result)
 }
 
 export function audioExtensionForMimeType(mimeType: string): string {
