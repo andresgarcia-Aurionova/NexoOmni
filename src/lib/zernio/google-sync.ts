@@ -250,7 +250,7 @@ async function importEmailThread(
   })
   if (messageError && !isUniqueViolation(messageError)) throw messageError
   const { error: conversationError } = await db.from('conversations').update({
-    channel_source_label: `${connector.display_name}${thread.subject ? ` · ${thread.subject}` : ''}`.slice(0, 180),
+    channel_source_label: `${connector.display_name}${thread.subject ? ` · ${thread.subject}` : ''}`.slice(0, 80),
     last_message_text: content,
     last_message_at: lastMessageAt,
     unread_count: thread.unread ? 1 : 0,

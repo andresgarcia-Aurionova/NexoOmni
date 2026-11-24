@@ -1031,7 +1031,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       const { row: conversationRow, created } = await findOrCreateZernioConversation(db, typed, contactId, auditUserId, externalConversationId)
       if (isEmailChannel && emailSubject) {
         const { error: contextError } = await db.from('conversations').update({
-          channel_source_label: `${typed.display_name} · ${emailSubject}`.slice(0, 180),
+          channel_source_label: `${typed.display_name} · ${emailSubject}`.slice(0, 80),
         }).eq('id', conversationRow.id).eq('account_id', typed.account_id)
         if (contextError) throw contextError
       } else if (publicComment) {
