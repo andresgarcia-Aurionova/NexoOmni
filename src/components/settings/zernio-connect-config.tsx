@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { channelAddOnEntitlement } from '@/lib/account/entitlements'
+import { channelAddOnEntitlement } from '@/lib/account/channel-addons'
 import {
   connectChannelForProvider,
   type ZernioConnectChannel,

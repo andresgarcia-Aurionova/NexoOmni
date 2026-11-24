@@ -2,6 +2,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { ForbiddenError, requireRole, type AccountContext } from '@/lib/auth/account'
 import type { AccountRole } from '@/lib/auth/roles'
+import {
+  CHANNEL_ADD_ON_ENTITLEMENTS,
+} from './channel-addons'
+
+export {
+  CHANNEL_ADD_ON_ENTITLEMENTS,
+  channelAddOnEntitlement,
+  type ChannelAddOnEntitlement,
+} from './channel-addons'
 
 export const PLAN_CODES = ['basic', 'ai', 'yeastar_voice', 'whatsapp_voice'] as const
 export type PlanCode = (typeof PLAN_CODES)[number]
@@ -15,36 +24,9 @@ export const ENTITLEMENTS = [
   'social_messaging',
   'whatsapp_voice_calls',
   'automation_flows',
-  'channel_whatsapp',
-  'channel_facebook',
-  'channel_instagram',
-  'channel_googlebusiness',
-  'channel_google',
-  'channel_email',
-  'channel_tiktok',
-  'channel_twitter',
-  'channel_threads',
-  'channel_telegram',
-  'channel_hubspot',
-  'channel_salesforce',
+  ...CHANNEL_ADD_ON_ENTITLEMENTS,
 ] as const
 export type Entitlement = (typeof ENTITLEMENTS)[number]
-
-export const CHANNEL_ADD_ON_ENTITLEMENTS = [
-  'channel_whatsapp',
-  'channel_facebook',
-  'channel_instagram',
-  'channel_googlebusiness',
-  'channel_google',
-  'channel_email',
-  'channel_tiktok',
-  'channel_twitter',
-  'channel_threads',
-  'channel_telegram',
-  'channel_hubspot',
-  'channel_salesforce',
-] as const
-export type ChannelAddOnEntitlement = (typeof CHANNEL_ADD_ON_ENTITLEMENTS)[number]
 
 type SubscriptionRow = {
   plan_code: string
@@ -69,15 +51,6 @@ const PLAN_FEATURES: Record<PlanCode, Record<Entitlement, boolean>> = {
   ai: { ai_assistant: true, ai_conversation_intelligence: true, ai_credits: true, yeastar_telephony: false, yeastar_live_chat: false, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true, channel_whatsapp: false, channel_facebook: false, channel_instagram: false, channel_googlebusiness: false, channel_google: false, channel_email: false, channel_tiktok: false, channel_twitter: false, channel_threads: false, channel_telegram: false, channel_hubspot: false, channel_salesforce: false },
   yeastar_voice: { ai_assistant: true, ai_conversation_intelligence: true, ai_credits: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: false, automation_flows: true, channel_whatsapp: false, channel_facebook: false, channel_instagram: false, channel_googlebusiness: false, channel_google: false, channel_email: false, channel_tiktok: false, channel_twitter: false, channel_threads: false, channel_telegram: false, channel_hubspot: false, channel_salesforce: false },
   whatsapp_voice: { ai_assistant: true, ai_conversation_intelligence: true, ai_credits: true, yeastar_telephony: true, yeastar_live_chat: true, social_messaging: true, whatsapp_voice_calls: true, automation_flows: true, channel_whatsapp: false, channel_facebook: false, channel_instagram: false, channel_googlebusiness: false, channel_google: false, channel_email: false, channel_tiktok: false, channel_twitter: false, channel_threads: false, channel_telegram: false, channel_hubspot: false, channel_salesforce: false },
-}
-
-export function channelAddOnEntitlement(
-  channel: string
-): ChannelAddOnEntitlement | null {
-  const feature = `channel_${channel}`;
-  return (CHANNEL_ADD_ON_ENTITLEMENTS as readonly string[]).includes(feature)
-    ? feature as ChannelAddOnEntitlement
-    : null;
 }
 
 function isPlanCode(value: string): value is PlanCode {
