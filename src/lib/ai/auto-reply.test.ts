@@ -293,4 +293,28 @@ describe('dispatchInboundToAiReply — handoff', () => {
       assigned_agent_id: 'agent-7',
     })
   })
+
+  it('sends an acknowledgement before pausing a critical case', async () => {
+    h.state.conv = {
+      ...h.state.conv,
+      case_level: 'n3',
+    }
+    h.generateReply.mockResolvedValue({
+      text: '',
+      handoff: true,
+      handoffQueue: null,
+    })
+
+    await dispatchInboundToAiReply(ARGS)
+
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.engineSendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        text: expect.stringContaining('revisará tu reporte de inmediato'),
+        aiGenerated: true,
+      }),
+    )
+    expect(h.state.rpcCalls).toHaveLength(1)
+  })
 })

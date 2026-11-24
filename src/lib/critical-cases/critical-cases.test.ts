@@ -12,7 +12,7 @@ import { criticalCaseWhatsAppParams } from './alert-copy'
 import { parseCriticalSettings } from './settings'
 import { criticalLevelLabel } from '@/lib/notifications/critical-case-notification'
 
-const sedes = ['Polanco', 'Condesa']
+const sedes = ['Polanco', 'Condesa', 'Cueva de Lobos']
 
 describe('parseClassification', () => {
   it('accepts fenced JSON and maps the sede case-insensitively to the configured name', () => {
@@ -22,6 +22,19 @@ describe('parseClassification', () => {
 
   it('drops sedes that are not configured', () => {
     expect(parseClassification('{"level":"n2","sede":"Roma","reason":"Demora"}', sedes).sede).toBeNull()
+  })
+
+  it('detects a health incident and maps a partial branch alias', () => {
+    const transcript = 'Cliente: Ayer fui a restaurante lobos y me enfermé del estómago; fue toda mi familia.'
+    expect(parseClassification(
+      '{"level":"n1","sede":null,"reason":"Seguimiento al cliente"}',
+      sedes,
+      transcript,
+    )).toEqual({
+      level: 'n3',
+      sede: 'Cueva de Lobos',
+      reason: 'Seguimiento al cliente',
+    })
   })
 
   it('rejects invalid JSON, unknown levels and extra keys', () => {

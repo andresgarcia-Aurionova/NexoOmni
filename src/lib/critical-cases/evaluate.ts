@@ -37,12 +37,13 @@ export async function evaluateCriticalCase(args: EvaluateArgs): Promise<CaseLeve
   if (!context.some((message) => message.role === 'user' && message.content.trim())) return null
 
   const sedeNames = settings.sedes.map((sede) => sede.name)
+  const transcript = transcriptForClassifier(context)
   const result = await generateText({
     config,
     task: 'analysis',
     maxOutputTokens: 200,
     systemPrompt: buildClassifierPrompt(sedeNames),
-    messages: [{ role: 'user', content: transcriptForClassifier(context) }],
+    messages: [{ role: 'user', content: transcript }],
   })
   await logAiUsage(db, {
     accountId: args.accountId,
@@ -55,7 +56,7 @@ export async function evaluateCriticalCase(args: EvaluateArgs): Promise<CaseLeve
     usage: result.usage,
     billingIdempotencyKey: args.triggerId ? `critical-case:${args.triggerId}` : undefined,
   })
-  const classification = parseClassification(result.text, sedeNames)
+  const classification = parseClassification(result.text, sedeNames, transcript)
   if (!shouldApplyAiLevel(current, classification.level)) return null
 
   // Compare-and-swap on the state read above: a concurrent human correction

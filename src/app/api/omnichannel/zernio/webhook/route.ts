@@ -1071,6 +1071,13 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         await flagBroadcastReplyIfAny(db, typed.account_id, contactId, conversationRow.id)
       }
       await db.rpc('auto_assign_inbound_conversation', { p_account_id: typed.account_id, p_conversation_id: conversationRow.id })
+      if (content.trim()) {
+        await evaluateCriticalCaseSafely({
+          accountId: typed.account_id,
+          conversationId: conversationRow.id,
+          triggerId: `zernio:${messageId}`,
+        })
+      }
       // Flows run before automations and the AI: a customer navigating a bot
       // menu is not sending a fresh trigger word.
       const closure = typed.provider === 'zernio_whatsapp'
@@ -1158,9 +1165,6 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       })
       await db.from('omnichannel_connectors').update({ status: 'active', last_event_at: now, last_error: null, updated_at: now }).eq('id', typed.id)
       if (created) await dispatchWebhookEvent(db, typed.account_id, 'conversation.created', { conversation_id: conversationRow.id, contact_id: contactId, channel_type: typed.provider, connector_id: typed.id })
-      if (content.trim()) {
-        after(() => evaluateCriticalCaseSafely({ accountId: typed.account_id, conversationId: conversationRow.id, triggerId: `zernio:${messageId}` }))
-      }
       await dispatchWebhookEvent(db, typed.account_id, 'message.received', { conversation_id: conversationRow.id, contact_id: contactId, message_id: messageId, channel_type: typed.provider, content_type: contentType, text: content, media_url: mediaUrl })
       await db.from('zernio_webhook_receipts').update({ outcome: 'processed', detail: 'Mensaje del canal conectado agregado.', processed_at: now }).eq('connector_id', typed.id).eq('external_message_id', externalEventId)
       } catch (eventError) {

@@ -760,6 +760,14 @@ async function processMessage(
     flowConsumed,
   })
 
+  if (inboundText.trim()) {
+    await evaluateCriticalCaseSafely({
+      accountId,
+      conversationId: conversation.id,
+      triggerId: `whatsapp:${message.id}`,
+    })
+  }
+
   // AI auto-reply. Runs only for plain-text inbound the deterministic
   // flow runner did NOT consume (flows win over the LLM), and only when
   // the account has enabled it. Awaited inside `after()` (same reason as
@@ -774,10 +782,6 @@ async function processMessage(
       channelType: 'whatsapp',
       automationReplied: contentAutomationRan,
     })
-  }
-
-  if (inboundText.trim()) {
-    await evaluateCriticalCaseSafely({ accountId, conversationId: conversation.id, triggerId: `whatsapp:${message.id}` })
   }
 
   // message.received webhook (public API). Awaited — not fire-and-forget

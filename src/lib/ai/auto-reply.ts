@@ -44,7 +44,11 @@ export type AutoReplyGateResult =
   | {
       ok: true;
       config: AiConfig;
-      conv: { assigned_agent_id: string | null; ai_reply_count: number };
+      conv: {
+        assigned_agent_id: string | null;
+        ai_reply_count: number;
+        case_level: string | null;
+      };
     }
   | { ok: false; reason: string };
 
@@ -109,7 +113,7 @@ export async function evaluateAutoReplyGates(
 
   const { data: conv, error: convErr } = await db
     .from('conversations')
-    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id')
+    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id, case_level')
     .eq('id', conversationId)
     .eq('account_id', accountId)
     .maybeSingle();
@@ -148,6 +152,7 @@ export async function evaluateAutoReplyGates(
     conv: {
       assigned_agent_id: conv.assigned_agent_id,
       ai_reply_count: conv.ai_reply_count,
+      case_level: conv.case_level,
     },
   };
 }
@@ -237,6 +242,10 @@ export async function dispatchInboundToAiReply(
       mode: 'auto_reply',
       knowledge,
       handoffQueues: routableQueues.map((q) => q.name),
+      criticalCaseLevel:
+        conv.case_level === 'n2' || conv.case_level === 'n3'
+          ? conv.case_level
+          : null,
     });
 
     const { text, handoff, handoffQueue, usage, provider, model, latencyMs } =
@@ -258,6 +267,11 @@ export async function dispatchInboundToAiReply(
     });
 
     if (handoff || !text) {
+      const criticalAcknowledgement =
+        text ||
+        (conv.case_level === 'n2' || conv.case_level === 'n3'
+          ? 'Lamento mucho lo ocurrido. El equipo revisará tu reporte de inmediato y te dará seguimiento; gracias por comentárnoslo.'
+          : '')
       // The model can't (or shouldn't) answer — stop auto-replying on
       // this thread and hand it to a human. We (a) pause the bot here
       // (sticky until re-enabled), (b) route the conversation to the
@@ -312,6 +326,39 @@ export async function dispatchInboundToAiReply(
             '[ai auto-reply] queue assignment failed:',
             assignErr.message
           );
+        }
+      }
+      if (criticalAcknowledgement) {
+        const { data: claimed, error: claimErr } = await db.rpc(
+          'claim_ai_reply_slot',
+          {
+            conversation_id: conversationId,
+            max_replies: config.autoReplyMaxPerConversation,
+          }
+        );
+        if (claimErr) {
+          console.error('[ai auto-reply] handoff acknowledgement claim failed:', claimErr);
+          return false;
+        }
+        if (claimed === true) {
+          if (args.channelType && args.channelType !== 'whatsapp') {
+            await sendOmnichannelText(db, {
+              accountId,
+              conversationId,
+              text: criticalAcknowledgement,
+              senderType: 'bot',
+              aiGenerated: true,
+            });
+          } else {
+            await engineSendText({
+              accountId,
+              userId: configOwnerUserId,
+              conversationId,
+              contactId,
+              text: criticalAcknowledgement,
+              aiGenerated: true,
+            });
+          }
         }
       }
       return false;

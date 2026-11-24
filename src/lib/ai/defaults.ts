@@ -70,8 +70,9 @@ export function buildSystemPrompt(args: {
   }
   /** Queues the model may route the handoff to (auto-reply mode). */
   handoffQueues?: string[]
+  criticalCaseLevel?: 'n2' | 'n3' | null
 }): string {
-  const { userPrompt, mode, knowledge, copilotContext, handoffQueues } = args
+  const { userPrompt, mode, knowledge, copilotContext, handoffQueues, criticalCaseLevel } = args
   const parts: string[] = [
     'You are a customer-messaging assistant for a business that uses a WhatsApp CRM. ' +
       'You are shown the recent WhatsApp conversation between the business (assistant) and a customer (user). ' +
@@ -84,8 +85,16 @@ export function buildSystemPrompt(args: {
 
   if (mode === 'auto_reply') {
     parts.push(
-      `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — reply with exactly ${HANDOFF_SENTINEL} and nothing else. A human agent will then take over. Prefer handing off over guessing.`,
+      `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — hand off with ${HANDOFF_SENTINEL}. Prefer handing off over guessing.`,
     )
+    if (criticalCaseLevel) {
+      parts.push(
+        `This conversation is classified as ${criticalCaseLevel.toUpperCase()} and requires immediate human attention. ` +
+          'Send one brief, empathetic acknowledgement in the customer language, take the report seriously, ' +
+          'say the team will review it immediately, do not give medical advice, admit liability, diagnose, promise compensation, ' +
+          `or mention internal classification. Then include exactly ${HANDOFF_SENTINEL} after the acknowledgement so the team can take over.`,
+      )
+    }
     if (handoffQueues && handoffQueues.length > 0) {
       parts.push(
         'When you hand off, route the conversation to the department that fits what the customer needs, using exactly this marker instead: ' +
