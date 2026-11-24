@@ -22,6 +22,19 @@ export async function findOrCreateZernioConversation(
   const existing = await find()
   if (existing) return { row: existing, created: false }
 
+  if (connector.provider !== 'zernio_whatsapp') {
+    const { data: byContact, error: byContactError } = await db
+      .from('conversations')
+      .select('id, unread_count, status')
+      .eq('account_id', connector.account_id)
+      .eq('contact_id', contactId)
+      .eq('channel_type', connector.provider)
+      .limit(1)
+      .maybeSingle()
+    if (byContactError) throw byContactError
+    if (byContact) return { row: byContact as ConversationRow, created: false }
+  }
+
   if (connector.provider === 'zernio_whatsapp') {
     const { data: attached, error: attachError } = await db.from('conversations')
       .update({ external_session_id: externalConversationId })

@@ -78,4 +78,20 @@ describe('Zernio webhook conversation reconciliation', () => {
       .toMatchObject({ created: false })
     expect(methods).toEqual(['GET'])
   })
+
+  it('reuses the existing contact conversation on channels with one thread per contact', async () => {
+    const facebookRow = {
+      ...row('recipient', 'older-thread'),
+      channel_type: 'zernio_facebook',
+    }
+    const { db, methods } = database([facebookRow])
+    expect(await findOrCreateZernioConversation(
+      db,
+      { ...connector, provider: 'zernio_facebook' },
+      'recipient',
+      'owner',
+      'new-thread',
+    )).toMatchObject({ row: { id: 'conversation' }, created: false })
+    expect(methods).toEqual(['GET', 'GET'])
+  })
 })

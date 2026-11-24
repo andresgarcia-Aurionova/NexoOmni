@@ -308,7 +308,7 @@ export async function listZernioCalendarEvents(
     from,
     to,
     showCancelled: 'true',
-    limit: '250',
+    limit: '200',
   })
   if (cursor) query.set('cursor', cursor)
   const payload = await zernioFetch(`/calendar/events?${query.toString()}`)
