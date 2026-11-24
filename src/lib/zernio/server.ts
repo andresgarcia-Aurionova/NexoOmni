@@ -348,7 +348,7 @@ export async function listZernioEmailThreads(
     accountId,
     folder: 'inbox',
     after,
-    limit: '100',
+    limit: '50',
     sortOrder: 'desc',
   })
   if (cursor) query.set('cursor', cursor)

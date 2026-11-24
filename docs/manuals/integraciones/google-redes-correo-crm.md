@@ -45,8 +45,8 @@ TikTok no permite abrir una conversación nueva.
 5. Al volver, comprueba que el estado aparece como **Conectado**. Puedes
    pausar, reactivar o eliminar la conexión en cualquier momento.
 
-Al conectar una cuenta Google, NexoOmni realiza una carga inicial de los
-últimos 90 días de hilos del buzón de entrada, importa los contactos que ya
+Al conectar una cuenta Google, NexoOmni realiza una carga inicial de hasta
+100 hilos recientes del buzón de entrada (dentro de los últimos 90 días), importa los contactos que ya
 sincroniza Zernio y carga los eventos de Calendar desde 30 días antes hasta
 90 días adelante. Después, Gmail y los cambios de Calendar siguen entrando
 por webhook. Los eventos de Google se muestran en **Agenda** como lectura

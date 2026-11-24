@@ -340,7 +340,7 @@ export async function syncZernioGoogleConnector(
         }
         cursor = page.nextCursor
         pages += 1
-        if (!cursor || pages >= 5) break
+        if (!cursor || pages >= 2) break
       } while (true)
       emailSucceeded = true
     } catch (error) {
