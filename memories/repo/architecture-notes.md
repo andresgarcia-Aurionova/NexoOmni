@@ -33,5 +33,6 @@ Client UI keeps the whole catalog visible, while connection, send, inbound
 webhook and background-send paths must all enforce the matching entitlement.
 
 Business hours block new flows and deterministic automations, but an enabled
-AI auto-reply may still answer outside hours. The closure notice is sent only
-when neither an active flow nor the AI handled the inbound message.
+AI auto-reply may still answer outside hours, including after image/PDF
+analysis completes in the background. The closure notice is sent only when
+neither an active flow nor the AI handled the inbound message.

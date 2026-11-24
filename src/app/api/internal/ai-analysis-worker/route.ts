@@ -13,7 +13,6 @@ import { analyzeInvoiceImageWithOpenAi, analyzeInvoicePdfWithOpenAi, downloadPub
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import type { ChannelType } from '@/types'
-import { getClosure } from '@/lib/business-hours/inbound'
 import { MIN_DAILY_ANALYSES_PER_CONVERSATION, ANALYSIS_MAX_OUTPUT_TOKENS, aiRequestTimeoutMs } from '@/lib/ai/defaults'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { syncGoogleCalendarChanges } from '@/lib/appointments/google-calendar'
@@ -725,10 +724,6 @@ async function dispatchDocumentAutoReply(
     .limit(1)
     .maybeSingle()
   if (activeRun) return
-  if (conversation.connector_id) {
-    const closure = await getClosure(db, job.account_id, conversation.connector_id, new Date())
-    if (closure) return
-  }
   const configOwnerUserId = await resolveAuditUserId(db, job.account_id)
   await dispatchInboundToAiReply({
     accountId: job.account_id,
