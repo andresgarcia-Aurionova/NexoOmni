@@ -75,9 +75,10 @@ async function upsertLocalContact(
       .select('id')
       .eq('account_id', connector.account_id)
       .eq('email_normalized', email)
-      .limit(2)
+      .order('updated_at', { ascending: false })
+      .limit(1)
     if (error) throw error
-    if (existing?.length === 1) contactId = existing[0].id as string
+    if (existing?.[0]?.id) contactId = existing[0].id as string
   }
 
   const displayName = remote.name.trim() || (email ? email.split('@')[0] : 'Contacto de Gmail')
