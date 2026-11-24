@@ -10,11 +10,12 @@ import { dispatchWithBusinessHours } from '@/lib/business-hours/dispatch'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { extractZernioMedia, extractZernioReaction, firstZernioContactName, isZernioPlaceholderName, normalizeMetaText, safeZernioContactName } from '@/lib/omnichannel/webhook-normalizer'
-import { getZernioParticipantProfile, verifyZernioSignature, type ZernioChannel } from '@/lib/zernio/server'
+import { getZernioContact, getZernioParticipantProfile, verifyZernioSignature, type ZernioChannel } from '@/lib/zernio/server'
 import { persistZernioOutbound, zernioOutboundIsHuman } from '@/lib/zernio/outbound-message'
 import { recordCallEnded } from '@/lib/zernio/call-events'
 import { extractZernioPostContext } from '@/lib/zernio/post-context'
 import { parseZernioPublicComment } from '@/lib/zernio/comment-context'
+import { parseZernioBusinessReview } from '@/lib/zernio/review-context'
 import { processWebPushOutbox } from '@/lib/notifications/web-push'
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny } from '@/lib/whatsapp/broadcast-reply-flag'
@@ -23,6 +24,7 @@ import { reservationReplySenderPhone } from '@/lib/telephony/reservation-reply-s
 import { findExactZernioWhatsAppContact } from '@/lib/zernio/whatsapp-contact'
 import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversation'
 import type { ChannelType } from '@/types'
+import { isZernioConversationPlatform, type ZernioConversationPlatform } from '@/lib/zernio/channels'
 
 export const dynamic = 'force-dynamic'
 // Zernio requires a prompt HTTP acknowledgement. The actual handling (which
@@ -91,12 +93,26 @@ function extractZernioAdReferral(metadata: Json) {
   }
 }
 
-function channelFrom(value: unknown): ZernioChannel | null {
+function platformFrom(value: unknown): ZernioChannel | null {
   const normalized = text(value).toLowerCase()
+  if (normalized.includes('googlebusiness') || normalized.includes('google_business') || normalized.includes('google business')) return 'googlebusiness'
   if (normalized.includes('instagram')) return 'instagram'
   if (normalized.includes('facebook') || normalized.includes('messenger')) return 'facebook'
   if (normalized.includes('whatsapp')) return 'whatsapp'
+  if (normalized === 'google' || normalized.includes('gmail')) return 'google'
+  if (normalized === 'imap' || normalized.includes('smtp')) return 'imap'
+  if (normalized.includes('tiktok')) return 'tiktok'
+  if (normalized === 'x' || normalized.includes('twitter')) return 'twitter'
+  if (normalized.includes('threads')) return 'threads'
+  if (normalized.includes('telegram')) return 'telegram'
+  if (normalized.includes('hubspot')) return 'hubspot'
+  if (normalized.includes('salesforce')) return 'salesforce'
   return null
+}
+
+function channelFrom(value: unknown): ZernioConversationPlatform | null {
+  const platform = platformFrom(value)
+  return platform && isZernioConversationPlatform(platform) ? platform : null
 }
 
 function entries(payload: Json) {
@@ -273,6 +289,65 @@ async function registerReceipt(
   throw error
 }
 
+async function syncZernioContactEvent(db: ReturnType<typeof admin>, event: Json, eventId: string) {
+  const account = record(event.account)
+  const contactRef = record(event.contact)
+  const zernioAccountId = text(account.accountId, account.id, account._id)
+  const contactId = text(contactRef.id, contactRef.contactId)
+  const changeType = text(contactRef.changeType)
+  if (!zernioAccountId || !contactId || platformFrom(account.platform) !== 'google' || changeType === 'deleted') return
+
+  const { data: connector, error: connectorError } = await db.from('omnichannel_connectors')
+    .select('id, account_id, provider, display_name, zernio_account_id, queue_id')
+    .eq('provider', 'zernio_google')
+    .eq('zernio_account_id', zernioAccountId)
+    .neq('status', 'paused')
+    .maybeSingle()
+  if (connectorError) throw connectorError
+  if (!connector) return
+  const typed = connector as Connector
+  if (!(await registerReceipt(db, typed, eventId, 'contact.updated', event))) return
+  const contact = await getZernioContact(contactId)
+  if (!contact) return
+  const auditUserId = await resolveAuditUserId(db, typed.account_id)
+  await resolveContact(
+    db,
+    typed,
+    contact.id,
+    auditUserId,
+    contact.name || safeZernioContactName('google', contact.id),
+    contact.email ?? undefined,
+    contact.phone ?? undefined,
+    contact.avatarUrl ?? undefined,
+  )
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+  if (contact.company) updates.company = contact.company
+  if (contact.name) updates.name = contact.name
+  if (contact.email) updates.email = contact.email
+  if (Object.keys(updates).length > 1) {
+    const { data: identity, error: identityError } = await db.from('omnichannel_contact_identities')
+      .select('contact_id')
+      .eq('connector_id', typed.id)
+      .eq('external_user_id', contact.id)
+      .maybeSingle()
+    if (identityError) throw identityError
+    if (identity?.contact_id) {
+      const { error: updateError } = await db.from('contacts')
+        .update(updates)
+        .eq('id', identity.contact_id)
+        .eq('account_id', typed.account_id)
+      if (updateError && !isUniqueViolation(updateError)) throw updateError
+    }
+  }
+  await db.from('zernio_webhook_receipts').update({
+    outcome: 'processed',
+    detail: 'Contacto de Google sincronizado.',
+    processed_at: new Date().toISOString(),
+  }).eq('connector_id', typed.id).eq('external_message_id', eventId)
+}
+
 /**
  * Keeps our connector row in sync when Zernio reports a connect/disconnect
  * that didn't originate from our own Settings UI — e.g. a phone-side
@@ -287,7 +362,7 @@ async function handleAccountLifecycleEvent(
   account: Json,
 ) {
   const zernioAccountId = text(account.accountId, account.id, account._id)
-  const channel = channelFrom(account.platform ?? account.channel ?? account.type)
+  const channel = platformFrom(account.platform ?? account.channel ?? account.type)
   if (!zernioAccountId || !channel) return
   const now = new Date().toISOString()
   try {
@@ -566,6 +641,11 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         await handleAccountLifecycleEvent(db, eventType, record(event.account))
         continue
       }
+      if (eventType === 'contact.updated') {
+        const eventId = text(event.id, eventIdHeader)
+        if (eventId) await syncZernioContactEvent(db, event, eventId)
+        continue
+      }
       if (eventType === 'message.delivered' || eventType === 'message.read' || eventType === 'message.failed') {
         await handleOutboundStatusEvent(db, eventType, record(event.message), record(event.error), {
           conversation: record(event.conversation),
@@ -579,14 +659,20 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         continue
       }
       if (eventType === 'call.ended') throw new Error('call.ended must be billed synchronously')
-      if (eventType !== 'message.received' && eventType !== 'comment.received' && eventType !== 'reaction.received' && eventType !== 'message.sent') continue
+      if (eventType !== 'message.received' && eventType !== 'comment.received' && eventType !== 'reaction.received' && eventType !== 'message.sent' && eventType !== 'review.new') continue
 
       const message = record(event.message)
       const comment = record(event.comment)
       const publicComment = eventType === 'comment.received' ? parseZernioPublicComment(event) : null
       if (eventType === 'comment.received' && !publicComment) continue
+      const businessReview = eventType === 'review.new' ? parseZernioBusinessReview(event) : null
+      if (eventType === 'review.new' && !businessReview) continue
       const reactionEvent = record(event.reaction)
-      const incoming = eventType === 'comment.received' ? comment : message
+      const incoming = eventType === 'comment.received'
+        ? comment
+        : businessReview
+          ? record(event.review)
+          : message
       const conversation = record(event.conversation ?? incoming.conversation)
       const account = record(event.account ?? incoming.account)
       // `conversation.participantId`/`participantName` (documented shape:
@@ -596,8 +682,8 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       // fallback below in case an older/nested shape is ever delivered.
       const participantSource = conversation.contact ?? conversation.customer ?? conversation.participant
       const participant = record(participantSource)
-      const sender = record(incoming.sender ?? event.sender ?? participantSource ?? comment.author)
-      const externalUserId = text(conversation.participantId, incoming.senderId, sender.id, sender._id, sender.userId, participant.id, participant._id, comment.author_id, comment.authorId, conversation.customerId, conversation.contactId, event.senderId)
+      const sender = record(incoming.sender ?? event.sender ?? participantSource ?? comment.author ?? incoming.reviewer)
+      const externalUserId = text(businessReview?.reviewerId, conversation.participantId, incoming.senderId, sender.id, sender._id, sender.userId, participant.id, participant._id, comment.author_id, comment.authorId, conversation.customerId, conversation.contactId, event.senderId)
       const externalMessageId = text(incoming.platformMessageId, incoming.id, incoming._id, event.messageId, event.id)
       const externalEventId = text(event.id, eventIdHeader, externalMessageId)
       const externalConversationId = text(
@@ -606,6 +692,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         incoming.conversationId,
         event.conversationId,
         publicComment ? `comment:${publicComment.rootCommentId}` : '',
+        businessReview ? `review:${businessReview.id}` : '',
       )
       const channel = channelFrom(account.platform ?? account.channel ?? account.type ?? conversation.platform ?? event.channel ?? event.platform ?? incoming.platform ?? incoming.channel ?? conversation.channel ?? payload.channel)
       // Zernio's webhook docs name this field `account.accountId` explicitly
@@ -785,7 +872,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       // One lookup covers both gaps: a missing avatar (pre-existing
       // behavior) and a missing name, which Zernio frequently fills in on
       // its side a moment after the webhook was built.
-      const profile = !publicComment && (!webhookAvatarUrl || isZernioPlaceholderName(contactName))
+      const profile = !publicComment && !businessReview && (!webhookAvatarUrl || isZernioPlaceholderName(contactName))
         ? await getZernioParticipantProfile(externalConversationId, zernioAccountId).catch((error) => {
           console.error('[zernio] participant profile lookup failed:', error)
           return null
@@ -815,6 +902,15 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
           social_post_preview_url: publicComment.post.imageUrl,
           social_ad_id: publicComment.ad?.id ?? null,
           social_ad_title: publicComment.ad?.title ?? null,
+        }).eq('id', conversationRow.id).eq('account_id', typed.account_id)
+        if (contextError) throw contextError
+      } else if (businessReview) {
+        const { error: contextError } = await db.from('conversations').update({
+          channel_source_label: `${typed.display_name} · Reseña de Google`,
+          social_comment_id: businessReview.id,
+          social_post_id: businessReview.locationId || businessReview.id,
+          social_post_title: businessReview.locationName || 'Google Business',
+          social_post_url: businessReview.reviewUrl,
         }).eq('id', conversationRow.id).eq('account_id', typed.account_id)
         if (contextError) throw contextError
       }
@@ -879,14 +975,14 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         platform_message_id: platformMessageId,
         reply_to_message_id: replyToInternalId,
         status: 'delivered',
-        created_at: publicComment?.createdAt ?? now,
+        created_at: publicComment?.createdAt ?? businessReview?.createdAt ?? now,
         // Which of the contact's numbers actually sent this — only
         // meaningful on WhatsApp, where the participant id IS the phone
         // (see contactPhone above). Migration 131.
         sender_phone: channel === 'whatsapp' ? (contactPhone || null) : null,
         ad_referral: extractZernioAdReferral(replyMetadata),
       }
-      const postContext = channel === 'whatsapp' ? null : extractZernioPostContext(record(incoming), replyMetadata)
+      const postContext = channel === 'whatsapp' || businessReview ? null : extractZernioPostContext(record(incoming), replyMetadata)
       let { error: messageError } = await db.from('messages').insert(postContext ? { ...inboundRow, post_context: postContext } : inboundRow)
       // Never lose an inbound message because migration 145 hasn't been
       // applied yet — retry without the optional context column.

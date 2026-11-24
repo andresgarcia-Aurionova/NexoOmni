@@ -116,6 +116,7 @@ al día.
 | Servidor MCP (conectar un asistente de IA externo) | [integraciones/servidor-mcp.md](./integraciones/servidor-mcp.md) | ✅ |
 | API pública v1 | [integraciones/api-publica.md](./integraciones/api-publica.md) | ✅ (enlaza a [../public-api.md](../public-api.md) para la referencia técnica completa) |
 | AgendaPro (reservas + confirmación automática por WhatsApp) | [integraciones/agendapro.md](./integraciones/agendapro.md) | ✅ |
+| Google, correo, redes sociales y CRM | [integraciones/google-redes-correo-crm.md](./integraciones/google-redes-correo-crm.md) | ✅ |
 | Notificaciones | [notificaciones/notificaciones.md](./notificaciones/notificaciones.md) | ✅ |
 | Aplicación instalable, modo sin conexión y notificaciones web push | [primeros-pasos/instalar-nexoomni.md](./primeros-pasos/instalar-nexoomni.md) | ✅ |
 | Panel de plataforma (solo operador NexoOmni, no clientes) | — | Fuera de alcance de este catálogo — es interno, no se documenta como manual de cliente |

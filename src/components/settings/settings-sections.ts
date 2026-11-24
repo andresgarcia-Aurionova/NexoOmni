@@ -64,7 +64,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
   'operating-mode': { id: 'operating-mode', label: 'Operating objective', icon: LayoutGrid, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  'social-messaging': { id: 'social-messaging', label: 'Facebook & Instagram', icon: Share2, group: 'workspace' },
+  'social-messaging': { id: 'social-messaging', label: 'Canales e integraciones', icon: Share2, group: 'workspace' },
   'live-chat': { id: 'live-chat', label: 'Live chat', icon: MessageCircle, group: 'workspace' },
   assignment: { id: 'assignment', label: 'Conversation assignment', icon: UsersRound, group: 'workspace' },
   telephony: { id: 'telephony', label: 'Telephony', icon: Phone, group: 'workspace' },

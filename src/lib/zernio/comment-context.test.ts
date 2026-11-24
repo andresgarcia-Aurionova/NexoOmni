@@ -43,4 +43,26 @@ describe('Zernio public comment context', () => {
       comment: { id: '1', platformPostId: '2', author: { id: '3' } },
     })).toBeNull()
   })
+
+  it.each(['tiktok', 'twitter', 'threads'] as const)(
+    'normalizes public replies from %s',
+    (platform) => {
+      expect(parseZernioPublicComment({
+        event: 'comment.received',
+        account: { platform },
+        comment: {
+          id: `${platform}-reply`,
+          platformPostId: 'post-1',
+          platform,
+          text: 'Quiero más información',
+          author: { id: 'person-1', name: 'Cliente' },
+        },
+      })).toMatchObject({
+        id: `${platform}-reply`,
+        platform,
+        text: 'Quiero más información',
+        author: { id: 'person-1', name: 'Cliente' },
+      })
+    },
+  )
 })

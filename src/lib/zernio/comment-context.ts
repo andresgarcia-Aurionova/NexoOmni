@@ -24,7 +24,7 @@ export type ZernioPublicComment = {
   rootCommentId: string
   parentCommentId: string | null
   platformPostId: string
-  platform: 'facebook' | 'instagram'
+  platform: 'facebook' | 'instagram' | 'tiktok' | 'twitter' | 'threads'
   text: string
   createdAt: string | null
   author: {
@@ -56,7 +56,7 @@ export function parseZernioPublicComment(event: Json): ZernioPublicComment | nul
   const author = record(comment.author)
   const ad = record(comment.ad)
   const platform = text(comment.platform, record(event.account).platform)
-  if (platform !== 'facebook' && platform !== 'instagram') return null
+  if (platform !== 'facebook' && platform !== 'instagram' && platform !== 'tiktok' && platform !== 'twitter' && platform !== 'threads') return null
   const id = text(comment.id)
   const authorId = text(author.id)
   const platformPostId = text(comment.platformPostId, post.platformPostId)

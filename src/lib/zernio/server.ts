@@ -1,8 +1,16 @@
 import crypto from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const ZERNIO_CHANNELS = ['whatsapp', 'facebook', 'instagram'] as const
-export type ZernioChannel = (typeof ZERNIO_CHANNELS)[number]
+import {
+  isZernioConnectChannel,
+  isZernioPlatform,
+  ZERNIO_PLATFORMS,
+  type ZernioConnectChannel,
+  type ZernioPlatform,
+} from '@/lib/zernio/channels'
+
+export const ZERNIO_CHANNELS = ZERNIO_PLATFORMS
+export type ZernioChannel = ZernioPlatform
 
 const DEFAULT_API_URL = 'https://zernio.com/api/v1'
 
@@ -139,8 +147,9 @@ export async function ensureZernioProfile(
   }
 }
 
-export async function getZernioConnectUrl(channel: ZernioChannel, profileId: string, redirectUrl: string) {
+export async function getZernioConnectUrl(channel: ZernioConnectChannel, profileId: string, redirectUrl: string) {
   const query = new URLSearchParams({ profileId, redirect_url: redirectUrl })
+  if (channel === 'google') query.set('scopes', 'email,calendar,files,contacts')
   const response = await zernioFetch(`/connect/${channel}?${query.toString()}`)
   const data = response.data as Record<string, unknown> | undefined
   const authUrl = response.authUrl ?? response.url ?? data?.authUrl ?? data?.url
@@ -166,6 +175,36 @@ export type ZernioConnectedAccount = {
   username: string | null
   displayName: string | null
   profileUrl: string | null
+}
+
+export type ZernioContact = {
+  id: string
+  name: string
+  email: string | null
+  company: string | null
+  avatarUrl: string | null
+  phone: string | null
+}
+
+export async function getZernioContact(contactId: string): Promise<ZernioContact | null> {
+  const payload = await zernioFetch(`/contacts/${encodeURIComponent(contactId)}`)
+  const contact = record(payload.contact ?? payload.data)
+  const id = asText(contact.id) ?? contactId
+  const channels = Array.isArray(payload.channels) ? payload.channels : []
+  const phoneChannel = channels.map(record).find((channel) =>
+    ['whatsapp', 'sms', 'phone', 'rcs'].includes((asText(channel.platform) ?? '').toLowerCase()),
+  )
+  const phone = phoneChannel
+    ? asText(phoneChannel.platformIdentifier ?? phoneChannel.displayIdentifier)
+    : null
+  return {
+    id,
+    name: asText(contact.name) ?? '',
+    email: asText(contact.email),
+    company: asText(contact.company),
+    avatarUrl: asText(contact.avatarUrl ?? contact.avatar_url),
+    phone,
+  }
 }
 
 /**
@@ -204,7 +243,17 @@ export async function listZernioAccounts(profileId: string, channel: ZernioChann
 }
 
 export function isZernioChannel(value: string): value is ZernioChannel {
-  return (ZERNIO_CHANNELS as readonly string[]).includes(value)
+  return isZernioPlatform(value)
+}
+
+export function isZernioConnectRouteChannel(value: string): value is ZernioConnectChannel {
+  return isZernioConnectChannel(value)
+}
+
+export async function listZernioAccountsForConnect(profileId: string, channel: ZernioConnectChannel) {
+  const platforms: ZernioChannel[] = channel === 'email' ? ['google', 'imap'] : [channel]
+  const accounts = await Promise.all(platforms.map((platform) => listZernioAccounts(profileId, platform)))
+  return accounts.flat()
 }
 
 export function extractZernioPlatformMessageId(messageId: string | null | undefined) {
@@ -222,6 +271,29 @@ export function zernioAttachmentTypeFrom(kind: string | null | undefined) {
   if (normalized === 'video') return 'video'
   if (normalized === 'audio') return 'audio'
   return 'file'
+}
+
+export async function createZernioTelegramCode(profileId: string) {
+  const payload = await zernioFetch(`/connect/telegram?${new URLSearchParams({ profileId })}`)
+  const data = record(payload.data)
+  const code = asText(payload.code ?? data.code)
+  const botUsername = asText(payload.botUsername ?? data.botUsername)
+  const expiresAt = asText(payload.expiresAt ?? data.expiresAt)
+  const instructions = Array.isArray(payload.instructions)
+    ? payload.instructions.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : Array.isArray(data.instructions)
+      ? data.instructions.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : []
+  if (!code || !botUsername) throw new Error('No se recibió un código válido para conectar Telegram.')
+  return { code, botUsername, expiresAt, instructions }
+}
+
+export async function completeZernioTelegramConnect(code: string) {
+  const payload = await zernioFetch(`/connect/telegram?${new URLSearchParams({ code })}`, { method: 'PATCH' })
+  const data = record(payload.data)
+  const id = asText(data.accountId ?? data.id ?? payload.accountId ?? payload.id)
+  const connected = payload.connected === true || data.connected === true || Boolean(id)
+  return { connected, accountId: id }
 }
 
 export async function resolveZernioPlatformMessageId(
@@ -464,6 +536,36 @@ export async function replyToZernioComment(
   })
   const data = record(payload.data)
   return asText(data.commentId ?? payload.commentId)
+}
+
+export async function replyToZernioReview(
+  reviewId: string,
+  zernioAccountId: string,
+  message: string,
+) {
+  let resolvedReviewId = reviewId
+  if (!reviewId.includes('/')) {
+    const reviewsQuery = new URLSearchParams({
+      platform: 'googlebusiness',
+      accountId: zernioAccountId,
+    })
+    const reviews = await zernioFetch(`/inbox/reviews?${reviewsQuery.toString()}`)
+    const source = Array.isArray(reviews.data) ? reviews.data : []
+    const match = source.find((value) => {
+      const item = record(value)
+      const id = asText(item.id ?? item.name)
+      return id === reviewId || (id?.endsWith(`/reviews/${reviewId}`) ?? false)
+    })
+    const fullId = match && asText(record(match).id ?? record(match).name)
+    if (fullId) resolvedReviewId = fullId
+  }
+  const payload = await zernioFetch(`/inbox/reviews/${encodeURIComponent(resolvedReviewId)}/reply`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    body: JSON.stringify({ accountId: zernioAccountId, message }),
+  })
+  const reply = record(payload.reply)
+  return asText(reply.id ?? payload.replyId ?? payload.id)
 }
 
 /**

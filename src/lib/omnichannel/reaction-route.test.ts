@@ -8,6 +8,8 @@ describe('getReactionEndpoint', () => {
     expect(getReactionEndpoint('zernio_whatsapp')).toBe('/api/omnichannel/react')
     expect(getReactionEndpoint('zernio_facebook')).toBe('/api/omnichannel/react')
     expect(getReactionEndpoint('zernio_instagram')).toBe('/api/omnichannel/react')
+    expect(getReactionEndpoint('zernio_tiktok')).toBe('/api/omnichannel/react')
+    expect(getReactionEndpoint('zernio_telegram')).toBe('/api/omnichannel/react')
   })
 
   it('keeps WhatsApp on the native Meta reaction route', () => {

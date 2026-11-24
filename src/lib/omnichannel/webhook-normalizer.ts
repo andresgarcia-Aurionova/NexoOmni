@@ -87,8 +87,25 @@ export function extractMetaReaction(value: Record<string, unknown>): MetaReactio
   }
 }
 
-export function safeZernioContactName(provider: 'whatsapp' | 'facebook' | 'instagram', externalUserId: string): string {
-  const label = provider === 'whatsapp' ? 'Cliente WhatsApp' : provider === 'facebook' ? 'Cliente Facebook' : 'Cliente Instagram'
+export function safeZernioContactName(
+  provider: 'whatsapp' | 'facebook' | 'instagram' | 'googlebusiness' | 'google' | 'imap' | 'tiktok' | 'twitter' | 'threads' | 'telegram' | 'hubspot' | 'salesforce',
+  externalUserId: string,
+): string {
+  const labels = {
+    whatsapp: 'Cliente WhatsApp',
+    facebook: 'Cliente Facebook',
+    instagram: 'Cliente Instagram',
+    googlebusiness: 'Cliente de Google Business',
+    google: 'Contacto de Gmail',
+    imap: 'Contacto de correo',
+    tiktok: 'Cliente TikTok',
+    twitter: 'Cliente X',
+    threads: 'Cliente Threads',
+    telegram: 'Contacto de Telegram',
+    hubspot: 'Contacto de HubSpot',
+    salesforce: 'Contacto de Salesforce',
+  } as const
+  const label = labels[provider]
   const suffix = externalUserId.trim() ? externalUserId.slice(-6) : 'anon'
   return `${label} ${suffix}`
 }
@@ -97,7 +114,8 @@ export function safeZernioContactName(provider: 'whatsapp' | 'facebook' | 'insta
  *  i.e. a name that may be replaced as soon as the real one is known. */
 export function isZernioPlaceholderName(name: string | null | undefined): boolean {
   const trimmed = (name ?? '').trim()
-  return !trimmed || /^Cliente (WhatsApp|Facebook|Instagram) \S+$/.test(trimmed)
+  return !trimmed || /^Cliente (WhatsApp|Facebook|Instagram|TikTok|X|Threads|de Google Business) \S+$/.test(trimmed)
+    || /^Contacto de (Gmail|correo|Telegram) \S+$/.test(trimmed)
     || /^\+?[\d\s().-]{7,}$/.test(trimmed)
 }
 

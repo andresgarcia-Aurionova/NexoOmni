@@ -468,7 +468,19 @@ export interface PipelineStage {
 }
 
 export type DealStatus = 'open' | 'won' | 'lost';
-export type DealSourceChannel = 'whatsapp' | 'yeastar_live_chat' | 'yeastar_voice' | 'facebook' | 'instagram' | 'tiktok' | 'other';
+export type DealSourceChannel =
+  | 'whatsapp'
+  | 'yeastar_live_chat'
+  | 'yeastar_voice'
+  | 'facebook'
+  | 'instagram'
+  | 'tiktok'
+  | 'googlebusiness'
+  | 'email'
+  | 'twitter'
+  | 'threads'
+  | 'telegram'
+  | 'other';
 
 export interface Deal {
   id: string;
@@ -566,6 +578,13 @@ export type ChannelType =
   | 'zernio_whatsapp'
   | 'zernio_facebook'
   | 'zernio_instagram'
+  | 'zernio_googlebusiness'
+  | 'zernio_google'
+  | 'zernio_imap'
+  | 'zernio_tiktok'
+  | 'zernio_twitter'
+  | 'zernio_threads'
+  | 'zernio_telegram'
   | 'facebook'
   | 'instagram'
   | 'tiktok'

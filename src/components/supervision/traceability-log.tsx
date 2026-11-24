@@ -29,6 +29,13 @@ const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   yeastar_live_chat: 'Chat web',
   tiktok: 'TikTok',
+  zernio_googlebusiness: 'Google Business',
+  zernio_google: 'Gmail',
+  zernio_imap: 'Correo electrónico',
+  zernio_tiktok: 'TikTok',
+  zernio_twitter: 'X',
+  zernio_threads: 'Threads',
+  zernio_telegram: 'Telegram',
   'telefonía': 'Telefonía',
 }
 

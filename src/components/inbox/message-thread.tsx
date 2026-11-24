@@ -1326,7 +1326,17 @@ export function MessageThread({
         onOpenTemplates={handleOpenTemplates}
         templatesAvailable={canUseWhatsAppTemplates}
         sessionExpiredHint={canUseWhatsAppTemplates ? undefined : META_MESSAGING_WINDOW_CLOSED_MESSAGE}
-        supportedMediaKinds={conversation.channel_type === "yeastar_live_chat" ? ["image"] : conversation.channel_type === "facebook" || conversation.channel_type === "instagram" ? [] : undefined}
+        supportedMediaKinds={
+          conversation.social_comment_id || conversation.channel_type === "zernio_googlebusiness" || conversation.channel_type === "zernio_threads"
+            ? []
+            : conversation.channel_type === "yeastar_live_chat" || conversation.channel_type === "zernio_tiktok"
+              ? ["image"]
+              : conversation.channel_type === "zernio_twitter"
+                ? ["image", "video"]
+                : conversation.channel_type === "facebook" || conversation.channel_type === "instagram"
+                  ? []
+                  : undefined
+        }
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
       />

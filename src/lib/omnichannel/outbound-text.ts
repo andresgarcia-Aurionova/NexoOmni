@@ -8,7 +8,7 @@ import {
   META_MESSAGING_WINDOW_CLOSED_MESSAGE,
 } from '@/lib/omnichannel/messaging-window'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { sendZernioText } from '@/lib/zernio/server'
+import { replyToZernioComment, replyToZernioReview, sendZernioText } from '@/lib/zernio/server'
 import { persistZernioOutbound } from '@/lib/zernio/outbound-message'
 
 // ------------------------------------------------------------
@@ -27,6 +27,7 @@ export interface OmnichannelConversationRow {
   connector_id: string | null
   external_session_id: string | null
   social_comment_id: string | null
+  social_post_id: string | null
 }
 
 export interface SendOmnichannelTextArgs {
@@ -99,6 +100,20 @@ async function sendViaZernio(
     throw new OmnichannelSendError('El canal conectado está pausado o requiere reconexión.')
   }
   await assertMessagingWindow(db, conversation)
+  if (conversation.social_comment_id) {
+    if (conversation.channel_type === 'zernio_googlebusiness') {
+      return replyToZernioReview(conversation.social_comment_id, connector.zernio_account_id as string, text)
+    }
+    if (!conversation.social_post_id) {
+      throw new OmnichannelSendError('El comentario público no tiene el identificador de publicación necesario.')
+    }
+    return replyToZernioComment(
+      conversation.social_post_id,
+      connector.zernio_account_id as string,
+      conversation.social_comment_id,
+      text,
+    )
+  }
   return sendZernioText(conversation.external_session_id, connector.zernio_account_id as string, text)
 }
 
@@ -266,7 +281,7 @@ export async function sendOmnichannelText(
 
   const { data: conversation, error } = await db
     .from('conversations')
-    .select('id, channel_type, connector_id, external_session_id, social_comment_id')
+    .select('id, channel_type, connector_id, external_session_id, social_comment_id, social_post_id')
     .eq('id', args.conversationId)
     .eq('account_id', args.accountId)
     .maybeSingle()

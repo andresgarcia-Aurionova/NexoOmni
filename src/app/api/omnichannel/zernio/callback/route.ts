@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-import { listZernioAccounts, type ZernioChannel } from '@/lib/zernio/server'
+import { isZernioConnectRouteChannel, listZernioAccountsForConnect } from '@/lib/zernio/server'
+import { zernioChannelLabel } from '@/lib/zernio/channels'
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -41,15 +42,18 @@ export async function GET(request: Request) {
       return settingsRedirect(request, 'social-messaging', 'error', 'El enlace de conexión venció. Inténtalo nuevamente.')
     }
     const tab = attempt.channel === 'whatsapp' ? 'whatsapp' : 'social-messaging'
-  if (connected === 'error') {
+    if (connected === 'error') {
       return settingsRedirect(request, tab, 'error', 'La cuenta no se terminó de seleccionar en el proveedor. Inténtalo nuevamente.')
     }
 
-    const channel = attempt.channel as ZernioChannel
-    if (connected && connected !== 'true' && connected !== channel) {
+    if (!isZernioConnectRouteChannel(attempt.channel)) {
+      return settingsRedirect(request, tab, 'error', 'La integración solicitada ya no es compatible.')
+    }
+    const channel = attempt.channel
+    if (connected && connected !== 'true' && connected !== channel && !(channel === 'email' && (connected === 'google' || connected === 'imap'))) {
       return settingsRedirect(request, tab, 'error', 'El proveedor devolvió un canal distinto al solicitado. Inténtalo nuevamente.')
     }
-    const accounts = await listZernioAccounts(attempt.zernio_profile_id, channel)
+    const accounts = await listZernioAccountsForConnect(attempt.zernio_profile_id, channel)
     const known = new Set(Array.isArray(attempt.known_account_ids) ? (attempt.known_account_ids as unknown[]).filter((id): id is string => typeof id === 'string') : [])
     const hint = username?.trim().toLowerCase()
     const selected =
@@ -63,8 +67,8 @@ export async function GET(request: Request) {
       return settingsRedirect(request, tab, 'error', 'No pudimos identificar de forma segura la cuenta conectada. Repite la conexión y selecciona una sola cuenta de este canal.')
     }
 
-    const provider = `zernio_${channel}`
-    const displayName = selected.displayName || selected.username || ({ whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram' } as const)[channel]
+    const provider = `zernio_${selected.platform}`
+    const displayName = selected.displayName || selected.username || zernioChannelLabel(selected.platform)
     const now = new Date().toISOString()
     const { error: connectorError } = await db.from('omnichannel_connectors').upsert({
       account_id: attempt.account_id,

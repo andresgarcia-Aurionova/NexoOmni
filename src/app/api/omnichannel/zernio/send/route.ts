@@ -10,7 +10,7 @@ import {
   META_MESSAGING_WINDOW_CLOSED_MESSAGE,
 } from '@/lib/omnichannel/messaging-window'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
-import { replyToZernioComment, sendZernioMedia, sendZernioTemplateMessage, sendZernioTemplateToConversation, sendZernioText, zernioAttachmentTypeFrom, ZernioApiError } from '@/lib/zernio/server'
+import { replyToZernioComment, replyToZernioReview, sendZernioMedia, sendZernioTemplateMessage, sendZernioTemplateToConversation, sendZernioText, zernioAttachmentTypeFrom, ZernioApiError } from '@/lib/zernio/server'
 import { persistZernioOutbound } from '@/lib/zernio/outbound-message'
 import { attachZernioConversation } from '@/lib/zernio/send-template-to-contact'
 import { renderTemplateBody } from '@/lib/whatsapp/broadcast-message-log'
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
     const { data: conversation, error: conversationError } = await db.from('conversations')
       .select('id, connector_id, external_session_id, channel_type, social_comment_id, social_post_id')
       .eq('id', conversationId).eq('account_id', accountId)
-      .in('channel_type', ['zernio_whatsapp', 'zernio_facebook', 'zernio_instagram']).maybeSingle()
+      .like('channel_type', 'zernio_%').maybeSingle()
     if (conversationError) throw conversationError
     if (!conversation?.connector_id || !conversation.external_session_id) {
       return NextResponse.json({ error: 'Esta conversación no tiene un destinatario conectado disponible.' }, { status: 409 })
@@ -241,12 +241,18 @@ export async function POST(request: Request) {
     let externalId: string | null
     try {
       externalId = conversation.social_comment_id
-        ? await replyToZernioComment(
-            conversation.social_post_id!,
-            connector.zernio_account_id,
-            conversation.social_comment_id,
-            text,
-          )
+        ? conversation.channel_type === 'zernio_googlebusiness'
+          ? await replyToZernioReview(
+              conversation.social_comment_id,
+              connector.zernio_account_id,
+              text,
+            )
+          : await replyToZernioComment(
+              conversation.social_post_id!,
+              connector.zernio_account_id,
+              conversation.social_comment_id,
+              text,
+            )
         : isTemplateSend
         ? await sendZernioTemplateToConversation({
             conversationId: conversation.external_session_id,

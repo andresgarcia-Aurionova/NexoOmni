@@ -11,6 +11,13 @@ const CHANNELS = new Set<string>([
   'instagram',
   'tiktok',
   'yeastar_live_chat',
+  'zernio_googlebusiness',
+  'zernio_google',
+  'zernio_imap',
+  'zernio_tiktok',
+  'zernio_twitter',
+  'zernio_threads',
+  'zernio_telegram',
 ])
 
 export function isChannelType(value: unknown): value is ChannelType {

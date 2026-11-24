@@ -9,6 +9,17 @@ import type { Conversation } from "@/types";
 export function SocialPublicationBanner({ conversation }: { conversation: Conversation }) {
   const t = useTranslations("Inbox.socialPublication");
   if (!conversation.social_comment_id) return null;
+  const titleKey = conversation.channel_type === "zernio_instagram" || conversation.channel_type === "instagram"
+    ? "instagramComment"
+    : conversation.channel_type === "zernio_facebook" || conversation.channel_type === "facebook"
+      ? "facebookComment"
+      : conversation.channel_type === "zernio_googlebusiness"
+        ? "googleReview"
+        : conversation.channel_type === "zernio_tiktok"
+          ? "tiktokComment"
+          : conversation.channel_type === "zernio_twitter"
+            ? "xComment"
+            : "threadsReply";
 
   return (
     <div className="border-b border-border bg-primary/5 px-3 py-2 text-xs sm:px-4">
@@ -27,7 +38,7 @@ export function SocialPublicationBanner({ conversation }: { conversation: Conver
         )}
         <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">
-            {t(conversation.channel_type === "zernio_instagram" || conversation.channel_type === "instagram" ? "instagramComment" : "facebookComment")}
+            {t(titleKey)}
           </p>
           <p className="mt-0.5 line-clamp-2 text-muted-foreground">
             {conversation.social_post_title || t("unknownPost")}

@@ -59,6 +59,11 @@ const DEAL_CHANNEL_OPTIONS: Array<{ value: DealSourceChannel; label: string }> =
   { value: "facebook", label: "Facebook" },
   { value: "instagram", label: "Instagram" },
   { value: "tiktok", label: "TikTok" },
+  { value: "googlebusiness", label: "Google Business" },
+  { value: "email", label: "Correo electrónico" },
+  { value: "twitter", label: "X" },
+  { value: "threads", label: "Threads" },
+  { value: "telegram", label: "Telegram" },
   { value: "other", label: "Otro" },
 ];
 
@@ -74,6 +79,14 @@ function relatedConversationChannel(conversation: Conversation | null): DealSour
     case "instagram":
     case "tiktok":
       return channelType;
+    case "googlebusiness":
+    case "twitter":
+    case "threads":
+    case "telegram":
+      return channelType;
+    case "google":
+    case "imap":
+      return "email";
     default:
       return null;
   }

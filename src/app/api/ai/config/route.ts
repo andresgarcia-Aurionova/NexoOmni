@@ -218,6 +218,13 @@ export async function POST(request: Request) {
       'facebook',
       'instagram',
       'tiktok',
+      'zernio_googlebusiness',
+      'zernio_google',
+      'zernio_imap',
+      'zernio_tiktok',
+      'zernio_twitter',
+      'zernio_threads',
+      'zernio_telegram',
       'yeastar_live_chat',
     ]
     const requestedChannels = Array.isArray(body.channel_types)

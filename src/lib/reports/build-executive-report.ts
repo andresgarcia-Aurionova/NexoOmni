@@ -1,6 +1,7 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { isAgendaProCancelled } from '@/lib/agendapro/server'
 import { normalizeStatusKey } from '@/lib/agendapro/status-colors'
+import type { DealSourceChannel } from '@/types'
 
 export type OperatingMode = 'commercial' | 'support' | 'hybrid'
 type ConversationRow = {
@@ -18,7 +19,7 @@ type CallRow = {
   sentiment: string | null; sentiment_score: number | null
 }
 type AgendaProBookingRow = { status_id: number | null; status_name: string | null }
-type DealChannel = 'whatsapp' | 'yeastar_live_chat' | 'yeastar_voice' | 'facebook' | 'instagram' | 'tiktok' | 'other'
+type DealChannel = DealSourceChannel
 type DealStageRow = { name: string; position: number }
 type DealRow = { value: number | string | null; status: string; updated_at: string; source_broadcast_id: string | null; source_channel: DealChannel | null; stage: DealStageRow | DealStageRow[] | null }
 type BroadcastRow = {
@@ -87,8 +88,13 @@ function dealChannelLabel(channel: DealChannel | null) {
         : channel === 'facebook' ? 'Facebook'
           : channel === 'instagram' ? 'Instagram'
             : channel === 'tiktok' ? 'TikTok'
-              : channel === 'other' ? 'Otro'
-                : 'Sin canal confirmado'
+              : channel === 'googlebusiness' ? 'Google Business'
+                : channel === 'email' ? 'Correo electrónico'
+                  : channel === 'twitter' ? 'X'
+                    : channel === 'threads' ? 'Threads'
+                      : channel === 'telegram' ? 'Telegram'
+                        : channel === 'other' ? 'Otro'
+                          : 'Sin canal confirmado'
 }
 
 // Zernio-connected channels are stored as `zernio_whatsapp`/`zernio_facebook`/
@@ -101,8 +107,14 @@ function channelTypeLabel(channelType: string | null) {
       : normalized === 'facebook' ? 'Facebook'
         : normalized === 'instagram' ? 'Instagram'
           : normalized === 'tiktok' ? 'TikTok'
-            : normalized === 'whatsapp' || !normalized ? 'WhatsApp'
-              : normalized
+            : normalized === 'googlebusiness' ? 'Google Business'
+              : normalized === 'google' ? 'Gmail'
+                : normalized === 'imap' ? 'Correo electrónico'
+                  : normalized === 'twitter' ? 'X'
+                    : normalized === 'threads' ? 'Threads'
+                      : normalized === 'telegram' ? 'Telegram'
+                        : normalized === 'whatsapp' || !normalized ? 'WhatsApp'
+                          : normalized
 }
 
 /** Computes the report window (+previous-period comparison window) from two

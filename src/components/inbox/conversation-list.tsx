@@ -66,7 +66,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 type InboxFilter = ConversationStatus | "all" | "unread";
-export type InboxChannelFilter = "all" | "whatsapp" | "facebook" | "instagram" | "yeastar_live_chat";
+export type InboxChannelFilter = "all" | "whatsapp" | "facebook" | "instagram" | "yeastar_live_chat" | "googlebusiness" | "email" | "tiktok" | "twitter" | "threads" | "telegram";
 
 function normalizedChannel(channel: Conversation["channel_type"]): Exclude<InboxChannelFilter, "all"> | null {
   switch (channel) {
@@ -76,6 +76,14 @@ function normalizedChannel(channel: Conversation["channel_type"]): Exclude<Inbox
     case "zernio_facebook": return "facebook";
     case "instagram":
     case "zernio_instagram": return "instagram";
+    case "zernio_googlebusiness": return "googlebusiness";
+    case "zernio_google":
+    case "zernio_imap": return "email";
+    case "tiktok":
+    case "zernio_tiktok": return "tiktok";
+    case "zernio_twitter": return "twitter";
+    case "zernio_threads": return "threads";
+    case "zernio_telegram": return "telegram";
     case "yeastar_live_chat": return "yeastar_live_chat";
     default: return null;
   }
@@ -87,6 +95,12 @@ const CHANNEL_OPTIONS: { label: string; value: InboxChannelFilter }[] = [
   { label: "Facebook", value: "facebook" },
   { label: "Instagram", value: "instagram" },
   { label: "Chat web", value: "yeastar_live_chat" },
+  { label: "Google Business", value: "googlebusiness" },
+  { label: "Correo", value: "email" },
+  { label: "TikTok", value: "tiktok" },
+  { label: "X", value: "twitter" },
+  { label: "Threads", value: "threads" },
+  { label: "Telegram", value: "telegram" },
 ];
 
 export function ConversationList({
@@ -805,7 +819,13 @@ function ConversationItem({
 
 function channelOriginLabel(conversation: Conversation) {
   if (conversation.social_comment_id) {
-    return conversation.channel_type === "instagram" ? "Comentario público de Instagram" : "Comentario público de Facebook";
+    if (conversation.channel_type === "zernio_googlebusiness") return "Reseña de Google Business";
+    if (conversation.channel_type === "zernio_tiktok") return "Comentario de TikTok";
+    if (conversation.channel_type === "zernio_twitter") return "Respuesta de X";
+    if (conversation.channel_type === "zernio_threads") return "Respuesta de Threads";
+    return conversation.channel_type === "instagram" || conversation.channel_type === "zernio_instagram"
+      ? "Comentario público de Instagram"
+      : "Comentario público de Facebook";
   }
   switch (conversation.channel_type) {
     case "whatsapp": return "WhatsApp";
@@ -814,6 +834,13 @@ function channelOriginLabel(conversation: Conversation) {
     case "zernio_facebook": return "Facebook Messenger";
     case "instagram": return "Instagram";
     case "zernio_instagram": return "Instagram";
+    case "zernio_googlebusiness": return "Google Business";
+    case "zernio_google": return "Gmail";
+    case "zernio_imap": return "Correo";
+    case "zernio_tiktok": return "TikTok";
+    case "zernio_twitter": return "X";
+    case "zernio_threads": return "Threads";
+    case "zernio_telegram": return "Telegram";
     case "yeastar_live_chat": return "Chat web";
     default: return "Canal";
   }

@@ -46,6 +46,13 @@ const AI_CHANNELS: { id: string; label: string }[] = [
   { id: 'instagram', label: 'Instagram' },
   { id: 'yeastar_live_chat', label: 'Chat web de Yeastar' },
   { id: 'tiktok', label: 'TikTok' },
+  { id: 'zernio_googlebusiness', label: 'Google Business' },
+  { id: 'zernio_google', label: 'Gmail / Google' },
+  { id: 'zernio_imap', label: 'Correo IMAP' },
+  { id: 'zernio_tiktok', label: 'TikTok (conectado)' },
+  { id: 'zernio_twitter', label: 'X' },
+  { id: 'zernio_threads', label: 'Threads' },
+  { id: 'zernio_telegram', label: 'Telegram' },
 ];
 
 export function AiConfig() {

@@ -3,8 +3,9 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
+import { ZERNIO_PLATFORMS, zernioProvider } from '@/lib/zernio/channels'
 
-const PROVIDERS = ['zernio_whatsapp', 'zernio_facebook', 'zernio_instagram']
+const PROVIDERS = ZERNIO_PLATFORMS.map(zernioProvider)
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

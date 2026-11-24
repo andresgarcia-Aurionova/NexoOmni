@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { displayContactPhone } from "@/lib/contacts/contact-identity";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { ChannelType, Contact, Deal, ContactNote, Tag } from "@/types";
 import {
   Mail,
   Copy,
@@ -41,7 +41,7 @@ type ContactConversation = {
   status: "open" | "pending" | "closed";
   last_message_text: string | null;
   last_message_at: string | null;
-  channel_type: "whatsapp" | "yeastar_live_chat" | "facebook" | "instagram" | "tiktok" | "zernio_whatsapp" | "zernio_facebook" | "zernio_instagram" | null;
+  channel_type: ChannelType | null;
   channel_source_label: string | null;
 };
 
@@ -72,7 +72,14 @@ function channelLabel(conversation: ContactConversation) {
   if (conversation.channel_type === "instagram" || conversation.channel_type === "zernio_instagram") return "Instagram";
   if (conversation.channel_type === "zernio_whatsapp") return "WhatsApp";
   if (conversation.channel_type === "tiktok") return "TikTok";
-  return "WhatsApp";
+  if (conversation.channel_type?.replace(/^zernio_/, "") === "googlebusiness") return "Google Business";
+  if (conversation.channel_type === "zernio_google") return "Gmail";
+  if (conversation.channel_type === "zernio_imap") return "Correo electrónico";
+  if (conversation.channel_type?.replace(/^zernio_/, "") === "twitter") return "X";
+  if (conversation.channel_type?.replace(/^zernio_/, "") === "threads") return "Threads";
+  if (conversation.channel_type?.replace(/^zernio_/, "") === "telegram") return "Telegram";
+  if (conversation.channel_type?.replace(/^zernio_/, "") === "tiktok") return "TikTok";
+  return conversation.channel_type?.replace(/^zernio_/, "") || "WhatsApp";
 }
 
 /** Friendly due-date label for the sidebar's Tareas list — mirrors the

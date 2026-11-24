@@ -19,6 +19,13 @@ export const AUTOMATION_CHANNELS: ChannelType[] = [
   'instagram',
   'yeastar_live_chat',
   'tiktok',
+  'zernio_googlebusiness',
+  'zernio_google',
+  'zernio_imap',
+  'zernio_tiktok',
+  'zernio_twitter',
+  'zernio_threads',
+  'zernio_telegram',
 ]
 
 const CHANNEL_SET = new Set<string>(AUTOMATION_CHANNELS)
