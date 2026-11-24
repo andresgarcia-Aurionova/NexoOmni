@@ -41,3 +41,7 @@ Image/PDF validation uses OpenAI first for task pricing and reroutes provider
 failures to Anthropic's vision/document blocks when the account has both chat
 credentials. The retry preserves billable usage under the provider that
 actually completed the request.
+
+PostgreSQL checks for template names must separate `char_length(... ) <= 512`
+from the character-class regex. A bound like `{1,512}` in the regex raises
+`2201B invalid repetition count` and makes every settings insert fail.
