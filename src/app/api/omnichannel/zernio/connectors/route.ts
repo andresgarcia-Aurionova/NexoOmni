@@ -4,6 +4,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { ZERNIO_PLATFORMS, zernioProvider } from '@/lib/zernio/channels'
+import { safeConnectedChannelError } from '@/lib/zernio/server'
 
 const PROVIDERS = ZERNIO_PLATFORMS.map(zernioProvider)
 
@@ -29,7 +30,9 @@ export async function GET() {
         externalChannelId: connector.external_channel_id,
         status: connector.status,
         lastEventAt: connector.last_event_at,
-        lastError: connector.last_error,
+        lastError: typeof connector.last_error === 'string'
+          ? safeConnectedChannelError(connector.last_error)
+          : connector.last_error,
         createdAt: connector.created_at,
       })),
       configured: Boolean(process.env.ZERNIO_API_KEY),

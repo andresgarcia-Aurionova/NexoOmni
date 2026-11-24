@@ -37,7 +37,9 @@ import {
 import { channelAddOnEntitlement } from '@/lib/account/channel-addons'
 import {
   connectChannelForProvider,
+  ZERNIO_CONVERSATION_PLATFORMS,
   type ZernioConnectChannel,
+  zernioProvider,
 } from '@/lib/zernio/channels'
 
 type Connector = {
@@ -73,11 +75,9 @@ const CHANNEL_ICONS: Record<ZernioConnectChannel, typeof MessageCircle> = {
   salesforce: Building2,
 }
 
-const PROFILE_SYNC_PROVIDERS = new Set([
-  'zernio_whatsapp',
-  'zernio_facebook',
-  'zernio_instagram',
-])
+const PROFILE_SYNC_PROVIDERS: Set<string> = new Set(
+  ZERNIO_CONVERSATION_PLATFORMS.map(zernioProvider),
+)
 
 export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChannel[] }) {
   const t = useTranslations('ZernioConnect')
@@ -92,15 +92,17 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   const [blockedChannel, setBlockedChannel] = useState<ZernioConnectChannel | null>(null)
 
   useEffect(() => {
-    const status = searchParams.get('zernio')
+    const status = searchParams.get('connection') ?? searchParams.get('zernio')
     if (!status) return
-    const message = searchParams.get('zernio_message')
+    const message = searchParams.get('connection_message') ?? searchParams.get('zernio_message')
     if (status === 'connected') {
       toast.success(t('connected'))
     } else if (status === 'error') {
       toast.error(message || t('connectError'))
     }
     const params = new URLSearchParams(searchParams.toString())
+    params.delete('connection')
+    params.delete('connection_message')
     params.delete('zernio')
     params.delete('zernio_message')
     router.replace(`/settings?${params.toString()}`, { scroll: false })
@@ -111,7 +113,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   const load = useCallback(async () => {
     try {
       const [response, entitlementResponse] = await Promise.all([
-        fetch('/api/omnichannel/zernio/connectors', { cache: 'no-store' }),
+        fetch('/api/omnichannel/connections', { cache: 'no-store' }),
         fetch('/api/account/entitlements', { cache: 'no-store' }),
       ])
       if (!response.ok) throw new Error(t('loadError'))
@@ -141,11 +143,11 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
     }
     setPending(`connect:${channel}`)
     if (channel !== 'telegram') {
-      window.location.assign(`/api/omnichannel/zernio/connect/${channel}`)
+      window.location.assign(`/api/omnichannel/connect/${channel}`)
       return
     }
     try {
-      const response = await fetch('/api/omnichannel/zernio/connect/telegram', { cache: 'no-store' })
+      const response = await fetch('/api/omnichannel/connect/telegram', { cache: 'no-store' })
       const body = await response.json().catch(() => null) as (TelegramAccess & { error?: string }) | null
       if (!response.ok || !body?.state || !body.code || !body.botUsername) {
         throw new Error(body?.error || t('connectError'))
@@ -161,7 +163,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   useEffect(() => {
     if (!telegramAccess) return
     const timer = window.setInterval(async () => {
-      const response = await fetch(`/api/omnichannel/zernio/connect/telegram/${telegramAccess.state}`, {
+      const response = await fetch(`/api/omnichannel/connect/telegram/${telegramAccess.state}`, {
         method: 'POST',
         cache: 'no-store',
       })
@@ -187,7 +189,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
     if (isDelete && !window.confirm(t('confirmDelete', { name: connector.displayName }))) return
     setPending(`${action}:${connector.id}`)
     try {
-      const response = await fetch(`/api/omnichannel/zernio/connectors/${connector.id}`, {
+      const response = await fetch(`/api/omnichannel/connections/${connector.id}`, {
         method: isDelete ? 'DELETE' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: isDelete ? undefined : JSON.stringify({ status: action === 'pause' ? 'paused' : 'configured' }),
@@ -207,7 +209,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   const syncAvatars = async (connector: Connector) => {
     setPending(`avatars:${connector.id}`)
     try {
-      const response = await fetch('/api/omnichannel/zernio/avatars/sync', {
+      const response = await fetch('/api/omnichannel/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectorId: connector.id }),
@@ -268,7 +270,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium">{t('telegramTitle')}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{t('telegramHelp', { bot: telegramAccess.botUsername })}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('telegramHelp')}</p>
               </div>
               <Loader2 className="size-4 animate-spin text-primary" />
             </div>

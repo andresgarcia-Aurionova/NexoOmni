@@ -37,8 +37,8 @@ function publicOrigin(request: Request) {
 function settingsRedirect(request: Request, tab: string, status: string, message?: string) {
   const url = new URL('/settings', publicOrigin(request))
   url.searchParams.set('tab', tab)
-  url.searchParams.set('zernio', status)
-  if (message) url.searchParams.set('zernio_message', message.slice(0, 180))
+  url.searchParams.set('connection', status)
+  if (message) url.searchParams.set('connection_message', message.slice(0, 180))
   return NextResponse.redirect(url, { status: 302 })
 }
 
@@ -57,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
     const knownAccounts = await listZernioAccountsForConnect(profileId, channel)
     const state = randomUUID()
     const origin = publicOrigin(request)
-    const callback = new URL('/api/omnichannel/zernio/callback', origin)
+    const callback = new URL('/api/omnichannel/connect/callback', origin)
     callback.searchParams.set('state', state)
     let metadata: Record<string, unknown> = {}
     let telegramCode: Awaited<ReturnType<typeof createZernioTelegramCode>> | null = null

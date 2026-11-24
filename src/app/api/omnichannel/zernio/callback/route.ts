@@ -21,8 +21,8 @@ function publicOrigin(request: Request) {
 function settingsRedirect(request: Request, tab: string, status: string, message?: string) {
   const url = new URL('/settings', publicOrigin(request))
   url.searchParams.set('tab', tab)
-  url.searchParams.set('zernio', status)
-  if (message) url.searchParams.set('zernio_message', message.slice(0, 180))
+  url.searchParams.set('connection', status)
+  if (message) url.searchParams.set('connection_message', message.slice(0, 180))
   return NextResponse.redirect(url, { status: 302 })
 }
 
@@ -88,10 +88,14 @@ export async function GET(request: Request) {
       .single()
     if (connectorError) throw connectorError
     await db.from('zernio_connection_attempts').update({ completed_at: now }).eq('id', attempt.id)
-    if (connector?.provider === 'zernio_google') {
+    if (connector?.provider === 'zernio_google' || connector?.provider === 'zernio_imap') {
       after(async () => {
         try {
-          await syncZernioGoogleConnector(db, connector)
+          await syncZernioGoogleConnector(db, connector, {
+            contacts: connector.provider === 'zernio_google',
+            calendar: connector.provider === 'zernio_google',
+            email: true,
+          })
         } catch (syncError) {
           console.error('[zernio] Initial Google sync failed:', syncError)
         }

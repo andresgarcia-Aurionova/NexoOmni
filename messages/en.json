@@ -26,7 +26,7 @@
     "pause": "Pause",
     "delete": "Remove",
     "telegramTitle": "Complete the Telegram connection",
-    "telegramHelp": "Open @{bot}, add the bot as an administrator to the group or channel, and send the code together with the group or channel username.",
+    "telegramHelp": "Open the connection bot, add it as an administrator to the group or channel, and send the code with the group or channel username.",
     "openTelegram": "Open Telegram",
     "telegramExpired": "The Telegram code expired. Request a new one.",
     "addonRequiredTitle": "This channel requires an add-on",
@@ -1122,7 +1122,7 @@
       "namePlaceholder": "Jane Doe",
       "phoneLabel": "Phone Number",
       "phonePlaceholder": "+1234567890",
-      "phoneHint": "Include country code, e.g. +1 for US",
+      "phoneHint": "Include the country code. Email-only contacts may leave this blank.",
       "emailLabel": "Email",
       "emailPlaceholder": "jane@example.com",
       "companyLabel": "Company",
@@ -1144,7 +1144,7 @@
       "dupSimilar": "A contact with a very similar number already exists.",
       "loadingTags": "Loading tags...",
       "noTagsAvailable": "No tags available. Create tags in Settings.",
-      "phoneRequired": "Phone number is required"
+      "phoneRequired": "Add at least a phone number or an email address"
     },
     "trace": {
       "description": "Everyone who handled this customer, on chat and phone.",
@@ -1205,7 +1205,7 @@
       "channelNative": "Direct WhatsApp",
       "saveChangesBtn": "Save Changes",
       "saveCustomFieldsBtn": "Save Custom Fields",
-      "toastPhoneRequired": "Phone number is required",
+      "toastPhoneRequired": "Add at least a phone number or an email address",
       "toastUpdateFailed": "Failed to update contact",
       "toastUpdated": "Contact updated",
       "toastNotAuthenticated": "Not authenticated",

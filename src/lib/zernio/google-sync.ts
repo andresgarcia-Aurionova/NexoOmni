@@ -12,13 +12,14 @@ import {
 import { isUniqueViolation } from '@/lib/contacts/dedupe'
 import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversation'
 import { getAccountEntitlements } from '@/lib/account/entitlements'
+import { technicalContactPhone } from '@/lib/contacts/technical-identity'
 
 type Json = Record<string, unknown>
 
 export type ZernioGoogleConnector = {
   id: string
   account_id: string
-  provider: 'zernio_google'
+  provider: 'zernio_google' | 'zernio_imap'
   display_name: string
   queue_id: string | null
   zernio_account_id: string | null
@@ -111,7 +112,7 @@ async function upsertLocalContact(
       .eq('account_id', connector.account_id)
     if (error) throw error
   } else {
-    const placeholder = `zernio:${connector.provider}:${remote.id}`
+    const placeholder = technicalContactPhone(connector.provider, remote.id)
     const { data: created, error } = await db.from('contacts').insert({
       account_id: connector.account_id,
       user_id: auditUserId,
@@ -267,7 +268,7 @@ export async function syncZernioGoogleConnector(
   connector: ZernioGoogleConnector,
   options: SyncOptions = {},
 ) {
-  if (!connector.zernio_account_id) throw new Error('La conexión Google no tiene una cuenta Zernio vinculada.')
+  if (!connector.zernio_account_id) throw new Error('La conexión no tiene una cuenta vinculada.')
   const auditUserId = await resolveAuditUserId(db, connector.account_id)
   const now = options.now ?? new Date()
   const summary = { contacts: 0, events: 0, emailThreads: 0 }
@@ -354,6 +355,9 @@ export async function syncZernioGoogleConnector(
     google_contacts_synced_at: contactsSucceeded && options.contacts !== false
       ? record(connector.zernio_metadata).google_contacts_synced_at ?? now.toISOString()
       : record(connector.zernio_metadata).google_contacts_synced_at,
+    google_contacts_repaired_at: contactsSucceeded && options.contacts !== false
+      ? now.toISOString()
+      : record(connector.zernio_metadata).google_contacts_repaired_at,
     google_calendar_synced_at: calendarSucceeded && options.calendar !== false
       ? now.toISOString()
       : record(connector.zernio_metadata).google_calendar_synced_at,
@@ -375,7 +379,7 @@ export async function syncZernioGoogleConnector(
 export async function syncZernioGoogleConnectors(db: SupabaseClient) {
   const { data, error } = await db.from('omnichannel_connectors')
     .select('id, account_id, provider, display_name, queue_id, zernio_account_id, zernio_metadata')
-    .eq('provider', 'zernio_google')
+    .in('provider', ['zernio_google', 'zernio_imap'])
     .neq('status', 'paused')
   if (error) throw error
   const summary = { checked: 0, contacts: 0, events: 0, emailThreads: 0, failed: 0 }
@@ -384,14 +388,18 @@ export async function syncZernioGoogleConnectors(db: SupabaseClient) {
     const previous = new Date(String(record(connector.zernio_metadata).google_calendar_synced_at ?? ''))
     if (!Number.isNaN(previous.getTime()) && Date.now() - previous.getTime() < 5 * 60_000) continue
     const entitlements = await getAccountEntitlements(db, connector.account_id)
-    if (!entitlements?.features.channel_google) continue
+    const enabled = connector.provider === 'zernio_google'
+      ? entitlements?.features.channel_google
+      : entitlements?.features.channel_email
+    if (!enabled) continue
     summary.checked += 1
     try {
       const metadata = record(connector.zernio_metadata)
       const result = await syncZernioGoogleConnector(db, connector, {
-        contacts: !metadata.google_contacts_synced_at,
+        contacts: connector.provider === 'zernio_google'
+          && (!metadata.google_contacts_synced_at || !metadata.google_contacts_repaired_at),
         email: !metadata.google_email_synced_at,
-        calendar: true,
+        calendar: connector.provider === 'zernio_google',
       })
       summary.contacts += result.contacts
       summary.events += result.events

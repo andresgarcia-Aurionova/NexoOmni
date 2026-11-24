@@ -28,6 +28,7 @@ import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversatio
 import type { ChannelType } from '@/types'
 import { connectChannelForProvider, isZernioConversationPlatform, type ZernioConversationPlatform } from '@/lib/zernio/channels'
 import { channelAddOnEntitlement, getAccountEntitlements } from '@/lib/account/entitlements'
+import { technicalContactPhone } from '@/lib/contacts/technical-identity'
 
 export const dynamic = 'force-dynamic'
 // Zernio requires a prompt HTTP acknowledgement. The actual handling (which
@@ -170,24 +171,34 @@ async function resolveContact(
     // the customer's profile) can create the contact with a placeholder
     // like "Cliente Facebook 123456". Upgrade it as soon as a later event
     // carries the real name — never overwrite a name someone already set.
-    if (!isZernioPlaceholderName(name)) {
+    if (!isZernioPlaceholderName(name) || email) {
       const { data: current, error: currentError } = await db
         .from('contacts')
-        .select('name')
+        .select('name, phone, email')
         .eq('id', contactId)
         .eq('account_id', connector.account_id)
         .maybeSingle()
       if (currentError) throw currentError
-      if (current && isZernioPlaceholderName(current.name as string | null) && current.name !== name) {
-        const { error: renameError } = await db.from('contacts')
-          .update({ name, updated_at: new Date().toISOString() })
+      if (current) {
+        const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+        if (!isZernioPlaceholderName(name) && isZernioPlaceholderName(current.name as string | null) && current.name !== name) {
+          update.name = name
+        }
+        if (email && !current.email) update.email = email
+        if (email && typeof current.phone === 'string' && /^(?:zernio:|connected-contact-)/i.test(current.phone)) {
+          update.phone = technicalContactPhone(connector.provider, externalUserId)
+        }
+        const { error: contactError } = await db.from('contacts')
+          .update(update)
           .eq('id', contactId)
           .eq('account_id', connector.account_id)
-        if (renameError) console.error('[zernio] could not update placeholder contact name:', renameError.message)
-        await db.from('omnichannel_contact_identities')
-          .update({ display_name: name })
-          .eq('connector_id', connector.id)
-          .eq('external_user_id', externalUserId)
+        if (contactError) console.error('[zernio] could not enrich mapped contact:', contactError.message)
+        if (!isZernioPlaceholderName(name)) {
+          await db.from('omnichannel_contact_identities')
+            .update({ display_name: name })
+            .eq('connector_id', connector.id)
+            .eq('external_user_id', externalUserId)
+        }
       }
     }
     return { contactId, created: false }
@@ -195,7 +206,7 @@ async function resolveContact(
 
   const channel = connector.provider.replace('zernio_', '') as ZernioChannel
   const fallback = safeZernioContactName(channel, externalUserId)
-  const placeholderPhone = `zernio:${connector.provider}:${externalUserId}`
+  const placeholderPhone = technicalContactPhone(connector.provider, externalUserId)
 
   const phoneMatch = phone
     ? connector.provider === 'zernio_whatsapp'
@@ -210,10 +221,11 @@ async function resolveContact(
       .select('id, name, email, phone, avatar_url')
       .eq('account_id', connector.account_id)
       .eq('email_normalized', normalizedEmail)
-      .limit(2)
+      .order('created_at', { ascending: true })
+      .limit(1)
     if (error) {
       console.error('[zernio] could not match contact by email:', error.message)
-    } else if (data?.length === 1) {
+    } else if (data?.[0]) {
       emailMatch = data[0]
     }
   }

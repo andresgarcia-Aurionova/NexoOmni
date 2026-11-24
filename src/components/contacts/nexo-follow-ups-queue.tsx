@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Calendar, Check, Plus, PhoneCall, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { displayContactPhone } from '@/lib/contacts/contact-identity';
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -106,7 +107,7 @@ export function NexoFollowUpsQueue() {
         return {
           key: `call-${task.id}`,
           since: task.due_at,
-          contactName: task.conversation?.contact?.name || task.conversation?.contact?.phone || 'Contacto',
+          contactName: task.conversation?.contact?.name || displayContactPhone(task.conversation?.contact?.phone) || 'Contacto',
           contactPhone: task.conversation?.contact?.phone ?? null,
           detail: analysis?.next_best_action || 'Sin análisis previo: atiende el seguimiento desde el historial del chat.',
           meta: analysis ? `${sentimentLabel[sentiment] ?? 'Sin sentimiento'}${analysis.sentiment_score != null ? ` · ${analysis.sentiment_score}/100` : ''}${analysis.qa_score != null ? ` · QA ${analysis.qa_score}/100` : ''}` : null,
@@ -280,7 +281,10 @@ export function NexoFollowUpsQueue() {
             <Label htmlFor="task-contact">Contacto</Label>
             {selectedContact ? (
               <div className="mt-1.5 flex items-center justify-between rounded-md border border-border px-2.5 py-2 text-sm">
-                <span>{selectedContact.name || selectedContact.phone || 'Contacto'}{selectedContact.phone ? ` · ${selectedContact.phone}` : ''}</span>
+                <span>
+                  {selectedContact.name || displayContactPhone(selectedContact.phone) || 'Contacto'}
+                  {displayContactPhone(selectedContact.phone) ? ` · ${displayContactPhone(selectedContact.phone)}` : ''}
+                </span>
                 <Button size="icon-sm" variant="ghost" onClick={() => { setSelectedContact(null); setContactQuery('') }}><X className="size-3.5" /></Button>
               </div>
             ) : (
@@ -296,7 +300,7 @@ export function NexoFollowUpsQueue() {
                         onClick={() => { setSelectedContact(option); setContactResults([]) }}
                       >
                         <span className="font-medium">{option.name || 'Sin nombre'}</span>
-                        <span className="text-xs text-muted-foreground">{option.phone}</span>
+                        <span className="text-xs text-muted-foreground">{displayContactPhone(option.phone) ?? ''}</span>
                       </button>
                     ))}
                   </div>

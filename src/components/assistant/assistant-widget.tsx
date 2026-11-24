@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { displayContactPhone } from '@/lib/contacts/contact-identity'
 
 interface Thread {
   id: string
@@ -557,7 +558,7 @@ export function AssistantWidget() {
                     if (!proposal) return null
                     const action = proposal.action
                     const expired = request.status === 'pending' && Date.parse(request.expires_at) <= Date.now()
-                    const contactLabel = proposal.contact.name || proposal.contact.phone || t('actions.contact')
+                    const contactLabel = proposal.contact.name || displayContactPhone(proposal.contact.phone) || t('actions.contact')
                     const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
                     return (
                       <section className="mt-3 rounded-md border border-current/15 p-3" aria-label={t('actions.previewTitle')}>

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { displayContactPhone } from '@/lib/contacts/contact-identity';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -228,7 +229,7 @@ export function Step3Personalize({
         } else if (mapping.type === 'field' && mapping.value) {
           const fieldMap: Record<string, string | undefined> = {
             name: contact.name,
-            phone: contact.phone,
+            phone: displayContactPhone(contact.phone) ?? undefined,
             email: contact.email,
             company: contact.company,
           };
@@ -249,7 +250,7 @@ export function Step3Personalize({
   ]);
 
   const previewLabel = firstContact
-    ? firstContact.name || firstContact.phone
+    ? firstContact.name || displayContactPhone(firstContact.phone) || firstContact.email
     : t('personalize.previewSample');
 
   return (

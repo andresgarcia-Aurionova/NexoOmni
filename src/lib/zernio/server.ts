@@ -66,7 +66,7 @@ export async function zernioFetch(path: string, init?: RequestInit) {
           : typeof error.title === 'string' ? error.title
             : `HTTP ${response.status}`
     const code = typeof error.code === 'string' || typeof error.code === 'number' ? ` (${error.code})` : ''
-    throw new ZernioApiError(`No se pudo completar la solicitud${code}: ${detail}`, response.status, body)
+    throw new ZernioApiError(safeConnectedChannelError(`No se pudo completar la solicitud${code}: ${detail}`), response.status, body)
   }
   return body ?? {}
 }
@@ -167,6 +167,10 @@ function record(value: unknown): Record<string, unknown> {
 
 function asText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+export function safeConnectedChannelError(value: string) {
+  return value.replace(/zernio/gi, 'proveedor de conexión')
 }
 
 export type ZernioConnectedAccount = {

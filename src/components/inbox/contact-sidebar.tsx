@@ -391,7 +391,7 @@ export function ContactSidebar({ contact, conversationId, internalNotesOpenSigna
   }
 
   const contactPhone = displayContactPhone(contact.phone);
-  const displayName = contact.name || contactPhone || "Contacto";
+  const displayName = contact.name || contactPhone || contact.email || "Contacto";
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
@@ -421,6 +421,12 @@ export function ContactSidebar({ contact, conversationId, internalNotesOpenSigna
 
           {/* Phone */}
           <div className="mt-4 space-y-2">
+            {contact.email ? (
+              <div className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate">{contact.email}</span>
+              </div>
+            ) : null}
             {contactPhone ? (
               <div className="flex w-full items-center gap-1 rounded-lg px-1 py-1 text-sm text-muted-foreground">
                 <button
@@ -451,11 +457,12 @@ export function ContactSidebar({ contact, conversationId, internalNotesOpenSigna
                 line + a personal line) — each callable on its own. */}
             {(contact.alternate_phones ?? []).map((altPhone) => {
               const label = displayContactPhone(altPhone);
+              if (!label) return null;
               return (
                 <div key={altPhone} className="flex w-full items-center gap-1 rounded-lg px-1 py-1 text-sm text-muted-foreground">
                   <button
                     type="button"
-                    onClick={() => void telephony.call(label ?? altPhone)}
+                    onClick={() => void telephony.call(label)}
                     disabled={!telephony.connected}
                     title="Llamar por NexPhone"
                     aria-label="Llamar por NexPhone"

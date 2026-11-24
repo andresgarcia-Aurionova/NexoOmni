@@ -5,8 +5,11 @@ import { requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { extractZernioMedia, isZernioPlaceholderName, normalizeMetaText } from '@/lib/omnichannel/webhook-normalizer'
 import { getZernioParticipantProfile, listZernioConversationMessages } from '@/lib/zernio/server'
+import { channelAddOnEntitlement, getAccountEntitlements } from '@/lib/account/entitlements'
+import { connectChannelForProvider, ZERNIO_CONVERSATION_PLATFORMS, zernioProvider } from '@/lib/zernio/channels'
+import { syncZernioGoogleConnector } from '@/lib/zernio/google-sync'
 
-const PROVIDERS = ['zernio_whatsapp', 'zernio_facebook', 'zernio_instagram']
+const PROVIDERS = ZERNIO_CONVERSATION_PLATFORMS.map(zernioProvider)
 const MAX_CONVERSATIONS_PER_SYNC = 100
 const CONCURRENCY = 5
 
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
     const db = admin()
     const { data: connector, error: connectorError } = await db
       .from('omnichannel_connectors')
-      .select('id, provider, zernio_account_id')
+      .select('id, account_id, provider, display_name, queue_id, zernio_account_id, zernio_metadata')
       .eq('id', body.connectorId)
       .eq('account_id', accountId)
       .in('provider', PROVIDERS)
@@ -62,6 +65,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'La conexión no tiene una cuenta disponible.' }, { status: 409 })
     }
     const zernioAccountId = connector.zernio_account_id as string
+    const connectChannel = connectChannelForProvider(connector.provider)
+    const addOn = connectChannel ? channelAddOnEntitlement(connectChannel) : null
+    const entitlements = await getAccountEntitlements(db, accountId)
+    if (!addOn || entitlements?.features[addOn] !== true) {
+      return NextResponse.json({ error: 'Este canal no está habilitado para la cuenta.' }, { status: 403 })
+    }
+    if (connector.provider === 'zernio_google' || connector.provider === 'zernio_imap') {
+      const summary = await syncZernioGoogleConnector(db, {
+        ...connector,
+        provider: connector.provider,
+      }, {
+        contacts: connector.provider === 'zernio_google',
+        email: true,
+        calendar: connector.provider === 'zernio_google',
+      })
+      return NextResponse.json({
+        updated: summary.contacts,
+        renamed: 0,
+        recovered_messages: summary.emailThreads,
+        calendar_events: summary.events,
+        scanned: summary.emailThreads,
+        capped: false,
+      })
+    }
 
     const { data, error } = await db
       .from('conversations')

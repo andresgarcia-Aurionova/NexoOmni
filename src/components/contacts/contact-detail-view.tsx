@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
-import { displayContactPhone } from '@/lib/contacts/contact-identity';
+import { displayContactPhone, isTechnicalContactIdentifier } from '@/lib/contacts/contact-identity';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -148,7 +148,7 @@ export function ContactDetailView({
     if (data) {
       setContact(data);
       setEditName(data.name ?? '');
-      setEditPhone(data.phone);
+      setEditPhone(displayContactPhone(data.phone) ?? '');
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
     }
@@ -262,7 +262,9 @@ export function ContactDetailView({
   }
 
   async function saveDetails() {
-    if (!contactId || !editPhone.trim()) {
+    const phoneValue = editPhone.trim();
+    const emailValue = editEmail.trim();
+    if (!contactId || (!phoneValue && !emailValue)) {
       toast.error(t('toastPhoneRequired'));
       return;
     }
@@ -272,8 +274,10 @@ export function ContactDetailView({
       .from('contacts')
       .update({
         name: editName.trim() || null,
-        phone: editPhone.trim(),
-        email: editEmail.trim() || null,
+        phone: phoneValue || (contact && isTechnicalContactIdentifier(contact.phone)
+          ? contact.phone
+          : `email-contact-${emailValue.toLowerCase()}`),
+        email: emailValue || null,
         company: editCompany.trim() || null,
         updated_at: new Date().toISOString(),
       })
@@ -667,7 +671,7 @@ export function ContactDetailView({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-muted-foreground text-xs">
-                      {t('phone')} <span className="text-red-400">*</span>
+                      {t('phone')}
                     </Label>
                     <Input
                       value={editPhone}
@@ -980,7 +984,10 @@ export function ContactDetailView({
         <DialogHeader>
           <DialogTitle>{t('mergeConfirmTitle')}</DialogTitle>
           <DialogDescription>
-            {t('mergeConfirmDescription', { loserName: mergeTarget?.name || mergeTarget?.phone || '', survivorName: contact?.name || contact?.phone || '' })}
+            {t('mergeConfirmDescription', {
+              loserName: mergeTarget?.name || displayContactPhone(mergeTarget?.phone) || mergeTarget?.email || '',
+              survivorName: contact?.name || displayContactPhone(contact?.phone) || contact?.email || '',
+            })}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

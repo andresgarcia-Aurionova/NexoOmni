@@ -857,7 +857,7 @@ export function MessageThread({
     return map;
   }, [reactions]);
 
-  const contactDisplayName = contact?.name || contact?.phone || "Customer";
+  const contactDisplayName = contact?.name || displayContactPhone(contact?.phone) || contact?.email || "Customer";
 
   // Author label for a quoted message: "You" when we sent the parent,
   // contact name when the customer sent it.
@@ -1251,7 +1251,7 @@ export function MessageThread({
                           authorLabel:
                             parent.sender_type === "agent" || parent.sender_type === "bot"
                               ? t("me") 
-                              : contact?.name || contact?.phone || "Unknown",
+                              : contact?.name || displayContactPhone(contact?.phone) || contact?.email || "Unknown",
                           preview: buildReplyPreview(parent, tQuote),
                         }
                       : null;

@@ -12,7 +12,7 @@ import {
   isUniqueViolation,
   type ExistingContact,
 } from '@/lib/contacts/dedupe';
-import { displayContactPhone } from '@/lib/contacts/contact-identity';
+import { displayContactPhone, isTechnicalContactIdentifier } from '@/lib/contacts/contact-identity';
 import {
   Dialog,
   DialogContent,
@@ -74,7 +74,7 @@ export function ContactForm({
   useEffect(() => {
     if (open) {
       setName(contact?.name ?? '');
-      setPhone(contact?.phone ?? '');
+      setPhone(displayContactPhone(contact?.phone) ?? '');
       setEmail(contact?.email ?? '');
       setCompany(contact?.company ?? '');
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
@@ -126,7 +126,9 @@ export function ContactForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!phone.trim()) {
+    const phoneValue = phone.trim();
+    const emailValue = email.trim();
+    if (!phoneValue && !emailValue) {
       toast.error(t('phoneRequired'));
       return;
     }
@@ -155,8 +157,10 @@ export function ContactForm({
           .from('contacts')
           .update({
             name: name.trim() || null,
-            phone: phone.trim(),
-            email: email.trim() || null,
+            phone: phoneValue || (contact && isTechnicalContactIdentifier(contact.phone)
+              ? contact.phone
+              : `email-contact-${emailValue.toLowerCase()}`),
+            email: emailValue || null,
             company: company.trim() || null,
             updated_at: new Date().toISOString(),
           })
@@ -169,8 +173,8 @@ export function ContactForm({
             user_id: user.id,
             account_id: accountId,
             name: name.trim() || null,
-            phone: phone.trim(),
-            email: email.trim() || null,
+            phone: phoneValue || `email-contact-${emailValue.toLowerCase()}`,
+            email: emailValue || null,
             company: company.trim() || null,
           })
           .select('id')
@@ -251,7 +255,7 @@ export function ContactForm({
 
           <div className="space-y-2">
             <Label htmlFor="cf-phone" className="text-muted-foreground">
-              {t('phoneLabel')} <span className="text-red-400">*</span>
+              {t('phoneLabel')}
             </Label>
             <Input
               id="cf-phone"

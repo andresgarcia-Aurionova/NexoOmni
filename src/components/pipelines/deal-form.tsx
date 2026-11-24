@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { displayContactPhone } from "@/lib/contacts/contact-identity";
 
 interface DealFormProps {
   open: boolean;
@@ -367,7 +368,7 @@ export function DealForm({
                 <option value="">{t("selectContact")}</option>
                 {contacts.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
+                    {c.name || displayContactPhone(c.phone) || "Contacto"}
                   </option>
                 ))}
               </select>

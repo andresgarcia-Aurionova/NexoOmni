@@ -49,6 +49,21 @@ describe('serializeContact', () => {
     };
     expect(serializeContact(row).tags).toEqual([]);
   });
+
+  it('never exposes a technical connector identifier as a phone', () => {
+    const row = {
+      id: 'c3',
+      phone: 'zernio:zernio_google:contact-123',
+      name: 'Jane',
+      email: 'jane@example.com',
+      company: null,
+      avatar_url: null,
+      created_at: 'a',
+      updated_at: 'b',
+    };
+    expect(serializeContact(row).phone).toBe('');
+    expect(serializeContact(row).email).toBe('jane@example.com');
+  });
 });
 
 describe('findOrCreateContact', () => {

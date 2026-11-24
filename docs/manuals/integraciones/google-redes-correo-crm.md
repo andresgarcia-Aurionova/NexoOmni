@@ -46,8 +46,7 @@ TikTok no permite abrir una conversación nueva.
    pausar, reactivar o eliminar la conexión en cualquier momento.
 
 Al conectar una cuenta Google, NexoOmni realiza una carga inicial de hasta
-100 hilos recientes del buzón de entrada (dentro de los últimos 90 días), importa los contactos que ya
-sincroniza Zernio y carga los eventos de Calendar desde 30 días antes hasta
+100 hilos recientes del buzón de entrada (dentro de los últimos 90 días), importa los contactos sincronizados y carga los eventos de Calendar desde 30 días antes hasta
 90 días adelante. Después, Gmail y los cambios de Calendar siguen entrando
 por webhook. Los eventos de Google se muestran en **Agenda** como lectura
 de calendario; para modificarlos o eliminarlos, usa Google Calendar.
@@ -120,13 +119,10 @@ escriba. NexoOmni intenta el envío y muestra el rechazo real del
 proveedor si la ventana ya terminó.
 
 **¿La conexión muestra el nombre de NexoOmni?**
-Sí, la pantalla de bienvenida usa la marca configurada. La autorización
-oficial del proveedor todavía puede abrirse temporalmente en el dominio
-del integrador. Zernio conserva su insignia “Secured by Zernio” y la página
-oficial del proveedor puede mencionar la app de Zernio; ese comportamiento
-no se puede eliminar con el flujo oficial de marca blanca. NexoOmni ya usa
-`GET /api/v1/connect/{platform}?profileId=PROFILE_ID` y Zernio aplica la
-pantalla de bienvenida guardada a todos sus enlaces.
+Sí. Dentro de NexoOmni no se muestra el nombre del proveedor técnico. La
+autorización oficial del canal puede abrir temporalmente una página del
+proveedor y conservar sus avisos legales obligatorios; esos avisos no forman
+parte de las conversaciones, los contactos ni los reportes de NexoOmni.
 
 **¿Se sincronizan tratos y oportunidades automáticamente?**
 Las conversaciones y contactos vinculados se sincronizan con el CRM

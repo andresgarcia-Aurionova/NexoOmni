@@ -26,7 +26,7 @@
     "pause": "Pausar",
     "delete": "Eliminar",
     "telegramTitle": "Completa la conexión de Telegram",
-    "telegramHelp": "Abre @{bot}, agrega el bot como administrador al grupo o canal y envíale el código junto con el usuario del grupo o canal.",
+    "telegramHelp": "Abre el bot de conexión, agrégalo como administrador al grupo o canal y envíale el código junto con el usuario del grupo o canal.",
     "openTelegram": "Abrir Telegram",
     "telegramExpired": "El código de Telegram venció. Solicita uno nuevo.",
     "addonRequiredTitle": "Este canal requiere un add-on",
@@ -1122,7 +1122,7 @@
       "namePlaceholder": "Juan Pérez",
       "phoneLabel": "Número de Teléfono",
       "phonePlaceholder": "+1234567890",
-      "phoneHint": "Incluye el código de país, ej. +1 para EE.UU. o +34 para España",
+      "phoneHint": "Incluye el código de país. En contactos que solo usan correo, puedes dejarlo vacío.",
       "emailLabel": "Correo electrónico",
       "emailPlaceholder": "juan@ejemplo.com",
       "companyLabel": "Empresa",
@@ -1144,7 +1144,7 @@
       "dupSimilar": "Ya existe un contacto con un número muy similar.",
       "loadingTags": "Cargando etiquetas...",
       "noTagsAvailable": "No hay etiquetas disponibles. Créalas en Configuración.",
-      "phoneRequired": "El número de teléfono es obligatorio"
+      "phoneRequired": "Registra al menos un teléfono o un correo electrónico"
     },
     "trace": {
       "description": "Quién atendió a este cliente, en chat y en llamadas.",
@@ -1205,7 +1205,7 @@
       "channelNative": "WhatsApp directo",
       "saveChangesBtn": "Guardar Cambios",
       "saveCustomFieldsBtn": "Guardar Campos Personalizados",
-      "toastPhoneRequired": "El número de teléfono es obligatorio",
+      "toastPhoneRequired": "Registra al menos un teléfono o un correo electrónico",
       "toastUpdateFailed": "Error al actualizar el contacto",
       "toastUpdated": "Contacto actualizado",
       "toastNotAuthenticated": "No autenticado",

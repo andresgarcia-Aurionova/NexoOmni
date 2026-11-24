@@ -831,8 +831,8 @@ function ContactsPageInner() {
             <DialogTitle className="text-popover-foreground">{showArchived ? t('restoreContactTitle') : t('archiveContactTitle')}</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               {showArchived
-                ? t('restoreContactDesc', { name: deleteTarget?.name || deleteTarget?.phone || '' })
-                : t('archiveContactDesc', { name: deleteTarget?.name || deleteTarget?.phone || '' })}
+                ? t('restoreContactDesc', { name: deleteTarget?.name || displayContactPhone(deleteTarget?.phone) || deleteTarget?.email || '' })
+                : t('archiveContactDesc', { name: deleteTarget?.name || displayContactPhone(deleteTarget?.phone) || deleteTarget?.email || '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="bg-popover border-border">

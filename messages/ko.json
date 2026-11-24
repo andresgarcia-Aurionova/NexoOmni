@@ -26,7 +26,7 @@
     "pause": "일시 중지",
     "delete": "삭제",
     "telegramTitle": "Telegram 연결 완료",
-    "telegramHelp": "@{bot}을 열고 그룹 또는 채널에 관리자 권한으로 봇을 추가한 후 사용자 이름과 함께 코드를 보냅니다.",
+    "telegramHelp": "연결 봇을 열고 그룹 또는 채널에 관리자 권한으로 추가한 뒤 사용자 이름과 함께 코드를 보냅니다.",
     "openTelegram": "Telegram 열기",
     "telegramExpired": "Telegram 코드가 만료되었습니다. 새 코드를 요청하세요.",
     "addonRequiredTitle": "이 채널에는 추가 기능이 필요합니다",
@@ -1122,7 +1122,7 @@
       "namePlaceholder": "홍길동",
       "phoneLabel": "전화번호",
       "phonePlaceholder": "+1234567890",
-      "phoneHint": "국가 코드를 포함하세요. 예: 미국은 +1",
+      "phoneHint": "국가 코드를 포함하세요. 이메일만 사용하는 연락처는 비워 둘 수 있습니다.",
       "emailLabel": "이메일",
       "emailPlaceholder": "jane@example.com",
       "companyLabel": "회사",
@@ -1144,7 +1144,7 @@
       "dupSimilar": "매우 유사한 번호를 가진 연락처가 이미 있습니다.",
       "loadingTags": "태그를 불러오는 중...",
       "noTagsAvailable": "사용 가능한 태그가 없습니다. 설정에서 태그를 만드세요.",
-      "phoneRequired": "전화번호는 필수입니다"
+      "phoneRequired": "전화번호 또는 이메일 주소 중 하나는 등록해야 합니다"
     },
     "trace": {
       "description": "채팅과 통화에서 이 고객을 응대한 모든 담당자입니다.",
@@ -1205,7 +1205,7 @@
       "channelNative": "다이렉트 WhatsApp",
       "saveChangesBtn": "변경 사항 저장",
       "saveCustomFieldsBtn": "커스텀 필드 저장",
-      "toastPhoneRequired": "전화번호는 필수입니다",
+      "toastPhoneRequired": "전화번호 또는 이메일 주소 중 하나는 등록해야 합니다",
       "toastUpdateFailed": "연락처를 업데이트하지 못했습니다",
       "toastUpdated": "연락처가 업데이트되었습니다",
       "toastNotAuthenticated": "인증되지 않았습니다",

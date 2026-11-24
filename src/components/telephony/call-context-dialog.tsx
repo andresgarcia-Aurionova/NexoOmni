@@ -6,6 +6,7 @@ import { BookOpen, Loader2, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { CallContext } from '@/lib/telephony/call-context'
+import { displayContactPhone } from '@/lib/contacts/contact-identity'
 
 function channelTranslationKey(channel: string): string {
   switch (channel) {
@@ -91,7 +92,7 @@ export function CallContextDialog({ callId, callEnded = false, onDismiss }: { ca
             {context.contact
               ? <>
                 <p className="font-medium">{context.contact.name || t('unnamedContact')}</p>
-                <p className="text-xs text-muted-foreground">{context.contact.phone || context.callerNumber}</p>
+                <p className="text-xs text-muted-foreground">{displayContactPhone(context.contact.phone) || context.callerNumber}</p>
                 {context.latestInteraction
                   ? <div className="mt-2 rounded-md bg-background/70 p-2">
                     <p className="text-xs font-medium">{t('lastInteraction')}: {t(channelTranslationKey(context.latestInteraction.channel))}{context.latestInteraction.sourceLabel ? ` · ${context.latestInteraction.sourceLabel}` : ''}{context.latestInteraction.occurredAt ? ` · ${new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(context.latestInteraction.occurredAt))}` : ''}</p>
