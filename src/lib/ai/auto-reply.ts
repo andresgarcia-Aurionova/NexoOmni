@@ -48,6 +48,7 @@ export type AutoReplyGateResult =
         assigned_agent_id: string | null;
         ai_reply_count: number;
         case_level: string | null;
+        last_message_at: string | null;
       };
     }
   | { ok: false; reason: string };
@@ -113,7 +114,7 @@ export async function evaluateAutoReplyGates(
 
   const { data: conv, error: convErr } = await db
     .from('conversations')
-    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id, case_level')
+    .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, connector_id, case_level, last_message_at')
     .eq('id', conversationId)
     .eq('account_id', accountId)
     .maybeSingle();
@@ -125,15 +126,21 @@ export async function evaluateAutoReplyGates(
     return { ok: false, reason: 'connector_out_of_scope' };
   }
 
-  // "A human owns this thread" must mean a person actually wrote in it, not
-  // merely that routing put a name on it: queue auto-assignment stamps an
-  // assignee on every inbound, which silenced the agent account-wide.
-  const { count: humanMessages } = await db
+  // Routing can assign a conversation without a human ever replying, and a
+  // manual reply from a previous interaction must not permanently mute a new
+  // customer message. Block only if a human answered after the inbound that is
+  // currently being processed (the webhook updates last_message_at before it
+  // reaches this gate), which also protects the handoff race.
+  let humanReplyQuery = db
     .from('messages')
     .select('id', { count: 'exact', head: true })
     .eq('conversation_id', conversationId)
     .eq('sender_type', 'agent')
     .not('sender_id', 'is', null);
+  if (conv.last_message_at) {
+    humanReplyQuery = humanReplyQuery.gt('created_at', conv.last_message_at);
+  }
+  const { count: humanMessages } = await humanReplyQuery
   if ((humanMessages ?? 0) > 0)
     return { ok: false, reason: 'human_agent_already_replied' };
 
@@ -153,6 +160,7 @@ export async function evaluateAutoReplyGates(
       assigned_agent_id: conv.assigned_agent_id,
       ai_reply_count: conv.ai_reply_count,
       case_level: conv.case_level,
+      last_message_at: conv.last_message_at,
     },
   };
 }

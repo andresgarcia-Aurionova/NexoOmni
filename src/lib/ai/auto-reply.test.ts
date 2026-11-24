@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
     conv: null as Record<string, unknown> | null,
     autoResponders: [] as { id: string }[],
     humanMessages: 0,
+    latestInboundAt: '2026-11-24T16:34:38.366Z',
     pendingMedia: 0,
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
@@ -48,7 +49,8 @@ vi.mock('./admin-client', () => ({
           select: () => chain,
           eq: () => chain,
           in: () => Promise.resolve({ count: h.state.pendingMedia, error: null }),
-          not: () => Promise.resolve({ count: h.state.humanMessages, error: null }),
+          not: () => chain,
+          gt: () => Promise.resolve({ count: h.state.humanMessages, error: null }),
         }
         return chain
       }
@@ -104,6 +106,7 @@ beforeEach(() => {
     assigned_agent_id: null,
     ai_autoreply_disabled: false,
     ai_reply_count: 0,
+    last_message_at: h.state.latestInboundAt,
   }
   h.state.autoResponders = []
   h.state.humanMessages = 0
@@ -229,10 +232,16 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.engineSendText).toHaveBeenCalled()
   })
 
-  it('skips once a human agent has written in the thread', async () => {
+  it('skips when a human agent answered after the current inbound', async () => {
     h.state.humanMessages = 1
     await dispatchInboundToAiReply(ARGS)
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('replies after an old human intervention when no agent answered this inbound', async () => {
+    h.state.humanMessages = 0
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalled()
   })
 
   it('skips when auto-reply was disabled on this conversation', async () => {
