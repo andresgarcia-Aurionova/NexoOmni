@@ -17,6 +17,7 @@ import {
   MessageSquare,
   PhoneCall,
   Send,
+  ShieldAlert,
   Siren,
   UserPlus,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ import {
   formatCreditBalance,
   getAiCreditAlertThreshold,
 } from '@/lib/notifications/credit-alert-types';
+import { criticalLevelLabel } from '@/lib/notifications/critical-case-notification';
 
 // Keep every notification type mapped so additions fail the TypeScript check.
 const TYPE_ICON: Record<Notification['type'], typeof Bell> = {
@@ -43,12 +45,14 @@ const TYPE_ICON: Record<Notification['type'], typeof Bell> = {
   agendapro_unconfirmed_appointment: CalendarClock,
   ai_credit_balance_10: Coins,
   ai_credit_balance_5: Coins,
+  critical_case: ShieldAlert,
 };
 
 export default function NotificationsPage() {
   const router = useRouter();
   const locale = useLocale();
   const creditAlertCopy = useTranslations('AiCreditAlerts');
+  const criticalCopy = useTranslations('CriticalCases');
   const { accountId } = useAuth();
   const [notifications, setNotifications] = useState<Notification[] | null>(
     null
@@ -251,17 +255,22 @@ export default function NotificationsPage() {
             const Icon = TYPE_ICON[n.type] ?? Bell;
             const isUnread = !n.read_at;
             const creditThreshold = getAiCreditAlertThreshold(n.type);
+            const criticalLevel = n.type === 'critical_case' ? criticalLevelLabel(n.body) : null;
             const isCritical =
-              n.type === 'negative_sentiment' || creditThreshold === 5;
+              n.type === 'negative_sentiment' || creditThreshold === 5 || criticalLevel !== null;
             const isWarning = creditThreshold === 10;
             const title =
-              creditThreshold === null
+              criticalLevel !== null
+                ? criticalCopy('notificationTitle', { level: criticalLevel })
+                : creditThreshold === null
                 ? n.title
                 : creditAlertCopy(
                     creditThreshold === 5 ? 'threshold5Title' : 'threshold10Title'
                   );
             const body =
-              creditThreshold === null
+              criticalLevel !== null
+                ? criticalCopy('notificationBody')
+                : creditThreshold === null
                 ? n.body
                 : creditAlertCopy(
                     creditThreshold === 5 ? 'threshold5Body' : 'threshold10Body',

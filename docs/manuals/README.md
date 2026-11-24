@@ -44,6 +44,7 @@ docs/manuals/
     supervision-en-vivo.md
     reportes-ejecutivos.md
     transcripcion-de-llamadas.md
+    casos-criticos.md
   automatizaciones-y-flujos/
     automatizaciones.md
     flujos.md
@@ -105,6 +106,7 @@ al día.
 | Supervisión en vivo (agentes, llamadas, intervenciones) | [supervision-y-reportes/supervision-en-vivo.md](./supervision-y-reportes/supervision-en-vivo.md) | ✅ |
 | Reportes ejecutivos + reportes programados | [supervision-y-reportes/reportes-ejecutivos.md](./supervision-y-reportes/reportes-ejecutivos.md) | ✅ |
 | Transcripción y análisis de llamadas | [supervision-y-reportes/transcripcion-de-llamadas.md](./supervision-y-reportes/transcripcion-de-llamadas.md) | ✅ |
+| Casos críticos N2/N3 con alerta inmediata | [supervision-y-reportes/casos-criticos.md](./supervision-y-reportes/casos-criticos.md) | ✅ |
 | Automatizaciones (palabra clave → acción) | [automatizaciones-y-flujos/automatizaciones.md](./automatizaciones-y-flujos/automatizaciones.md) | ✅ |
 | Flujos (editor visual multi-paso) | [automatizaciones-y-flujos/flujos.md](./automatizaciones-y-flujos/flujos.md) | ✅ |
 | Respuesta automática con IA | [agentes-ia/respuesta-automatica.md](./agentes-ia/respuesta-automatica.md) | ✅ |

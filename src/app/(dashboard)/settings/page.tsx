@@ -17,6 +17,7 @@ import { ZernioConnectConfig } from '@/components/settings/zernio-connect-config
 import { YeastarLiveChatConfig } from '@/components/settings/yeastar-live-chat-config';
 import { ConversationAssignmentConfig } from '@/components/settings/conversation-assignment-config';
 import { ConversationQueuesConfig } from '@/components/settings/conversation-queues-config';
+import { CriticalCaseSettings } from '@/components/settings/critical-case-settings';
 import { TelephonyConfig } from '@/components/settings/telephony-config';
 import { ReservationAlertSettings } from '@/components/settings/reservation-alert-settings';
 import { TemplateManager } from '@/components/settings/template-manager';
@@ -101,7 +102,7 @@ function SettingsPageInner() {
       'salesforce',
     ]} /></div>,
     'live-chat': <YeastarLiveChatConfig />,
-    assignment: <div><ConversationAssignmentConfig /><ConversationQueuesConfig /></div>,
+    assignment: <div><ConversationAssignmentConfig /><ConversationQueuesConfig /><CriticalCaseSettings /></div>,
     telephony: <div className="space-y-6"><TelephonyConfig /><ReservationAlertSettings /></div>,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,

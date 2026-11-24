@@ -54,6 +54,7 @@ import { deleteAccountMedia } from "@/lib/storage/upload-media";
 import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
 import { ConversationIntelligence } from "./conversation-intelligence";
+import { CriticalCaseBar } from "./critical-case-bar";
 import { InternalNoteAttention } from "./internal-note-attention";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
@@ -1310,6 +1311,11 @@ export function MessageThread({
             onAssignChange(conversation.id, patch.assigned_agent_id ?? null);
           }
         }}
+      />
+
+      <CriticalCaseBar
+        key={`${conversation.id}:${conversation.case_level_set_at ?? ""}:${conversation.case_sede ?? ""}`}
+        conversation={conversation}
       />
 
       <ConversationIntelligence conversationId={conversation.id} />

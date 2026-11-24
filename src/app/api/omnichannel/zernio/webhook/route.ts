@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { deferredFirstInbound, getClosure, sendClosureNotice } from '@/lib/business-hours/inbound'
@@ -1125,6 +1126,9 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       })
       await db.from('omnichannel_connectors').update({ status: 'active', last_event_at: now, last_error: null, updated_at: now }).eq('id', typed.id)
       if (created) await dispatchWebhookEvent(db, typed.account_id, 'conversation.created', { conversation_id: conversationRow.id, contact_id: contactId, channel_type: typed.provider, connector_id: typed.id })
+      if (content.trim()) {
+        after(() => evaluateCriticalCaseSafely({ accountId: typed.account_id, conversationId: conversationRow.id, triggerId: `zernio:${messageId}` }))
+      }
       await dispatchWebhookEvent(db, typed.account_id, 'message.received', { conversation_id: conversationRow.id, contact_id: contactId, message_id: messageId, channel_type: typed.provider, content_type: contentType, text: content, media_url: mediaUrl })
       await db.from('zernio_webhook_receipts').update({ outcome: 'processed', detail: 'Mensaje del canal conectado agregado.', processed_at: now }).eq('connector_id', typed.id).eq('external_message_id', externalEventId)
       } catch (eventError) {

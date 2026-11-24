@@ -7,6 +7,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -761,6 +762,10 @@ async function processMessage(
       channelType: 'whatsapp',
       automationReplied: contentAutomationRan,
     })
+  }
+
+  if (inboundText.trim()) {
+    await evaluateCriticalCaseSafely({ accountId, conversationId: conversation.id, triggerId: `whatsapp:${message.id}` })
   }
 
   // message.received webhook (public API). Awaited — not fire-and-forget

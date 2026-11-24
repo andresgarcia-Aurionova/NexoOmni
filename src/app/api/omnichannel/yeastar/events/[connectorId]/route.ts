@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -9,6 +9,7 @@ import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 
 // Receiving an image requires a PBX download and a Storage upload before the
@@ -519,6 +520,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
         channelType: 'yeastar_live_chat',
         automationReplied: contentAutomationRan,
       })
+    }
+    if (contentText.trim()) {
+      after(() => evaluateCriticalCaseSafely({ accountId: connector.account_id, conversationId: conversation.id, triggerId: `yeastar:${connector.id}:${externalMessageId}` }))
     }
     // n8n (and any other account webhook) receives the same normalized
     // vocabulary regardless of whether the customer wrote through WhatsApp

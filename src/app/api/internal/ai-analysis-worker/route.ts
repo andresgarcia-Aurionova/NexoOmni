@@ -38,6 +38,8 @@ import { processCreditCallPauses } from '@/lib/zernio/call-credit-pause'
 import { processAiCreditExpirations } from '@/lib/ai/credit-expiration'
 import { processAiCreditAlertEmails } from '@/lib/notifications/ai-credit-alerts'
 import { processReservationConfirmationJobs } from '@/lib/telephony/reservation-confirmation-worker'
+import { processCriticalCaseAlerts } from '@/lib/critical-cases/alerts'
+import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 
 /** How far ahead of a task's due_at the reminder notification fires. */
 const TASK_REMINDER_LEAD_MINUTES = 10
@@ -135,6 +137,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[ai credit alerts] Email outbox processing failed:', error)
     creditAlertEmails = { error: 'Could not process AI credit alert emails' }
+  }
+  let criticalCaseAlerts: Awaited<ReturnType<typeof processCriticalCaseAlerts>> | { error: string }
+  try {
+    criticalCaseAlerts = await processCriticalCaseAlerts(db)
+  } catch (error) {
+    console.error('[critical-cases] Alert outbox processing failed:', error)
+    criticalCaseAlerts = { error: 'Could not process critical case alerts' }
   }
   const webPush = await processWebPushOutbox(db)
   let callTranscriptions: Awaited<ReturnType<typeof processCallTranscriptions>> | { error: string }
@@ -319,7 +328,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[appointments] Google Calendar inbound sync could not start:', error)
   }
-  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, credit_call_pauses: creditCallPauses, calls: callTranscriptions, yeastar_transcription_charges: yeastarTranscriptionCharges, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, reservation_confirmations: reservationConfirmations, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in yeastarTranscriptionCharges || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
+  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, critical_case_alerts: criticalCaseAlerts, credit_call_pauses: creditCallPauses, calls: callTranscriptions, yeastar_transcription_charges: yeastarTranscriptionCharges, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, reservation_confirmations: reservationConfirmations, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in yeastarTranscriptionCharges || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
 }
 
 async function processAppointmentReminders(db: ReturnType<typeof supabaseAdmin>) {
@@ -678,6 +687,9 @@ async function completeMediaJob(
   await db.from('ai_media_analysis_jobs').update({ status: 'completed', error_message: null }).eq('id', job.id)
   await db.rpc('queue_ai_analysis_job', { p_account_id: job.account_id, p_conversation_id: job.conversation_id, p_trigger: 'manual', p_delay: '0 minutes' })
   if (job.kind === 'image' || job.kind === 'document') await dispatchDocumentAutoReplySafely(db, job)
+  if (job.kind === 'voice_note') {
+    await evaluateCriticalCaseSafely({ accountId: job.account_id, conversationId: job.conversation_id, triggerId: `media:${job.id}` })
+  }
 }
 
 async function dispatchDocumentAutoReplySafely(

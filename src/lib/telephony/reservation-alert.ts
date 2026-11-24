@@ -76,7 +76,7 @@ export async function loadAlertSettings(db: SupabaseClient, accountId: string): 
   }
 }
 
-const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim()
+export const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 export function reservationDateLabel(startsAt: string): string {
   const date = new Date(startsAt)
@@ -101,11 +101,14 @@ export function reservationAlertParams(args: {
   return [`Restaurante ${args.restaurant}`, when, oneLine(detail)]
 }
 
-type AlertSender =
+export type AlertTemplate = { templateName: string; templateLanguage: string }
+
+export type AlertSender =
   | { kind: 'zernio'; accountId: string }
   | { kind: 'meta'; phoneNumberId: string; accessToken: string }
 
-async function resolveAlertSender(db: SupabaseClient, accountId: string, settings: ReservationAlertSettings): Promise<AlertSender> {
+/** Resolves the WhatsApp line that owns the single approved copy of a template. */
+export async function resolveAlertSender(db: SupabaseClient, accountId: string, settings: AlertTemplate): Promise<AlertSender> {
   const { data: templates, error } = await db.from('message_templates')
     .select('connector_id, status')
     .eq('account_id', accountId)
@@ -114,23 +117,23 @@ async function resolveAlertSender(db: SupabaseClient, accountId: string, setting
   if (error) throw error
   const approved = (templates ?? []).filter((template) => String(template.status).toLowerCase() === 'approved')
   if (approved.length !== 1) {
-    throw new Error(`Expected one approved reservation alert template; found ${approved.length}`)
+    throw new Error(`Expected one approved alert template ${settings.templateName}; found ${approved.length}`)
   }
   const connectorId = approved[0].connector_id
   if (connectorId) {
     const connectors = await listZernioWhatsAppConnectors(db, accountId)
     const connector = connectors.find((item) => item.id === connectorId)
-    if (!connector) throw new Error('The reservation alert template WhatsApp connector is not active')
+    if (!connector) throw new Error('The alert template WhatsApp connector is not active')
     return { kind: 'zernio', accountId: connector.zernio_account_id }
   }
   const { data: meta, error: metaError } = await db.from('whatsapp_config')
     .select('phone_number_id, access_token').eq('account_id', accountId).maybeSingle()
   if (metaError) throw metaError
-  if (!meta) throw new Error('The reservation alert template direct WhatsApp number is not connected')
+  if (!meta) throw new Error('The alert template direct WhatsApp number is not connected')
   return { kind: 'meta', phoneNumberId: meta.phone_number_id, accessToken: decrypt(meta.access_token) }
 }
 
-async function sendToOne(sender: AlertSender, settings: ReservationAlertSettings, phone: string, params: string[]) {
+export async function sendToOne(sender: AlertSender, settings: AlertTemplate, phone: string, params: string[]) {
   if (sender.kind === 'zernio') {
     await sendZernioTemplateMessage({
       zernioAccountId: sender.accountId, phone,

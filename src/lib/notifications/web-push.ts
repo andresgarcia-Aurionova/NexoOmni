@@ -233,7 +233,7 @@ export async function processWebPushOutbox(db: SupabaseClient) {
     ] =
       await Promise.all([
         db.from('notifications')
-          .select('id, conversation_id')
+          .select('id, conversation_id, type, body')
           .eq('id', item.notification_id)
           .eq('user_id', item.user_id)
           .eq('account_id', item.account_id)
@@ -278,7 +278,10 @@ export async function processWebPushOutbox(db: SupabaseClient) {
       && isAccountRole(profile.account_role)
       && hasMinRole(profile.account_role, 'agent')
       && conversation
-      && (conversation.assigned_agent_id == null || conversation.assigned_agent_id === item.user_id);
+      // Critical cases fan out to supervisors regardless of who owns the thread.
+      && (notification?.type === 'critical_case'
+        || conversation.assigned_agent_id == null
+        || conversation.assigned_agent_id === item.user_id);
     if (!notification || !stillEligible || !subscriptions?.length) {
       if (!notification) {
         console.warn(`[web-push] Notification ${item.notification_id} no longer exists; skipping push.`);
@@ -313,8 +316,12 @@ export async function processWebPushOutbox(db: SupabaseClient) {
       try {
         const copy = pushCopy[subscription.locale];
         const payload = JSON.stringify({
-          title: copy.pushNotificationTitle,
-          body: copy.pushNotificationBody,
+          ...(notification.type === 'critical_case'
+            ? {
+                title: copy.criticalCaseTitle,
+                body: copy.criticalCaseBody.replace('{level}', String(notification.body ?? '').toUpperCase()),
+              }
+            : { title: copy.pushNotificationTitle, body: copy.pushNotificationBody }),
           url: `/inbox?c=${encodeURIComponent(item.conversation_id)}`,
           tag: `nexoomni-${notification.id}`,
           unreadCount,

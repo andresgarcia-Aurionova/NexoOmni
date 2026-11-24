@@ -212,6 +212,13 @@ export interface Conversation {
   social_post_preview_url?: string | null;
   social_ad_id?: string | null;
   social_ad_title?: string | null;
+  /** Case severity (migration 208). N2/N3 are critical and alert the team. */
+  case_level?: 'n1' | 'n2' | 'n3' | null;
+  case_level_source?: 'ai' | 'human' | null;
+  case_level_reason?: string | null;
+  case_sede?: string | null;
+  case_level_set_at?: string | null;
+  is_critical?: boolean;
 }
 
 // ============================================================
@@ -231,7 +238,9 @@ export type NotificationType =
   /** A client declined (or never answered) the 24h AgendaPro confirmation reminder — see src/lib/agendapro/confirmation.ts. */
   | 'agendapro_unconfirmed_appointment'
   | 'ai_credit_balance_10'
-  | 'ai_credit_balance_5';
+  | 'ai_credit_balance_5'
+  /** A conversation was classified N2/N3 (migration 208); title='critical_case', body=level. */
+  | 'critical_case';
 
 export interface Notification {
   id: string;

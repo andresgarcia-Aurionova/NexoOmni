@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -9,6 +9,7 @@ import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { extractMetaAttachment, extractMetaReaction, normalizeMetaText, safeMetaContactName } from '@/lib/omnichannel/webhook-normalizer'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import type { ChannelType } from '@/types'
 
@@ -595,6 +596,9 @@ async function ingestMessage(db: ReturnType<typeof admin>, connector: Connector,
       channelType: connector.provider as ChannelType,
       automationReplied: contentAutomationRan,
     })
+  }
+  if (contentText.trim()) {
+    after(() => evaluateCriticalCaseSafely({ accountId: connector.account_id, conversationId: conversation.id, triggerId: `meta:${connector.id}:${messageId}` }))
   }
   if (created) await dispatchWebhookEvent(db, connector.account_id, 'conversation.created', { conversation_id: conversation.id, contact_id: contactId, channel_type: connector.provider, connector_id: connector.id })
   await dispatchWebhookEvent(db, connector.account_id, 'message.received', { conversation_id: conversation.id, contact_id: contactId, message_id: `meta:${connector.id}:${messageId}`, channel_type: connector.provider, content_type: contentType, text: contentText, media_url: mediaUrl })

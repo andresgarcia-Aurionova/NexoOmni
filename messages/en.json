@@ -716,6 +716,8 @@
     "switchMode": "Switch to {mode} mode"
   },
   "Pwa": {
+    "criticalCaseTitle": "Critical case",
+    "criticalCaseBody": "New {level} case: handle it right away.",
     "installApp": "Install app",
     "iosInstallHelp": "In Safari, tap Share → Add to Home Screen.",
     "installFailed": "Could not start installation. Try using the browser menu.",
@@ -826,6 +828,8 @@
       "accessDeniedDescription": "Your role doesn't have permission to view that section."
     },
     "conversationList": {
+      "filterCritical": "Critical",
+      "criticalBadgeTitle": "Critical case (N2/N3)",
       "searchPlaceholder": "Search conversations...",
       "filterAll": "All",
       "filterUnread": "Unread",
@@ -2745,6 +2749,56 @@
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
       "loading": "Loading…"
+    }
+  },
+  "CriticalCases": {
+    "emailSubject": "⚠️ Critical case {level}: {contact}",
+    "emailHeading": "Critical case {level}",
+    "emailBody": "A case requiring immediate attention was detected. Review the conversation and follow up.",
+    "emailLevel": "Level",
+    "emailContact": "Customer",
+    "emailSede": "Location",
+    "emailReason": "Reason",
+    "emailCta": "Open conversation",
+    "sedeUnknown": "Location not identified",
+    "reasonUnknown": "No detail; review the conversation",
+    "level": {
+      "n1": "N1 · Inquiry",
+      "n2": "N2 · Complaint",
+      "n3": "N3 · Serious incident"
+    },
+    "noLevel": "Not classified",
+    "noLevelShort": "No level",
+    "criticalLabel": "Critical",
+    "sourceAi": "Classified by AI",
+    "sourceHuman": "Classified by the team",
+    "levelSelectLabel": "Case level",
+    "sedeSelectLabel": "Case location",
+    "saved": "Classification saved",
+    "saveError": "Could not save the classification",
+    "notificationTitle": "Critical case {level}",
+    "notificationBody": "A customer needs immediate attention. Open the conversation to handle it.",
+    "settings": {
+      "title": "Critical case alerts",
+      "description": "AI classifies each conversation as N1, N2 or N3. N2 and N3 cases are marked critical and send an immediate alert (in-app, WhatsApp and email) 24/7.",
+      "enabled": "Enable critical case alerts",
+      "levelsHint": "N1: inquiries and compliments · N2: complaints · N3: serious incidents (health, safety, food poisoning, mistreatment, wrongful charge, legal threat or public exposure).",
+      "defaultPhones": "Default alert WhatsApp numbers",
+      "defaultPhonesHint": "Used when the location can't be identified. One per line, in international format (+1…).",
+      "sedes": "Locations",
+      "sedesHint": "Each location can have its own alert numbers. AI tries to identify the location from the conversation.",
+      "sedeName": "Location {index} name",
+      "sedePhones": "Location {index} alert WhatsApp numbers",
+      "sedeNamePlaceholder": "e.g. Downtown branch",
+      "removeSede": "Remove location",
+      "addSede": "Add location",
+      "templateName": "WhatsApp template",
+      "templateLanguage": "Template language",
+      "templateHint": "Meta-approved template with 3 variables: level/location, customer and detail.",
+      "save": "Save",
+      "saved": "Settings saved",
+      "saveError": "Could not save settings",
+      "loadError": "Could not load settings"
     }
   }
 }

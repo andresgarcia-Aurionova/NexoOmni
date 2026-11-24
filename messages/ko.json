@@ -716,6 +716,8 @@
     "switchMode": "{mode} 모드로 전환"
   },
   "Pwa": {
+    "criticalCaseTitle": "긴급 사례",
+    "criticalCaseBody": "새 {level} 사례: 즉시 처리하세요.",
     "installApp": "앱 설치",
     "iosInstallHelp": "Safari에서 공유 → 홈 화면에 추가를 누르세요.",
     "installFailed": "설치를 시작할 수 없습니다. 브라우저 메뉴에서 다시 시도하세요.",
@@ -826,6 +828,8 @@
       "accessDeniedDescription": "현재 역할은 해당 섹션을 볼 권한이 없습니다."
     },
     "conversationList": {
+      "filterCritical": "긴급",
+      "criticalBadgeTitle": "긴급 사례 (N2/N3)",
       "searchPlaceholder": "대화 검색...",
       "filterAll": "전체",
       "filterUnread": "읽지 않음",
@@ -2745,6 +2749,56 @@
       "reindex": "재색인",
       "reindexTooltip": "모든 문서를 다시 임베딩합니다 (예: 임베딩 키 추가 후)",
       "loading": "불러오는 중…"
+    }
+  },
+  "CriticalCases": {
+    "emailSubject": "⚠️ 긴급 사례 {level}: {contact}",
+    "emailHeading": "긴급 사례 {level}",
+    "emailBody": "즉각적인 대응이 필요한 사례가 감지되었습니다. 대화를 확인하고 후속 조치하세요.",
+    "emailLevel": "등급",
+    "emailContact": "고객",
+    "emailSede": "지점",
+    "emailReason": "사유",
+    "emailCta": "대화 열기",
+    "sedeUnknown": "지점 미확인",
+    "reasonUnknown": "세부 정보 없음, 대화를 확인하세요",
+    "level": {
+      "n1": "N1 · 문의",
+      "n2": "N2 · 불만",
+      "n3": "N3 · 중대 사고"
+    },
+    "noLevel": "미분류",
+    "noLevelShort": "등급 없음",
+    "criticalLabel": "긴급",
+    "sourceAi": "AI 분류",
+    "sourceHuman": "팀 분류",
+    "levelSelectLabel": "사례 등급",
+    "sedeSelectLabel": "사례 지점",
+    "saved": "분류가 저장되었습니다",
+    "saveError": "분류를 저장할 수 없습니다",
+    "notificationTitle": "긴급 사례 {level}",
+    "notificationBody": "고객에게 즉각적인 대응이 필요합니다. 대화를 열어 처리하세요.",
+    "settings": {
+      "title": "긴급 사례 알림",
+      "description": "AI가 각 대화를 N1, N2, N3로 분류합니다. N2와 N3 사례는 긴급으로 표시되고 앱, WhatsApp, 이메일로 24시간 즉시 알림을 보냅니다.",
+      "enabled": "긴급 사례 알림 사용",
+      "levelsHint": "N1: 문의 및 칭찬 · N2: 불만 · N3: 중대 사고(건강, 안전, 식중독, 부당 대우, 부당 청구, 법적 위협 또는 공개 노출).",
+      "defaultPhones": "기본 알림 WhatsApp 번호",
+      "defaultPhonesHint": "지점을 확인할 수 없을 때 사용됩니다. 한 줄에 하나씩 국제 형식(+82…)으로 입력하세요.",
+      "sedes": "지점",
+      "sedesHint": "지점마다 별도의 알림 번호를 둘 수 있습니다. AI가 대화에서 지점을 식별합니다.",
+      "sedeName": "지점 {index} 이름",
+      "sedePhones": "지점 {index} 알림 WhatsApp 번호",
+      "sedeNamePlaceholder": "예: 본점",
+      "removeSede": "지점 삭제",
+      "addSede": "지점 추가",
+      "templateName": "WhatsApp 템플릿",
+      "templateLanguage": "템플릿 언어",
+      "templateHint": "변수 3개(등급/지점, 고객, 세부 정보)가 있는 Meta 승인 템플릿.",
+      "save": "저장",
+      "saved": "설정이 저장되었습니다",
+      "saveError": "설정을 저장할 수 없습니다",
+      "loadError": "설정을 불러올 수 없습니다"
     }
   }
 }

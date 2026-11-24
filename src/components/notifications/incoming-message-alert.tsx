@@ -13,6 +13,7 @@ import {
   formatCreditBalance,
   getAiCreditAlertThreshold,
 } from '@/lib/notifications/credit-alert-types';
+import { criticalLevelLabel } from '@/lib/notifications/critical-case-notification';
 
 /** Global listener for notification rows addressed to the signed-in user. */
 export function IncomingMessageAlert() {
@@ -21,6 +22,7 @@ export function IncomingMessageAlert() {
   const pushCopy = useTranslations('Pwa');
   const locale = useLocale();
   const creditAlertCopy = useTranslations('AiCreditAlerts');
+  const criticalCopy = useTranslations('CriticalCases');
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function IncomingMessageAlert() {
           oscillator.stop(endAt + 0.01);
         };
 
-        if (kind === 'negative_sentiment') {
+        if (kind === 'negative_sentiment' || kind === 'critical_case') {
           // A three-pulse alarm is intentionally unlike the two-note message
           // chime, so a supervisor can recognise an escalation by ear.
           playTone(660, context.currentTime, 0.22, 0.34);
@@ -124,6 +126,7 @@ export function IncomingMessageAlert() {
         notification.type !== 'conversation_assigned' &&
         notification.type !== 'conversation_transferred' &&
         notification.type !== 'agendapro_unconfirmed_appointment' &&
+        notification.type !== 'critical_case' &&
         getAiCreditAlertThreshold(notification.type) === null
       ) {
         return;
@@ -160,7 +163,9 @@ export function IncomingMessageAlert() {
 
       playAlert(notification.type);
       const creditThreshold = getAiCreditAlertThreshold(notification.type);
+      const isCriticalCase = notification.type === 'critical_case';
       const notify = notification.type === 'negative_sentiment' ||
+        isCriticalCase ||
         creditThreshold === 5
         ? toast.error
         : creditThreshold === 10 || notification.type === 'call_follow_up' || notification.type === 'nexo_memory_alert' || notification.type === 'task_reminder' || notification.type === 'agendapro_unconfirmed_appointment'
@@ -170,16 +175,18 @@ export function IncomingMessageAlert() {
             : notification.type === 'conversation_transferred'
               ? toast.success
               : toast;
-      const title =
-        creditThreshold === null
+      const title = isCriticalCase
+        ? criticalCopy('notificationTitle', { level: criticalLevelLabel(notification.body) })
+        : creditThreshold === null
           ? notification.title
           : creditAlertCopy(
               creditThreshold === 5
                 ? 'threshold5Title'
                 : 'threshold10Title'
               );
-      const description =
-        creditThreshold === null
+      const description = isCriticalCase
+        ? criticalCopy('notificationBody')
+        : creditThreshold === null
             ? notification.body
             : creditAlertCopy(
                 creditThreshold === 5
@@ -275,7 +282,7 @@ export function IncomingMessageAlert() {
       audioContextRef.current?.close().catch(() => undefined);
       audioContextRef.current = null;
     };
-  }, [router, user, pushCopy, locale, creditAlertCopy]);
+  }, [router, user, pushCopy, locale, creditAlertCopy, criticalCopy]);
 
   return null;
 }

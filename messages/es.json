@@ -716,6 +716,8 @@
     "switchMode": "Cambiar al modo {mode}"
   },
   "Pwa": {
+    "criticalCaseTitle": "Caso crítico",
+    "criticalCaseBody": "Nuevo caso {level}: atiéndelo de inmediato.",
     "installApp": "Instalar app",
     "iosInstallHelp": "En Safari, toca Compartir → Agregar a pantalla de inicio.",
     "installFailed": "No se pudo iniciar la instalación. Inténtalo desde el menú del navegador.",
@@ -826,6 +828,8 @@
       "accessDeniedDescription": "Tu rol no tiene permiso para ver esa sección."
     },
     "conversationList": {
+      "filterCritical": "Críticos",
+      "criticalBadgeTitle": "Caso crítico (N2/N3)",
       "searchPlaceholder": "Buscar conversaciones...",
       "filterAll": "Todos",
       "filterUnread": "No leídos",
@@ -2733,6 +2737,56 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Volver a incrustar (re-embed) todos los documentos (por ej. después de añadir una clave de embeddings)",
       "loading": "Cargando…"
+    }
+  },
+  "CriticalCases": {
+    "emailSubject": "⚠️ Caso crítico {level}: {contact}",
+    "emailHeading": "Caso crítico {level}",
+    "emailBody": "Se detectó un caso que requiere atención inmediata. Revisa la conversación y da seguimiento.",
+    "emailLevel": "Nivel",
+    "emailContact": "Cliente",
+    "emailSede": "Sede",
+    "emailReason": "Motivo",
+    "emailCta": "Abrir conversación",
+    "sedeUnknown": "Sede no identificada",
+    "reasonUnknown": "Sin detalle; revisa la conversación",
+    "level": {
+      "n1": "N1 · Consulta",
+      "n2": "N2 · Queja",
+      "n3": "N3 · Incidente grave"
+    },
+    "noLevel": "Sin clasificar",
+    "noLevelShort": "Sin nivel",
+    "criticalLabel": "Crítico",
+    "sourceAi": "Clasificado por IA",
+    "sourceHuman": "Clasificado por el equipo",
+    "levelSelectLabel": "Nivel del caso",
+    "sedeSelectLabel": "Sede del caso",
+    "saved": "Clasificación guardada",
+    "saveError": "No se pudo guardar la clasificación",
+    "notificationTitle": "Caso crítico {level}",
+    "notificationBody": "Un cliente necesita atención inmediata. Abre la conversación para atenderlo.",
+    "settings": {
+      "title": "Alertas de casos críticos",
+      "description": "La IA clasifica cada conversación en N1, N2 o N3. Los casos N2 y N3 se marcan como críticos y envían una alerta inmediata (en la app, WhatsApp y correo) las 24 horas.",
+      "enabled": "Activar alertas de casos críticos",
+      "levelsHint": "N1: consultas y felicitaciones · N2: quejas · N3: incidentes graves (salud, seguridad, intoxicación, maltrato, cobro indebido, amenaza legal o exposición pública).",
+      "defaultPhones": "WhatsApp de alerta predeterminados",
+      "defaultPhonesHint": "Se usan cuando no se identifica la sede. Uno por línea, en formato internacional (+52…).",
+      "sedes": "Sedes",
+      "sedesHint": "Cada sede puede tener sus propios números de alerta. La IA intenta identificar la sede por la conversación.",
+      "sedeName": "Nombre de la sede {index}",
+      "sedePhones": "WhatsApp de alerta de la sede {index}",
+      "sedeNamePlaceholder": "Ej. Sucursal Centro",
+      "removeSede": "Quitar sede",
+      "addSede": "Agregar sede",
+      "templateName": "Plantilla de WhatsApp",
+      "templateLanguage": "Idioma de la plantilla",
+      "templateHint": "Plantilla aprobada por Meta con 3 variables: nivel/sede, cliente y detalle.",
+      "save": "Guardar",
+      "saved": "Configuración guardada",
+      "saveError": "No se pudo guardar la configuración",
+      "loadError": "No se pudo cargar la configuración"
     }
   }
 }

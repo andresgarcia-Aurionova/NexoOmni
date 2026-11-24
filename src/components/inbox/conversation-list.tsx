@@ -65,7 +65,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 
-type InboxFilter = ConversationStatus | "all" | "unread";
+type InboxFilter = ConversationStatus | "all" | "unread" | "critical";
 export type InboxChannelFilter = "all" | "whatsapp" | "facebook" | "instagram" | "yeastar_live_chat" | "googlebusiness" | "email" | "tiktok" | "twitter" | "threads" | "telegram";
 
 function normalizedChannel(channel: Conversation["channel_type"]): Exclude<InboxChannelFilter, "all"> | null {
@@ -120,6 +120,7 @@ export function ConversationList({
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
     { label: t("filterUnread"), value: "unread" },
+    { label: t("filterCritical"), value: "critical" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
     { label: t("filterClosed"), value: "closed" },
@@ -298,6 +299,8 @@ export function ConversationList({
 
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
+    } else if (filter === "critical") {
+      result = result.filter((c) => c.is_critical === true);
     } else if (filter !== "all") {
       result = result.filter((c) => c.status === filter);
     }
@@ -777,6 +780,14 @@ function ConversationItem({
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
+            {conversation.is_critical && conversation.case_level && (
+              <span
+                className="rounded bg-destructive px-1 text-[10px] font-bold uppercase text-destructive-foreground"
+                title={t("criticalBadgeTitle")}
+              >
+                {conversation.case_level}
+              </span>
+            )}
             {conversation.unread_count > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}
