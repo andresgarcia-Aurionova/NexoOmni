@@ -115,8 +115,11 @@ proveedor si la ventana ya terminó.
 **¿La conexión muestra el nombre de NexoOmni?**
 Sí, la pantalla de bienvenida usa la marca configurada. La autorización
 oficial del proveedor todavía puede abrirse temporalmente en el dominio
-del integrador; ocultarlo por completo requiere un dominio personalizado
-o un flujo headless que debe habilitarse por separado.
+del integrador. Zernio conserva su insignia “Secured by Zernio” y la página
+oficial del proveedor puede mencionar la app de Zernio; ese comportamiento
+no se puede eliminar con el flujo oficial de marca blanca. NexoOmni ya usa
+`GET /api/v1/connect/{platform}?profileId=PROFILE_ID` y Zernio aplica la
+pantalla de bienvenida guardada a todos sus enlaces.
 
 **¿Se sincronizan tratos y oportunidades automáticamente?**
 Las conversaciones y contactos vinculados se sincronizan con el CRM

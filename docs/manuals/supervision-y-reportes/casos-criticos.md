@@ -17,6 +17,11 @@ NexoOmni revisa cada conversación entrante y le asigna un nivel de caso:
 
 Todo caso **N2 o N3 se marca como crítico** y dispara una alerta inmediata, las 24 horas del día y todos los días de la semana. Los casos N1 nunca generan alerta.
 
+Para incidentes de salud, la clasificación usa una regla adicional: síntomas,
+posible intoxicación o que se haya enfermado un grupo/familia después de comer
+se elevan a N3 aunque el modelo proponga un nivel menor. También se reconocen
+nombres parciales de sedes, por ejemplo “Lobos” como **Cueva de Lobos**.
+
 ## ¿Para quién es?
 
 - **Supervisores**: ven los casos críticos, filtran la bandeja y corrigen el nivel cuando la clasificación no es correcta.
@@ -46,6 +51,9 @@ NexoOmni llena las variables de la plantilla así:
 
 - En NexoOmni aparece un **aviso rojo** y una notificación del navegador o de la aplicación instalada.
 - La conversación muestra la etiqueta **Crítico N2** o **Crítico N3**. En la bandeja puedes filtrar para ver solo los casos críticos.
+- Si la IA debe pasar la conversación a una persona, primero envía al cliente
+  un acuse breve y empático; no ofrece diagnósticos, no admite responsabilidad
+  y no promete compensaciones.
 - Se envía un **WhatsApp** a los teléfonos de la sede del cliente, o a los teléfonos predeterminados cuando la sede no se identifica.
 - Se envía un **correo** a los supervisores, administradores y propietarios activos de la cuenta, y al agente asignado a la conversación, si lo hay.
 - Cada caso genera **una sola alerta**. Si la IA eleva un caso de N2 a N3, se avisa de nuevo. Si el nivel baja a N1, el caso vuelve a quedar listo para alertar en el futuro.

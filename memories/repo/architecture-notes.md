@@ -45,3 +45,9 @@ actually completed the request.
 PostgreSQL checks for template names must separate `char_length(... ) <= 512`
 from the character-class regex. A bound like `{1,512}` in the regex raises
 `2201B invalid repetition count` and makes every settings insert fail.
+
+Critical-case classification must not trust the model's severity alone.
+Health symptoms, suspected food poisoning, or a group becoming ill
+deterministically raise the result to N3; branch aliases are resolved from the
+transcript after normalization. The classifier runs before auto-reply so
+N2/N3 handoffs can acknowledge safely and still trigger the alert path.
