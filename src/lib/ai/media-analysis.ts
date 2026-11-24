@@ -1,6 +1,7 @@
 import { AiError, type AiUsage } from './types'
 import { AiBillingError, assertAiBillingReady } from './billing-config'
 import { supabaseAdmin } from './admin-client'
+import { providerHttpError, toNetworkError } from './providers/shared'
 
 export type MediaUsageReport = (
   report: { model: string; usage: AiUsage }
@@ -27,6 +28,8 @@ function tokenUsage(raw: unknown): AiUsage | null {
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_TRANSCRIPT_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
+const ANTHROPIC_VERSION = '2023-06-01'
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024
 // Media models are independent from the account's chat model. This avoids
 // breaking image/audio processing when an account chooses another text model.
@@ -269,6 +272,96 @@ No devuelvas los valores personales o fiscales encontrados. Enumera únicamente 
   }
   await args.onUsage({ model: data?.model || model, usage })
   return formatInvoicePdfValidation(result)
+}
+
+export async function analyzeInvoiceWithAnthropic(args: {
+  accountId: string
+  apiKey: string
+  model: string
+  kind: 'image' | 'document'
+  bytes: Buffer
+  mimeType: string
+  timeoutMs: number
+  onUsage: MediaUsageReport
+}): Promise<string> {
+  assertSize(args.bytes)
+  if (args.kind === 'image' && !args.mimeType.toLowerCase().startsWith('image/')) {
+    throw new AiError('El medio recibido no es una imagen compatible.', { code: 'unsupported_image_type', status: 415 })
+  }
+  if (args.kind === 'document' && !/application\/pdf/i.test(args.mimeType) && !args.bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+    throw new AiError('El documento enviado no es un PDF.', { code: 'unsupported_document_type', status: 415 })
+  }
+
+  const model = args.model || 'claude-sonnet-5-5'
+  await assertAiBillingReady(supabaseAdmin(), 'anthropic', model, args.accountId)
+  const prompt = args.kind === 'document'
+    ? `Analiza este PDF para apoyar una solicitud de facturación en México. Devuelve SOLO JSON válido con esta forma:
+{"document_type":"tax_certificate|receipt|other|unreadable","readable":true|false,"complete":true|false,"present_fields":[],"missing_fields":[],"issues":[]}
+
+Clasificación y reglas:
+- tax_certificate: constancia de situación fiscal. Deben estar legibles RFC, razón social/nombre, código postal fiscal y régimen fiscal.
+- receipt: ticket o comprobante de consumo. Deben estar legibles comercio/restaurante, fecha, importe total y folio/referencia.
+- other: es legible pero no corresponde a los documentos anteriores.
+- unreadable: está protegido, vacío, cortado o es demasiado borroso.
+
+No devuelvas valores personales o fiscales. Enumera solo nombres de campos detectados o faltantes.`
+    : `Analiza esta imagen para apoyo de atención al cliente y facturación. Devuelve SOLO JSON válido:
+{"document_type":"tax_certificate|receipt|other|unreadable","readable":true|false,"complete":true|false,"present_fields":[],"missing_fields":[],"issues":[],"description":""}
+
+- tax_certificate: constancia de situación fiscal; requiere RFC, razón social/nombre, código postal fiscal y régimen fiscal.
+- receipt: ticket o comprobante; requiere comercio/restaurante, fecha, importe total y folio/referencia.
+- other: no es ninguno; describe en una oración factual de máximo 25 palabras.
+- unreadable: borrosa, cortada, vacía o ilegible.
+
+No incluyas valores personales o fiscales. Enumera solo nombres de campos.`
+  const source = {
+    type: 'base64',
+    media_type: args.kind === 'document' ? 'application/pdf' : args.mimeType,
+    data: args.bytes.toString('base64'),
+  }
+  let response: Response
+  try {
+    response = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': args.apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 700,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: args.kind === 'document' ? 'document' : 'image', source },
+            { type: 'text', text: prompt },
+          ],
+        }],
+      }),
+      signal: AbortSignal.timeout(args.timeoutMs),
+    })
+  } catch (error) {
+    throw toNetworkError(error)
+  }
+  if (!response.ok) throw await providerHttpError('Anthropic', response)
+  const data = await response.json().catch(() => null) as {
+    model?: string
+    content?: Array<{ type?: string; text?: string }>
+    usage?: unknown
+  } | null
+  const raw = data?.content
+    ?.filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('')
+    .trim()
+  if (!raw) throw new AiError('Claude no devolvió el resultado del análisis del archivo.', { code: 'empty_response' })
+  const usage = tokenUsage(data?.usage)
+  if (!usage) {
+    throw new AiBillingError('Anthropic media validation did not report billable token usage; its output was blocked.')
+  }
+  await args.onUsage({ model: data?.model || model, usage })
+  return formatInvoicePdfValidation(parseInvoicePdfValidation(raw))
 }
 
 export function audioExtensionForMimeType(mimeType: string): string {

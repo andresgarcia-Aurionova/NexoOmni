@@ -51,7 +51,10 @@ export const AI_TASK_POLICY: Record<AiTask, TaskCandidate[]> = {
     { provider: 'anthropic', model: 'claude-sonnet-5-5' },
     { provider: 'openai', model: 'gpt-5.6-terra' },
   ],
-  image_description: [{ provider: 'openai', model: 'gpt-6-luna' }],
+  image_description: [
+    { provider: 'openai', model: 'gpt-6-luna' },
+    { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+  ],
   voice_transcription: [
     { provider: 'openai', model: 'gpt-4o-mini-transcribe' },
   ],

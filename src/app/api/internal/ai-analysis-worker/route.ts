@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server'
 import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
 import { generateForTask } from '@/lib/ai/generate'
-import { resolveAiTaskConfig } from '@/lib/ai/model-routing'
+import { resolveAiTaskConfig, resolveAiTaskFallbackConfig } from '@/lib/ai/model-routing'
 import { logAiUsage } from '@/lib/ai/usage'
-import type { AiUsage } from '@/lib/ai/types'
+import { AiError, type AiUsage } from '@/lib/ai/types'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { downloadZernioInboundMedia, type ZernioChannel } from '@/lib/zernio/server'
-import { analyzeInvoiceImageWithOpenAi, analyzeInvoicePdfWithOpenAi, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
+import { analyzeInvoiceImageWithOpenAi, analyzeInvoicePdfWithOpenAi, analyzeInvoiceWithAnthropic, downloadPublicMedia, transcribeAudioWithOpenAi } from '@/lib/ai/media-analysis'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import type { ChannelType } from '@/types'
@@ -555,10 +555,11 @@ async function analyzeMedia(
   fileName?: string,
 ): Promise<string> {
   const task = job.kind === 'voice_note' ? 'voice_transcription' : 'image_description'
-  const args = {
+  const primary = resolveAiTaskConfig(config, task)
+  const primaryArgs = {
     accountId: job.account_id,
-    apiKey: config.providerKeys?.openai ?? (config.provider === 'openai' ? config.apiKey : ''),
-    model: resolveAiTaskConfig(config, task).model,
+    apiKey: primary.apiKey,
+    model: primary.model,
     bytes,
     mimeType,
     timeoutMs: aiRequestTimeoutMs(),
@@ -567,15 +568,62 @@ async function analyzeMedia(
         accountId: job.account_id,
         conversationId: job.conversation_id,
         mode: task,
-        provider: 'openai',
+        provider: primary.provider,
         model,
         usage,
       })
     },
   }
-  if (job.kind === 'voice_note') return transcribeAudioWithOpenAi(args)
-  if (job.kind === 'document') return analyzeInvoicePdfWithOpenAi({ ...args, fileName })
-  return analyzeInvoiceImageWithOpenAi(args)
+  if (job.kind === 'voice_note') return transcribeAudioWithOpenAi(primaryArgs)
+  try {
+    if (primary.provider === 'anthropic') {
+      return await analyzeInvoiceWithAnthropic({ ...primaryArgs, kind: job.kind })
+    }
+    if (job.kind === 'document') return await analyzeInvoicePdfWithOpenAi({ ...primaryArgs, fileName })
+    return await analyzeInvoiceImageWithOpenAi(primaryArgs)
+  } catch (error) {
+    const policyFallback = error instanceof AiError
+      && ['timeout', 'network_error', 'rate_limited', 'provider_error', 'invalid_key'].includes(error.code)
+      ? resolveAiTaskFallbackConfig(config, task, primary)
+      : null
+    const fallback = policyFallback ?? (
+      error instanceof AiError
+      && ['timeout', 'network_error', 'rate_limited', 'provider_error', 'invalid_key'].includes(error.code)
+      && primary.provider === 'openai'
+      && config.providerKeys?.anthropic
+        ? {
+            ...config,
+            provider: 'anthropic' as const,
+            apiKey: config.providerKeys.anthropic,
+            model: 'claude-sonnet-5-5',
+          }
+        : null
+    )
+    if (!fallback) throw error
+    console.warn(
+      `[ai media] ${primary.provider}/${primary.model} failed (${(error as AiError).code}); retrying with ${fallback.provider}/${fallback.model}.`,
+    )
+    const fallbackArgs = {
+      ...primaryArgs,
+      apiKey: fallback.apiKey,
+      model: fallback.model,
+      onUsage: async ({ model, usage }: { model: string; usage: AiUsage }) => {
+        await logAiUsage(db, {
+          accountId: job.account_id,
+          conversationId: job.conversation_id,
+          mode: task,
+          provider: fallback.provider,
+          model,
+          usage,
+        })
+      },
+    }
+    if (fallback.provider === 'anthropic') {
+      return analyzeInvoiceWithAnthropic({ ...fallbackArgs, kind: job.kind })
+    }
+    if (job.kind === 'document') return analyzeInvoicePdfWithOpenAi({ ...fallbackArgs, fileName })
+    return analyzeInvoiceImageWithOpenAi(fallbackArgs)
+  }
 }
 
 async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
@@ -597,8 +645,8 @@ async function processMediaJobs(db: ReturnType<typeof supabaseAdmin>) {
     try {
       const config = await loadAiConfig(db, job.account_id)
       if (!config) throw new Error('La IA no está activa.')
-      if (!config.providerKeys?.openai && config.provider !== 'openai') {
-        await finishMediaJob(db, job, 'skipped_unsupported', 'El análisis de medios requiere OpenAI.', 'skipped')
+      if (!config.providerKeys?.openai && !config.providerKeys?.anthropic) {
+        await finishMediaJob(db, job, 'skipped_unsupported', 'No hay una credencial de IA compatible con el análisis de medios.', 'skipped')
         skipped++; continue
       }
       const { data: policy } = await db.from('ai_configs')

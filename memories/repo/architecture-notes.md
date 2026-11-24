@@ -36,3 +36,8 @@ Business hours block new flows and deterministic automations, but an enabled
 AI auto-reply may still answer outside hours, including after image/PDF
 analysis completes in the background. The closure notice is sent only when
 neither an active flow nor the AI handled the inbound message.
+
+Image/PDF validation uses OpenAI first for task pricing and reroutes provider
+failures to Anthropic's vision/document blocks when the account has both chat
+credentials. The retry preserves billable usage under the provider that
+actually completed the request.

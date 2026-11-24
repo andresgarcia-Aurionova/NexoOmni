@@ -76,6 +76,10 @@ describe('resolveAiTaskConfig', () => {
       provider: 'anthropic',
       model: 'claude-sonnet-5-5',
     });
+    expect(resolveAiTaskConfig(anthropicOnly, 'image_description', true)).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+    });
   });
 
   it('keeps explicit task-specific model overrides ahead of candidates', () => {
