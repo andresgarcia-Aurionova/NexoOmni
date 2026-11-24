@@ -36,6 +36,7 @@ type SubscriptionRow = {
   contract_reference: string | null
   invoice_reference: string | null
   internal_notes: string | null
+  feature_overrides: Record<string, unknown> | null
 }
 
 type ProfileRow = {
@@ -60,7 +61,7 @@ export async function GET() {
     const admin = adminClient()
     const [{ data: accounts, error: accountsError }, { data: subscriptions, error: subscriptionsError }, { data: profiles, error: profilesError }, { data: audit, error: auditError }] = await Promise.all([
       admin.from('accounts').select('id, name, owner_user_id, created_at').order('created_at', { ascending: false }),
-      admin.from('account_subscriptions').select('account_id, plan_code, seat_limit, status, ends_at, grace_days, contract_reference, invoice_reference, internal_notes'),
+      admin.from('account_subscriptions').select('account_id, plan_code, seat_limit, status, ends_at, grace_days, contract_reference, invoice_reference, internal_notes, feature_overrides'),
       admin.from('profiles').select('account_id, user_id, full_name, email, account_role, is_active'),
       admin.from('platform_commercial_audit').select('account_id, actor_user_id, action, created_at').order('created_at', { ascending: false }).limit(100),
     ])
@@ -117,6 +118,7 @@ export async function GET() {
             contract_reference: subscription.contract_reference,
             invoice_reference: subscription.invoice_reference,
             internal_notes: subscription.internal_notes,
+            feature_overrides: subscription.feature_overrides ?? {},
           } : null,
         }
       }),

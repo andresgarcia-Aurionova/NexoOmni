@@ -12,6 +12,7 @@ import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import type { ChannelType } from '@/types'
+import { channelAddOnEntitlement, getAccountEntitlements } from '@/lib/account/entitlements'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -783,6 +784,15 @@ export async function POST(request: Request) {
     for (const entry of payload.entry ?? []) {
       const connector = entry.id ? byChannel.get(entry.id) : undefined
       if (!connector || connector.status === 'paused') continue
+      const addOn = channelAddOnEntitlement(connector.provider)
+      const entitlements = await getAccountEntitlements(db, connector.account_id)
+      if (!addOn || !entitlements?.features[addOn]) {
+        console.info('[meta] webhook ignored because the channel add-on is disabled', {
+          accountId: connector.account_id,
+          provider: connector.provider,
+        })
+        continue
+      }
       for (const event of entry.messaging ?? []) {
         const kind: MetaEventKind | 'receipt' =
           (event.read || event.seen || event.delivery) ? 'receipt'

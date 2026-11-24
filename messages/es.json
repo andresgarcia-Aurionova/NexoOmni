@@ -29,6 +29,9 @@
     "telegramHelp": "Abre @{bot}, agrega el bot como administrador al grupo o canal y envíale el código junto con el usuario del grupo o canal.",
     "openTelegram": "Abrir Telegram",
     "telegramExpired": "El código de Telegram venció. Solicita uno nuevo.",
+    "addonRequiredTitle": "Este canal requiere un add-on",
+    "addonRequiredDescription": "{channel} está visible para consulta, pero tu cuenta aún no tiene habilitada esta conexión. Comunícate con tu proveedor de NexoOmni para contratar y activar el add-on.",
+    "understood": "Entendido",
     "channels": {
       "whatsapp": { "name": "WhatsApp", "description": "Mensajería de WhatsApp Business.", "connect": "Conectar WhatsApp" },
       "facebook": { "name": "Facebook", "description": "Messenger y comentarios públicos de la página.", "connect": "Conectar Facebook" },
@@ -43,6 +46,10 @@
       "hubspot": { "name": "HubSpot", "description": "Sincroniza contactos y conversaciones con el portal CRM.", "connect": "Conectar HubSpot" },
       "salesforce": { "name": "Salesforce", "description": "Conecta la organización para Contactos, Leads y actividades.", "connect": "Conectar Salesforce" }
     }
+  },
+  "PlatformChannelAddOns": {
+    "title": "Add-ons de integraciones y canales",
+    "description": "El cliente puede ver todos los canales. Sólo los marcados aquí le permitirán conectarse y utilizarlos."
   },
   "Assistant": {
     "title": "Nexo Asistente",
@@ -2464,7 +2471,7 @@
       "appearance": "Apariencia",
       "operating-mode": "Objetivo operativo",
       "whatsapp": "WhatsApp",
-      "social-messaging": "Facebook e Instagram",
+      "social-messaging": "Integraciones y canales conectados",
       "live-chat": "Chat web",
       "assignment": "Asignación",
       "telephony": "Telefonía",

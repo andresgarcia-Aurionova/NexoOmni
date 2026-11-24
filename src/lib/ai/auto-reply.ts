@@ -173,7 +173,7 @@ export async function evaluateAutoReplyGates(
  */
 export async function dispatchInboundToAiReply(
   args: DispatchArgs
-): Promise<void> {
+): Promise<boolean> {
   const { accountId, conversationId, contactId, configOwnerUserId } = args;
 
   try {
@@ -189,12 +189,12 @@ export async function dispatchInboundToAiReply(
       console.info(
         `[ai auto-reply] skipped conversation ${conversationId}: ${gate.reason}`
       );
-      return;
+      return false;
     }
     const { config, conv } = gate;
 
     const messages = await buildConversationContext(db, conversationId);
-    if (messages.length === 0) return;
+    if (messages.length === 0) return false;
 
     // Account-wide throttle on the shared provider credential. The per-conversation
     // cap bounds one thread; this bounds a burst across many threads (a
@@ -209,7 +209,7 @@ export async function dispatchInboundToAiReply(
       console.warn(
         `[ai auto-reply] account ${accountId} hit the per-account rate limit — skipping this inbound.`
       );
-      return;
+      return false;
     }
 
     // Ground the reply in the account's knowledge base (best-effort).
@@ -314,7 +314,7 @@ export async function dispatchInboundToAiReply(
           );
         }
       }
-      return;
+      return false;
     }
 
     // Atomically claim a reply slot: the cap check + increment happen in
@@ -335,9 +335,9 @@ export async function dispatchInboundToAiReply(
       // service role, or the migration not applied. Log it loudly: a
       // silent return makes "auto-reply never fires" undiagnosable.
       console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr);
-      return;
+      return false;
     }
-    if (claimed !== true) return; // lost the per-conversation cap race
+    if (claimed !== true) return false; // lost the per-conversation cap race
 
     if (args.channelType && args.channelType !== 'whatsapp') {
       await sendOmnichannelText(db, {
@@ -347,7 +347,7 @@ export async function dispatchInboundToAiReply(
         senderType: 'bot',
         aiGenerated: true,
       });
-      return;
+      return true;
     }
 
     await engineSendText({
@@ -358,8 +358,10 @@ export async function dispatchInboundToAiReply(
       text,
       aiGenerated: true,
     });
+    return true;
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err);
+    return false;
   }
 }
 

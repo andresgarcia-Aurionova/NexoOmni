@@ -22,6 +22,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import {
   Accordion,
@@ -38,6 +46,7 @@ type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
 
 export function WhatsAppConfig() {
   const t = useTranslations('Settings.whatsapp');
+  const integrationT = useTranslations('ZernioConnect');
   const supabase = createClient();
   // After multi-user, whatsapp_config is one-row-per-account, not
   // one-row-per-user. We pull `accountId` straight off the auth
@@ -55,6 +64,8 @@ export function WhatsAppConfig() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [resetReason, setResetReason] = useState<ResetReason>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [showAddonDialog, setShowAddonDialog] = useState(false);
   // Guards against re-hydrating the form when the load effect below
   // re-runs for reasons unrelated to actually switching accounts —
   // e.g. Supabase's onAuthStateChange fires a token refresh (new
@@ -136,6 +147,18 @@ export function WhatsAppConfig() {
         setPin('');
         setTokenEdited(false);
       }
+
+      const entitlementResponse = await fetch('/api/account/entitlements', {
+        cache: 'no-store',
+      });
+      if (entitlementResponse.ok) {
+        const entitlementBody = await entitlementResponse.json() as {
+          entitlements?: { features?: Record<string, boolean> }
+        };
+        setWhatsappEnabled(
+          entitlementBody.entitlements?.features?.channel_whatsapp === true,
+        );
+      }
       // Clear any stale probe result when reloading the row.
       setRegistrationProbe(null);
 
@@ -206,6 +229,10 @@ export function WhatsAppConfig() {
   }, [authLoading, profileLoading, user?.id, accountId, fetchConfig]);
 
   async function handleSave() {
+    if (!whatsappEnabled) {
+      setShowAddonDialog(true);
+      return;
+    }
     if (!phoneNumberId.trim()) {
       toast.error('Phone Number ID is required');
       return;
@@ -406,6 +433,7 @@ export function WhatsAppConfig() {
 
   if (loading) {
     return (
+      <>
       <section className="animate-in fade-in-50 duration-200">
         <SettingsPanelHead
           title={t("title")}
@@ -415,6 +443,24 @@ export function WhatsAppConfig() {
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
       </section>
+      <Dialog open={showAddonDialog} onOpenChange={setShowAddonDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{integrationT('addonRequiredTitle')}</DialogTitle>
+            <DialogDescription>
+              {integrationT('addonRequiredDescription', {
+                channel: integrationT('channels.whatsapp.name'),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowAddonDialog(false)}>
+              {integrationT('understood')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
     );
   }
 

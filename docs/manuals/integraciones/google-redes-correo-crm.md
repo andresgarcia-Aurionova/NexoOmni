@@ -24,8 +24,8 @@ TikTok no permite abrir una conversación nueva.
 ## ¿Para quién es?
 
 - El **propietario o administrador** autoriza las cuentas desde
-  **Configuración → Facebook e Instagram**, donde ahora aparecen todas
-  las integraciones conectadas.
+  **Configuración → Integraciones y canales conectados**, donde aparecen
+  todas las integraciones disponibles.
 - Los **supervisores y agentes** trabajan los eventos admitidos desde el
   Inbox como cualquier otra conversación.
 - El equipo comercial consulta en Reportes el canal de origen de cada
@@ -34,13 +34,22 @@ TikTok no permite abrir una conversación nueva.
 ## Cómo conectar
 
 1. Ve a **Configuración → Canales e integraciones**.
-2. Busca el servicio que quieres conectar y pulsa **Conectar**.
+2. Busca el servicio que quieres conectar y pulsa **Conectar**. Si el
+   canal está disponible pero no contratado, NexoOmni muestra un aviso
+   para contactar a tu proveedor y habilitar el add-on; la ventana no
+   inicia ninguna conexión ni cobro automáticamente.
 3. Autoriza la cuenta con el navegador del proveedor. NexoOmni nunca pide
    la contraseña de Google, TikTok, X, Threads, HubSpot o Salesforce.
 4. En Telegram, agrega el bot indicado como administrador del grupo o
    canal y envíale el código mostrado junto con el nombre del canal.
 5. Al volver, comprueba que el estado aparece como **Conectado**. Puedes
    pausar, reactivar o eliminar la conexión en cualquier momento.
+
+Los add-ons se habilitan por cuenta y por canal desde el panel de
+operación de NexoOmni. Esto incluye WhatsApp, Facebook, Instagram,
+Google Business, cuenta Google, correo, TikTok, X, Threads, Telegram,
+HubSpot y Salesforce. Un canal no habilitado sigue siendo visible, pero
+no permite conectarse ni enviar, recibir o analizar eventos nuevos.
 
 Para **correo IMAP / SMTP**, la guía detecta cuentas de Google o
 Microsoft y usa su autorización oficial. Otros buzones piden una

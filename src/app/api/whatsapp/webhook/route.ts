@@ -16,6 +16,7 @@ import {
 import { isValidStatusTransition } from '@/lib/whatsapp/recipient-status-ladder'
 import { flagBroadcastReplyIfAny as flagBroadcastReplyIfAnyShared } from '@/lib/whatsapp/broadcast-reply-flag'
 import { handleWhatsAppConfirmationReplies } from '@/lib/telephony/confirmation-replies'
+import { getAccountEntitlements } from '@/lib/account/entitlements'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -286,6 +287,17 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       }
 
       const config = configRows[0]
+      const entitlements = await getAccountEntitlements(
+        supabaseAdmin(),
+        config.account_id,
+      )
+      if (!entitlements?.features.channel_whatsapp) {
+        console.info('[whatsapp] inbound ignored because the channel add-on is disabled', {
+          accountId: config.account_id,
+          phoneNumberId,
+        })
+        continue
+      }
 
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]

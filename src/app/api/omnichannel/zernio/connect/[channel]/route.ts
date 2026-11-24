@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-import { requireEntitlement } from '@/lib/account/entitlements'
+import { channelAddOnEntitlement, requireEntitlement } from '@/lib/account/entitlements'
 import { ForbiddenError, UnauthorizedError } from '@/lib/auth/account'
 import {
   createZernioTelegramCode,
@@ -47,7 +47,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
   const tab = channel === 'whatsapp' ? 'whatsapp' : 'social-messaging'
   try {
     if (!isZernioConnectRouteChannel(channel)) return settingsRedirect(request, tab, 'error', 'Integración no válida.')
-    const { accountId, userId, supabase } = await requireEntitlement('social_messaging', 'admin')
+    const entitlement = channelAddOnEntitlement(channel)
+    if (!entitlement) return settingsRedirect(request, tab, 'error', 'Integración no válida.')
+    const { accountId, userId, supabase } = await requireEntitlement(entitlement, 'admin')
     const { data: account, error: accountError } = await supabase.from('accounts').select('name').eq('id', accountId).single()
     if (accountError) throw accountError
     const db = admin()

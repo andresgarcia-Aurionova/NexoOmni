@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-import { requireEntitlement } from '@/lib/account/entitlements'
+import { channelAddOnEntitlement, requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { encrypt } from '@/lib/whatsapp/encryption'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
@@ -62,17 +62,19 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireEntitlement('social_messaging', 'admin')
-    const limit = checkRateLimit(`omnichannel:meta:configure:${userId}`, RATE_LIMITS.adminAction)
-    if (!limit.success) return rateLimitResponse(limit)
     const body = await request.json().catch(() => null) as Record<string, unknown> | null
     const provider = asProvider(body?.provider)
+    if (!provider) return NextResponse.json({ error: 'Selecciona Facebook o Instagram.' }, { status: 400 })
+    const entitlement = channelAddOnEntitlement(provider)
+    if (!entitlement) return NextResponse.json({ error: 'Integración no válida.' }, { status: 400 })
+    const { accountId, userId } = await requireEntitlement(entitlement, 'admin')
+    const limit = checkRateLimit(`omnichannel:meta:configure:${userId}`, RATE_LIMITS.adminAction)
+    if (!limit.success) return rateLimitResponse(limit)
     const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : ''
     const channelId = typeof body?.channelId === 'string' ? body.channelId.trim() : ''
     const accessToken = typeof body?.accessToken === 'string' ? body.accessToken.trim() : ''
     const appSecret = typeof body?.appSecret === 'string' ? body.appSecret.trim() : ''
     const verifyToken = typeof body?.verifyToken === 'string' ? body.verifyToken.trim() : ''
-    if (!provider) return NextResponse.json({ error: 'Selecciona Facebook o Instagram.' }, { status: 400 })
     if (!displayName || displayName.length > 80) return NextResponse.json({ error: 'Indica un nombre de canal de hasta 80 caracteres.' }, { status: 400 })
     if (!CHANNEL_ID_RE.test(channelId)) return NextResponse.json({ error: 'El ID de página o cuenta profesional de Meta no es válido.' }, { status: 400 })
     if (accessToken.length > 2048 || appSecret.length > 512 || verifyToken.length > 512) return NextResponse.json({ error: 'Una credencial excede el tamaño permitido.' }, { status: 400 })

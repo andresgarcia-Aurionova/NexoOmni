@@ -27,6 +27,15 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { channelAddOnEntitlement } from '@/lib/account/entitlements'
+import {
   connectChannelForProvider,
   type ZernioConnectChannel,
 } from '@/lib/zernio/channels'
@@ -79,6 +88,8 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState<string | null>(null)
   const [telegramAccess, setTelegramAccess] = useState<TelegramAccess | null>(null)
+  const [entitlements, setEntitlements] = useState<Record<string, boolean>>({})
+  const [blockedChannel, setBlockedChannel] = useState<ZernioConnectChannel | null>(null)
 
   useEffect(() => {
     const status = searchParams.get('zernio')
@@ -99,11 +110,20 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch('/api/omnichannel/zernio/connectors', { cache: 'no-store' })
+      const [response, entitlementResponse] = await Promise.all([
+        fetch('/api/omnichannel/zernio/connectors', { cache: 'no-store' }),
+        fetch('/api/account/entitlements', { cache: 'no-store' }),
+      ])
       if (!response.ok) throw new Error(t('loadError'))
       const body = await response.json() as { connectors: Connector[]; configured?: boolean }
       setConnectors(body.connectors ?? [])
       setConfigured(body.configured !== false)
+      if (entitlementResponse.ok) {
+        const entitlementBody = await entitlementResponse.json() as {
+          entitlements?: { features?: Record<string, boolean> }
+        }
+        setEntitlements(entitlementBody.entitlements?.features ?? {})
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('loadError'))
     } finally {
@@ -114,6 +134,11 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   useEffect(() => { void load() }, [load])
 
   const startConnect = async (channel: ZernioConnectChannel) => {
+    const entitlement = channelAddOnEntitlement(channel)
+    if (!entitlement || !entitlements[entitlement]) {
+      setBlockedChannel(channel)
+      return
+    }
     setPending(`connect:${channel}`)
     if (channel !== 'telegram') {
       window.location.assign(`/api/omnichannel/zernio/connect/${channel}`)
@@ -208,6 +233,7 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
   })
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Link2 className="size-5 text-primary" />{t('title')}</CardTitle>
@@ -221,12 +247,14 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
           {channels.map((channel) => {
             const Icon = CHANNEL_ICONS[channel]
             const isConnecting = pending === `connect:${channel}`
+            const entitlement = channelAddOnEntitlement(channel)
+            const enabled = Boolean(entitlement && entitlements[entitlement])
             return (
               <div key={channel} className="rounded-lg border border-border p-4">
                 <Icon className="mb-3 size-5 text-primary" />
                 <p className="font-medium">{t(`channels.${channel}.name`)}</p>
                 <p className="mt-1 min-h-10 text-xs text-muted-foreground">{t(`channels.${channel}.description`)}</p>
-                <Button className="mt-4 w-full" onClick={() => void startConnect(channel)} disabled={pending !== null || !configured}>
+                <Button className="mt-4 w-full" onClick={() => void startConnect(channel)} disabled={pending !== null || (enabled && !configured)}>
                   {isConnecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Link2 className="mr-2 size-4" />}
                   {t(`channels.${channel}.connect`)}
                 </Button>
@@ -296,5 +324,26 @@ export function ZernioConnectConfig({ channels }: { channels: ZernioConnectChann
         )}
       </CardContent>
     </Card>
+    <Dialog
+      open={blockedChannel !== null}
+      onOpenChange={(open) => {
+        if (!open) setBlockedChannel(null)
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('addonRequiredTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('addonRequiredDescription', {
+              channel: blockedChannel ? t(`channels.${blockedChannel}.name`) : '',
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={() => setBlockedChannel(null)}>{t('understood')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

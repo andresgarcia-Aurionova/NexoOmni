@@ -29,6 +29,9 @@
     "telegramHelp": "@{bot}을 열고 그룹 또는 채널에 관리자 권한으로 봇을 추가한 후 사용자 이름과 함께 코드를 보냅니다.",
     "openTelegram": "Telegram 열기",
     "telegramExpired": "Telegram 코드가 만료되었습니다. 새 코드를 요청하세요.",
+    "addonRequiredTitle": "이 채널에는 추가 기능이 필요합니다",
+    "addonRequiredDescription": "{channel}은(는) 확인용으로 표시되지만 계정에서 아직 연결이 활성화되지 않았습니다. 추가 기능을 구매하고 활성화하려면 NexoOmni 공급업체에 문의하세요.",
+    "understood": "확인",
     "channels": {
       "whatsapp": { "name": "WhatsApp", "description": "WhatsApp Business 메시징.", "connect": "WhatsApp 연결" },
       "facebook": { "name": "Facebook", "description": "Messenger 및 공개 페이지 댓글.", "connect": "Facebook 연결" },
@@ -43,6 +46,10 @@
       "hubspot": { "name": "HubSpot", "description": "연락처와 대화를 CRM 포털과 동기화.", "connect": "HubSpot 연결" },
       "salesforce": { "name": "Salesforce", "description": "Contacts, Leads, 활동을 위해 조직 연결.", "connect": "Salesforce 연결" }
     }
+  },
+  "PlatformChannelAddOns": {
+    "title": "통합 및 채널 추가 기능",
+    "description": "고객은 모든 채널을 볼 수 있습니다. 선택한 추가 기능만 연결 및 사용을 허용합니다."
   },
   "Assistant": {
     "title": "Nexo 어시스턴트",
@@ -2474,7 +2481,7 @@
       "appearance": "화면 설정",
       "operating-mode": "운영 목표",
       "whatsapp": "WhatsApp",
-      "social-messaging": "Facebook 및 Instagram",
+      "social-messaging": "통합 및 연결된 채널",
       "live-chat": "웹 채팅",
       "assignment": "대화 배정",
       "telephony": "전화",

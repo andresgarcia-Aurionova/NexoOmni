@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Building2, CirclePause, CirclePlay, Eraser, LifeBuoy, LoaderCircle, Pencil, Send, ShieldCheck, Trash2, UserCog, UserPlus, UsersRound } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +17,7 @@ import { AiProviderCredentialsPanel } from '@/components/platform/ai-provider-cr
 import { StripeSettingsPanel } from '@/components/platform/stripe-settings-panel'
 
 type PlanCode = 'basic' | 'ai' | 'yeastar_voice' | 'whatsapp_voice'
+type ChannelAddOn = 'channel_whatsapp' | 'channel_facebook' | 'channel_instagram' | 'channel_googlebusiness' | 'channel_google' | 'channel_email' | 'channel_tiktok' | 'channel_twitter' | 'channel_threads' | 'channel_telegram' | 'channel_hubspot' | 'channel_salesforce'
 type PlatformAccount = {
   id: string
   name: string
@@ -24,7 +26,7 @@ type PlatformAccount = {
   members: number
   audit: { action: string; actor: string; created_at: string }[]
   team: PlatformMember[]
-  subscription: { plan_code: PlanCode; seat_limit: number; status: SubscriptionStatus; ends_at: string | null; grace_days: number; contract_reference: string | null; invoice_reference: string | null; internal_notes: string | null } | null
+  subscription: { plan_code: PlanCode; seat_limit: number; status: SubscriptionStatus; ends_at: string | null; grace_days: number; contract_reference: string | null; invoice_reference: string | null; internal_notes: string | null; feature_overrides: Record<string, boolean> } | null
 }
 
 type PlatformMember = {
@@ -44,6 +46,34 @@ const PLAN_LABELS: Record<PlanCode, string> = {
   whatsapp_voice: 'Plan 3 · IA + telefonía',
 }
 const STATUS_LABELS: Record<SubscriptionStatus, string> = { active: 'Activa', trial: 'Demo', suspended: 'Pausada', cancelled: 'Cancelada' }
+const CHANNEL_ADD_ON_LABELS: Record<ChannelAddOn, string> = {
+  channel_whatsapp: 'WhatsApp',
+  channel_facebook: 'Facebook',
+  channel_instagram: 'Instagram',
+  channel_googlebusiness: 'Google Business',
+  channel_google: 'Cuenta Google',
+  channel_email: 'Correo IMAP / SMTP',
+  channel_tiktok: 'TikTok',
+  channel_twitter: 'X',
+  channel_threads: 'Threads',
+  channel_telegram: 'Telegram',
+  channel_hubspot: 'HubSpot',
+  channel_salesforce: 'Salesforce',
+}
+const emptyChannelAddOns = (): Record<ChannelAddOn, boolean> => ({
+  channel_whatsapp: false,
+  channel_facebook: false,
+  channel_instagram: false,
+  channel_googlebusiness: false,
+  channel_google: false,
+  channel_email: false,
+  channel_tiktok: false,
+  channel_twitter: false,
+  channel_threads: false,
+  channel_telegram: false,
+  channel_hubspot: false,
+  channel_salesforce: false,
+})
 function dateInputValue(value: string | null) { return value ? value.slice(0, 10) : '' }
 function isExpired(endsAt: string | null) { return !!endsAt && new Date(endsAt).getTime() <= Date.now() }
 function isInGrace(subscription: PlatformAccount['subscription']) {
@@ -62,12 +92,13 @@ function displayStatus(subscription: PlatformAccount['subscription']) {
 }
 
 export default function PlatformPage() {
+  const addonT = useTranslations('PlatformChannelAddOns')
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [allowed, setAllowed] = useState(true)
   const [editing, setEditing] = useState<PlatformAccount | null>(null)
-  const [editForm, setEditForm] = useState({ account_name: '', owner_name: '', owner_email: '', plan_code: 'ai' as PlanCode, seat_limit: '1', status: 'active' as SubscriptionStatus, ends_at: '', grace_days: '0', contract_reference: '', invoice_reference: '', internal_notes: '' })
+  const [editForm, setEditForm] = useState({ account_name: '', owner_name: '', owner_email: '', plan_code: 'ai' as PlanCode, seat_limit: '1', status: 'active' as SubscriptionStatus, ends_at: '', grace_days: '0', contract_reference: '', invoice_reference: '', internal_notes: '', channel_add_ons: emptyChannelAddOns() })
   const [actionId, setActionId] = useState<string | null>(null)
   const [form, setForm] = useState({ account_name: '', owner_name: '', owner_email: '', plan_code: 'ai' as PlanCode, seat_limit: '1', access_days: '0' })
   const [managingAccount, setManagingAccount] = useState<PlatformAccount | null>(null)
@@ -136,7 +167,11 @@ export default function PlatformPage() {
       return
     }
     setEditing(account)
-    setEditForm({ account_name: account.name, owner_name: account.owner?.full_name ?? '', owner_email: account.owner?.email ?? '', plan_code: account.subscription.plan_code, seat_limit: String(account.subscription.seat_limit), status: account.subscription.status, ends_at: dateInputValue(account.subscription.ends_at), grace_days: String(account.subscription.grace_days ?? 0), contract_reference: account.subscription.contract_reference ?? '', invoice_reference: account.subscription.invoice_reference ?? '', internal_notes: account.subscription.internal_notes ?? '' })
+    const channelAddOns = emptyChannelAddOns()
+    for (const key of Object.keys(channelAddOns) as ChannelAddOn[]) {
+      channelAddOns[key] = account.subscription.feature_overrides?.[key] === true
+    }
+    setEditForm({ account_name: account.name, owner_name: account.owner?.full_name ?? '', owner_email: account.owner?.email ?? '', plan_code: account.subscription.plan_code, seat_limit: String(account.subscription.seat_limit), status: account.subscription.status, ends_at: dateInputValue(account.subscription.ends_at), grace_days: String(account.subscription.grace_days ?? 0), contract_reference: account.subscription.contract_reference ?? '', invoice_reference: account.subscription.invoice_reference ?? '', internal_notes: account.subscription.internal_notes ?? '', channel_add_ons: channelAddOns })
   }
 
   const saveEdit = async (event: React.FormEvent) => {
@@ -146,7 +181,12 @@ export default function PlatformPage() {
     try {
       const response = await fetch(`/api/platform/accounts/${editing.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editForm, seat_limit: Number(editForm.seat_limit), grace_days: Number(editForm.grace_days) }),
+        body: JSON.stringify({
+          ...editForm,
+          seat_limit: Number(editForm.seat_limit),
+          grace_days: Number(editForm.grace_days),
+          feature_overrides: editForm.channel_add_ons,
+        }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error ?? 'No se pudo actualizar la cuenta.')
@@ -335,6 +375,30 @@ export default function PlatformPage() {
           <div className="space-y-2"><Label htmlFor="edit-contract">Referencia de contrato</Label><Input id="edit-contract" maxLength={160} value={editForm.contract_reference} onChange={(event) => setEditForm((current) => ({ ...current, contract_reference: event.target.value }))} /></div>
           <div className="space-y-2"><Label htmlFor="edit-invoice">Referencia de factura</Label><Input id="edit-invoice" maxLength={160} value={editForm.invoice_reference} onChange={(event) => setEditForm((current) => ({ ...current, invoice_reference: event.target.value }))} /></div>
           <div className="space-y-2 md:col-span-2"><Label htmlFor="edit-commercial-notes">Notas internas comerciales</Label><textarea id="edit-commercial-notes" maxLength={4000} value={editForm.internal_notes} onChange={(event) => setEditForm((current) => ({ ...current, internal_notes: event.target.value }))} className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" /><p className="text-xs text-muted-foreground">Sólo visibles para operación de plataforma.</p></div>
+          <div className="space-y-3 rounded-lg border p-4 md:col-span-2">
+            <div>
+              <Label>{addonT('title')}</Label>
+              <p className="mt-1 text-xs text-muted-foreground">{addonT('description')}</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {(Object.keys(CHANNEL_ADD_ON_LABELS) as ChannelAddOn[]).map((key) => (
+                <label key={key} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editForm.channel_add_ons[key]}
+                    onChange={(event) => setEditForm((current) => ({
+                      ...current,
+                      channel_add_ons: {
+                        ...current.channel_add_ons,
+                        [key]: event.target.checked,
+                      },
+                    }))}
+                  />
+                  {CHANNEL_ADD_ON_LABELS[key]}
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2"><Label>Plan</Label><Select value={editForm.plan_code} onValueChange={(value) => setEditForm((current) => ({ ...current, plan_code: value as PlanCode }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(Object.keys(PLAN_LABELS) as PlanCode[]).map((plan) => <SelectItem key={plan} value={plan}>{PLAN_LABELS[plan]}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-2"><Label>Estado del servicio</Label><Select value={editForm.status} onValueChange={(value) => setEditForm((current) => ({ ...current, status: value as SubscriptionStatus }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(Object.keys(STATUS_LABELS) as SubscriptionStatus[]).map((status) => <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>)}</SelectContent></Select></div>
           <div className="flex items-end gap-2"><Button type="submit" disabled={actionId === editing.id}>{actionId === editing.id ? <LoaderCircle className="animate-spin" /> : <Pencil />}Guardar cambios</Button><Button type="button" variant="outline" onClick={() => setEditing(null)} disabled={actionId === editing.id}>Cancelar</Button></div>

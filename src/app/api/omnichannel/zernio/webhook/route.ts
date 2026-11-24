@@ -25,7 +25,8 @@ import { reservationReplySenderPhone } from '@/lib/telephony/reservation-reply-s
 import { findExactZernioWhatsAppContact } from '@/lib/zernio/whatsapp-contact'
 import { findOrCreateZernioConversation } from '@/lib/zernio/webhook-conversation'
 import type { ChannelType } from '@/types'
-import { isZernioConversationPlatform, type ZernioConversationPlatform } from '@/lib/zernio/channels'
+import { connectChannelForProvider, isZernioConversationPlatform, type ZernioConversationPlatform } from '@/lib/zernio/channels'
+import { channelAddOnEntitlement, getAccountEntitlements } from '@/lib/account/entitlements'
 
 export const dynamic = 'force-dynamic'
 // Zernio requires a prompt HTTP acknowledgement. The actual handling (which
@@ -307,6 +308,16 @@ async function syncZernioContactEvent(db: ReturnType<typeof admin>, event: Json,
   if (connectorError) throw connectorError
   if (!connector) return
   const typed = connector as Connector
+  const connectChannel = connectChannelForProvider(typed.provider)
+  const addOn = connectChannel ? channelAddOnEntitlement(connectChannel) : null
+  const entitlements = await getAccountEntitlements(db, typed.account_id)
+  if (!addOn || !entitlements?.features[addOn]) {
+    console.info('[zernio] webhook ignored because the channel add-on is disabled', {
+      accountId: typed.account_id,
+      provider: typed.provider,
+    })
+    return
+  }
   if (!(await registerReceipt(db, typed, eventId, 'contact.updated', event))) return
   const contact = await getZernioContact(contactId)
   if (!contact) return
@@ -712,6 +723,16 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       if (connectorError) throw connectorError
       if (!connector) continue
       const typed = connector as Connector
+      const connectChannel = connectChannelForProvider(typed.provider)
+      const addOn = connectChannel ? channelAddOnEntitlement(connectChannel) : null
+      const entitlements = await getAccountEntitlements(db, typed.account_id)
+      if (!addOn || !entitlements?.features[addOn]) {
+        console.info('[zernio] inbound ignored because the channel add-on is disabled', {
+          accountId: typed.account_id,
+          provider: typed.provider,
+        })
+        continue
+      }
       if (!(await registerReceipt(db, typed, externalEventId, eventType, event))) continue
       if (publicComment?.author.isOwnAccount) {
         await db.from('zernio_webhook_receipts').update({
@@ -1122,6 +1143,17 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
               automationReplied: contentAutomationRan,
             })
           }
+        },
+        runAfterHoursResponder: async (flowConsumed) => {
+          if (flowConsumed || contentType === 'document' || !content.trim()) return false
+          return dispatchInboundToAiReply({
+            accountId: typed.account_id,
+            conversationId: conversationRow.id,
+            contactId,
+            configOwnerUserId: auditUserId,
+            channelType: typed.provider as ChannelType,
+            automationReplied: false,
+          })
         },
       })
       await db.from('omnichannel_connectors').update({ status: 'active', last_event_at: now, last_error: null, updated_at: now }).eq('id', typed.id)

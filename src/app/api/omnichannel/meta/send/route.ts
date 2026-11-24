@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-import { requireEntitlement } from '@/lib/account/entitlements'
+import { channelAddOnEntitlement, requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
@@ -26,7 +26,7 @@ function graphVersion() {
 
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireEntitlement('social_messaging', 'agent')
+    const { accountId, userId, entitlements } = await requireEntitlement('social_messaging', 'agent')
     const limit = checkRateLimit(`omnichannel:meta:send:${userId}`, RATE_LIMITS.send)
     if (!limit.success) return rateLimitResponse(limit)
     const body = await request.json().catch(() => null) as Record<string, unknown> | null
@@ -38,6 +38,10 @@ export async function POST(request: Request) {
     const { data: conversation, error: conversationError } = await db.from('conversations')
       .select('id, connector_id, external_session_id, channel_type, social_comment_id').eq('id', conversationId).eq('account_id', accountId).in('channel_type', ['facebook', 'instagram']).maybeSingle()
     if (conversationError) throw conversationError
+    const addOn = conversation ? channelAddOnEntitlement(conversation.channel_type) : null
+    if (conversation && (!addOn || !entitlements.features[addOn])) {
+      return NextResponse.json({ error: 'Este canal no está habilitado para la cuenta. Contacta a tu proveedor de NexoOmni.' }, { status: 403 })
+    }
     if (!conversation?.connector_id || (!conversation.external_session_id && !conversation.social_comment_id) || (conversation.channel_type !== 'facebook' && conversation.channel_type !== 'instagram')) {
       return NextResponse.json({ error: 'Esta conversación no tiene un destinatario Meta disponible.' }, { status: 409 })
     }

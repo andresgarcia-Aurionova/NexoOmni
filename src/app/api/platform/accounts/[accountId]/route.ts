@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { toErrorResponse } from '@/lib/auth/account'
-import { PLAN_CODES } from '@/lib/account/entitlements'
+import { CHANNEL_ADD_ON_ENTITLEMENTS, PLAN_CODES } from '@/lib/account/entitlements'
 import { requirePlatformOperator } from '@/lib/platform/operator'
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
 
@@ -46,6 +46,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     const internalNotes = typeof body?.internal_notes === 'string' ? body.internal_notes.trim() : ''
     const ownerName = typeof body?.owner_name === 'string' ? body.owner_name.trim() : undefined
     const ownerEmail = typeof body?.owner_email === 'string' ? body.owner_email.trim().toLowerCase() : undefined
+    const requestedFeatureOverrides = body?.feature_overrides
+    if (
+      requestedFeatureOverrides !== undefined &&
+      (
+        !requestedFeatureOverrides ||
+        typeof requestedFeatureOverrides !== 'object' ||
+        Array.isArray(requestedFeatureOverrides) ||
+        Object.entries(requestedFeatureOverrides).some(([key, value]) =>
+          !(CHANNEL_ADD_ON_ENTITLEMENTS as readonly string[]).includes(key) ||
+          typeof value !== 'boolean'
+        )
+      )
+    ) {
+      return NextResponse.json({ error: 'Los add-ons de canales no son válidos.' }, { status: 400 })
+    }
     if (!name || name.length > MAX_ACCOUNT_NAME) return NextResponse.json({ error: 'Indica un nombre comercial de hasta 80 caracteres.' }, { status: 400 })
     if (!(PLAN_CODES as readonly string[]).includes(planCode)) return NextResponse.json({ error: 'El plan seleccionado no es válido.' }, { status: 400 })
     if (!Number.isInteger(seatLimit) || seatLimit < 1 || seatLimit > 1000) return NextResponse.json({ error: 'Los usuarios contratados deben estar entre 1 y 1000.' }, { status: 400 })
@@ -76,16 +91,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       }).eq('account_id', accountId).eq('user_id', account.owner_user_id)
       if (ownerUpdateError) throw ownerUpdateError
     }
-    const { data: current } = await admin.from('account_subscriptions').select('plan_code, seat_limit, status, ends_at, grace_days, contract_reference, invoice_reference, internal_notes').eq('account_id', accountId).maybeSingle()
+    const { data: current } = await admin.from('account_subscriptions').select('plan_code, seat_limit, status, ends_at, grace_days, contract_reference, invoice_reference, internal_notes, feature_overrides').eq('account_id', accountId).maybeSingle()
     const { count, error: countError } = await admin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_id', accountId)
     if (countError) throw countError
     if ((count ?? 0) > seatLimit) return NextResponse.json({ error: `No puedes bajar el límite a ${seatLimit}: la cuenta ya tiene ${count} usuario(s).` }, { status: 400 })
 
     const { error: accountError } = await admin.from('accounts').update({ name }).eq('id', accountId)
     if (accountError) throw accountError
-    const { error: subscriptionError } = await admin.from('account_subscriptions').update({ plan_code: planCode, seat_limit: seatLimit, status, ends_at: endsAt, grace_days: body?.grace_days === undefined ? current?.grace_days ?? 0 : graceDays, contract_reference: body?.contract_reference === undefined ? current?.contract_reference ?? null : contractReference || null, invoice_reference: body?.invoice_reference === undefined ? current?.invoice_reference ?? null : invoiceReference || null, internal_notes: body?.internal_notes === undefined ? current?.internal_notes ?? null : internalNotes || null }).eq('account_id', accountId)
+    const mergedFeatureOverrides = requestedFeatureOverrides === undefined
+      ? current?.feature_overrides ?? {}
+      : {
+          ...((current?.feature_overrides as Record<string, unknown> | null) ?? {}),
+          ...(requestedFeatureOverrides as Record<string, boolean>),
+        }
+    const { error: subscriptionError } = await admin.from('account_subscriptions').update({ plan_code: planCode, seat_limit: seatLimit, status, ends_at: endsAt, grace_days: body?.grace_days === undefined ? current?.grace_days ?? 0 : graceDays, contract_reference: body?.contract_reference === undefined ? current?.contract_reference ?? null : contractReference || null, invoice_reference: body?.invoice_reference === undefined ? current?.invoice_reference ?? null : invoiceReference || null, internal_notes: body?.internal_notes === undefined ? current?.internal_notes ?? null : internalNotes || null, feature_overrides: mergedFeatureOverrides }).eq('account_id', accountId)
     if (subscriptionError) throw subscriptionError
-    const { error: auditError } = await admin.from('platform_commercial_audit').insert({ account_id: accountId, account_name: name, actor_user_id: operator.user.id, action: ownerName !== undefined || ownerEmail !== undefined ? 'owner_profile_updated' : status !== current?.status ? `service_${status}` : 'commercial_record_updated', details: { before: { subscription: current, owner: ownerProfile }, after: { plan_code: planCode, seat_limit: seatLimit, status, ends_at: endsAt, grace_days: graceDays, contract_reference: contractReference || null, invoice_reference: invoiceReference || null, internal_notes: internalNotes || null, owner_name: ownerName ?? ownerProfile?.full_name ?? null, owner_email: ownerEmail ?? ownerProfile?.email ?? null } } })
+    const { error: auditError } = await admin.from('platform_commercial_audit').insert({ account_id: accountId, account_name: name, actor_user_id: operator.user.id, action: ownerName !== undefined || ownerEmail !== undefined ? 'owner_profile_updated' : status !== current?.status ? `service_${status}` : requestedFeatureOverrides !== undefined ? 'channel_addons_updated' : 'commercial_record_updated', details: { before: { subscription: current, owner: ownerProfile }, after: { plan_code: planCode, seat_limit: seatLimit, status, ends_at: endsAt, grace_days: graceDays, contract_reference: contractReference || null, invoice_reference: invoiceReference || null, internal_notes: internalNotes || null, feature_overrides: mergedFeatureOverrides, owner_name: ownerName ?? ownerProfile?.full_name ?? null, owner_email: ownerEmail ?? ownerProfile?.email ?? null } } })
     if (auditError) throw auditError
     return NextResponse.json({ message: 'Plan y límite de usuarios actualizados.' })
   } catch (error) {

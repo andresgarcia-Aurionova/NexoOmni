@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-import { requireEntitlement } from '@/lib/account/entitlements'
+import { channelAddOnEntitlement, requireEntitlement } from '@/lib/account/entitlements'
 import { toErrorResponse } from '@/lib/auth/account'
 import { pauseFlowOnAgentReply } from '@/lib/flows/pause-on-agent-reply'
 import {
@@ -15,6 +15,7 @@ import { persistZernioOutbound } from '@/lib/zernio/outbound-message'
 import { attachZernioConversation } from '@/lib/zernio/send-template-to-contact'
 import { renderTemplateBody } from '@/lib/whatsapp/broadcast-message-log'
 import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
+import { connectChannelForProvider } from '@/lib/zernio/channels'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -47,7 +48,7 @@ function zernioSendErrorResponse(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireEntitlement('social_messaging', 'agent')
+    const { accountId, userId, entitlements } = await requireEntitlement('social_messaging', 'agent')
     const limit = checkRateLimit(`omnichannel:zernio:send:${userId}`, RATE_LIMITS.send)
     if (!limit.success) return rateLimitResponse(limit)
     const body = await request.json().catch(() => null) as Record<string, unknown> | null
@@ -108,9 +109,14 @@ export async function POST(request: Request) {
       }
 
       const { data: connector, error: connectorError } = await db.from('omnichannel_connectors')
-        .select('zernio_account_id, status').eq('id', connectorIdInput).eq('account_id', accountId)
+        .select('provider, zernio_account_id, status').eq('id', connectorIdInput).eq('account_id', accountId)
         .eq('provider', 'zernio_whatsapp').maybeSingle()
       if (connectorError) throw connectorError
+      const coldConnectChannel = connector ? connectChannelForProvider(connector.provider) : null
+      const coldAddOn = coldConnectChannel ? channelAddOnEntitlement(coldConnectChannel) : null
+      if (!coldAddOn || !entitlements.features[coldAddOn]) {
+        return NextResponse.json({ error: 'El canal de WhatsApp no está habilitado para esta cuenta. Contacta a tu proveedor de NexoOmni.' }, { status: 403 })
+      }
       if (!connector?.zernio_account_id || connector.status === 'paused') {
         return NextResponse.json({ error: 'Este canal está pausado o requiere reconexión.' }, { status: 409 })
       }
@@ -186,6 +192,11 @@ export async function POST(request: Request) {
       .eq('id', conversationId).eq('account_id', accountId)
       .like('channel_type', 'zernio_%').maybeSingle()
     if (conversationError) throw conversationError
+    const connectChannel = conversation ? connectChannelForProvider(conversation.channel_type) : null
+    const conversationAddOn = connectChannel ? channelAddOnEntitlement(connectChannel) : null
+    if (conversation && (!conversationAddOn || !entitlements.features[conversationAddOn])) {
+      return NextResponse.json({ error: 'Este canal no está habilitado para la cuenta. Contacta a tu proveedor de NexoOmni.' }, { status: 403 })
+    }
     if (!conversation?.connector_id || !conversation.external_session_id) {
       return NextResponse.json({ error: 'Esta conversación no tiene un destinatario conectado disponible.' }, { status: 409 })
     }

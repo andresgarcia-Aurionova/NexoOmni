@@ -23,3 +23,15 @@ Telegram connection is code-based, not OAuth: the short-lived code is
 stored only in the connection attempt metadata, polled after the user
 adds the bot to a group/channel, and the connector is created only after
 Zernio confirms completion.
+
+## 2026-11-24: channel add-ons and after-hours AI
+
+Channel availability is not a plan default. The platform operator enables
+each `channel_*` override per account; migration 209 only backfills existing
+WhatsApp/native Meta/Zernio connections so current tenants are not interrupted.
+Client UI keeps the whole catalog visible, while connection, send, inbound
+webhook and background-send paths must all enforce the matching entitlement.
+
+Business hours block new flows and deterministic automations, but an enabled
+AI auto-reply may still answer outside hours. The closure notice is sent only
+when neither an active flow nor the AI handled the inbound message.

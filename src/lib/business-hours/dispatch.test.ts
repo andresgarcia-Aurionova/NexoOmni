@@ -32,6 +32,30 @@ describe('dispatchWithBusinessHours', () => {
     expect(others).toHaveBeenCalledWith(false)
   })
 
+  it('lets AI answer after hours without sending the closure notice', async () => {
+    const notice = vi.fn()
+    await dispatchWithBusinessHours({
+      closed: true,
+      runFlow: vi.fn().mockResolvedValue(false),
+      sendNotice: notice,
+      runOtherResponders: vi.fn(),
+      runAfterHoursResponder: vi.fn().mockResolvedValue(true),
+    })
+    expect(notice).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the closure notice when AI does not reply after hours', async () => {
+    const notice = vi.fn().mockResolvedValue(undefined)
+    await dispatchWithBusinessHours({
+      closed: true,
+      runFlow: vi.fn().mockResolvedValue(false),
+      sendNotice: notice,
+      runOtherResponders: vi.fn(),
+      runAfterHoursResponder: vi.fn().mockResolvedValue(false),
+    })
+    expect(notice).toHaveBeenCalledOnce()
+  })
+
   it('does not fall back to another responder on flow or notice errors', async () => {
     const others = vi.fn()
     await expect(dispatchWithBusinessHours({

@@ -10,6 +10,8 @@ import {
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { replyToZernioComment, replyToZernioReview, sendZernioText } from '@/lib/zernio/server'
 import { persistZernioOutbound } from '@/lib/zernio/outbound-message'
+import { channelAddOnEntitlement, getAccountEntitlements } from '@/lib/account/entitlements'
+import { connectChannelForProvider } from '@/lib/zernio/channels'
 
 // ------------------------------------------------------------
 // Server-side text sender for the omnichannel connectors.
@@ -289,6 +291,14 @@ export async function sendOmnichannelText(
   if (!conversation) throw new OmnichannelSendError('La conversación no existe en esta cuenta.')
 
   const row = conversation as OmnichannelConversationRow
+  if (row.channel_type !== 'yeastar_live_chat') {
+    const connectChannel = connectChannelForProvider(row.channel_type) ?? row.channel_type
+    const entitlement = channelAddOnEntitlement(connectChannel)
+    const entitlements = await getAccountEntitlements(db, args.accountId)
+    if (!entitlement || entitlements?.features[entitlement] !== true) {
+      throw new OmnichannelSendError('Este canal no está habilitado para la cuenta. Contacta a tu proveedor de NexoOmni.')
+    }
+  }
   let externalId: string | null
   let prefix: string
   if (row.channel_type.startsWith('zernio_')) {
