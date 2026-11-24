@@ -18,6 +18,7 @@ import { WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { parseInboxChannelFilter } from "@/lib/inbox/channel-filter";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -45,9 +46,7 @@ function InboxPageInner() {
    */
   const deepLinkConvId = searchParams.get("c");
   const requestedChannel = searchParams.get("channel");
-  const channelFilter: InboxChannelFilter = ["whatsapp", "facebook", "instagram", "yeastar_live_chat"].includes(requestedChannel ?? "")
-    ? requestedChannel as Exclude<InboxChannelFilter, "all">
-    : "all";
+  const channelFilter = parseInboxChannelFilter(requestedChannel);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =

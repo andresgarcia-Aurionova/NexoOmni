@@ -23,6 +23,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  normalizeInboxChannel,
+  type InboxChannelFilter,
+} from "@/lib/inbox/channel-filter";
+
+export type { InboxChannelFilter } from "@/lib/inbox/channel-filter";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -66,28 +72,6 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 type InboxFilter = ConversationStatus | "all" | "unread" | "critical";
-export type InboxChannelFilter = "all" | "whatsapp" | "facebook" | "instagram" | "yeastar_live_chat" | "googlebusiness" | "email" | "tiktok" | "twitter" | "threads" | "telegram";
-
-function normalizedChannel(channel: Conversation["channel_type"]): Exclude<InboxChannelFilter, "all"> | null {
-  switch (channel) {
-    case "whatsapp":
-    case "zernio_whatsapp": return "whatsapp";
-    case "facebook":
-    case "zernio_facebook": return "facebook";
-    case "instagram":
-    case "zernio_instagram": return "instagram";
-    case "zernio_googlebusiness": return "googlebusiness";
-    case "zernio_google":
-    case "zernio_imap": return "email";
-    case "tiktok":
-    case "zernio_tiktok": return "tiktok";
-    case "zernio_twitter": return "twitter";
-    case "zernio_threads": return "threads";
-    case "zernio_telegram": return "telegram";
-    case "yeastar_live_chat": return "yeastar_live_chat";
-    default: return null;
-  }
-}
 
 const CHANNEL_OPTIONS: { label: string; value: InboxChannelFilter }[] = [
   { label: "Todos los canales", value: "all" },
@@ -306,7 +290,7 @@ export function ConversationList({
     }
 
     if (channelFilter !== "all") {
-      result = result.filter((c) => normalizedChannel(c.channel_type) === channelFilter);
+      result = result.filter((c) => normalizeInboxChannel(c.channel_type) === channelFilter);
     }
 
     // REQ-04: assignment-scope quick filter. Agents' underlying data is

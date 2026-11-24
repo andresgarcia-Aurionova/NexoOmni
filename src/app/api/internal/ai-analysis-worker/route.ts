@@ -39,6 +39,7 @@ import { processAiCreditAlertEmails } from '@/lib/notifications/ai-credit-alerts
 import { processReservationConfirmationJobs } from '@/lib/telephony/reservation-confirmation-worker'
 import { processCriticalCaseAlerts } from '@/lib/critical-cases/alerts'
 import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
+import { syncZernioGoogleConnectors } from '@/lib/zernio/google-sync'
 
 /** How far ahead of a task's due_at the reminder notification fires. */
 const TASK_REMINDER_LEAD_MINUTES = 10
@@ -327,7 +328,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[appointments] Google Calendar inbound sync could not start:', error)
   }
-  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, critical_case_alerts: criticalCaseAlerts, credit_call_pauses: creditCallPauses, calls: callTranscriptions, yeastar_transcription_charges: yeastarTranscriptionCharges, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, reservation_confirmations: reservationConfirmations, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar }, { status: 'error' in callTranscriptions || 'error' in yeastarTranscriptionCharges || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
+  let zernioGoogle: Awaited<ReturnType<typeof syncZernioGoogleConnectors>> | null = null
+  try {
+    zernioGoogle = await syncZernioGoogleConnectors(db)
+  } catch (error) {
+    console.error('[zernio] Google resource sync could not start:', error)
+  }
+  return NextResponse.json({ completed, skipped, failed, web_push: webPush, credit_expirations: creditExpirations, credit_alert_emails: creditAlertEmails, critical_case_alerts: criticalCaseAlerts, credit_call_pauses: creditCallPauses, calls: callTranscriptions, yeastar_transcription_charges: yeastarTranscriptionCharges, media: mediaResult, follow_ups: followUps, appointment_reminders: appointmentReminders, reservation_confirmations: reservationConfirmations, agendapro_confirmations: agendaproConfirmations, agendapro_escalations: agendaproEscalations, overdue_commitments: overdueCommitments, task_reminders: taskReminders, stale_prospects: staleProspects, google_calendar: googleCalendar, zernio_google: zernioGoogle }, { status: 'error' in callTranscriptions || 'error' in yeastarTranscriptionCharges || 'error' in creditCallPauses || 'error' in creditExpirations || 'error' in creditAlertEmails ? 500 : 200 })
 }
 
 async function processAppointmentReminders(db: ReturnType<typeof supabaseAdmin>) {

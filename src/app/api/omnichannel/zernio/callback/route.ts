@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 import { isZernioConnectRouteChannel, listZernioAccountsForConnect } from '@/lib/zernio/server'
 import { zernioChannelLabel } from '@/lib/zernio/channels'
+import { syncZernioGoogleConnector } from '@/lib/zernio/google-sync'
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
     const provider = `zernio_${selected.platform}`
     const displayName = selected.displayName || selected.username || zernioChannelLabel(selected.platform)
     const now = new Date().toISOString()
-    const { error: connectorError } = await db.from('omnichannel_connectors').upsert({
+    const { data: connector, error: connectorError } = await db.from('omnichannel_connectors').upsert({
       account_id: attempt.account_id,
       provider,
       display_name: displayName.slice(0, 80),
@@ -83,8 +84,19 @@ export async function GET(request: Request) {
       created_by: attempt.user_id,
       updated_at: now,
     }, { onConflict: 'account_id,provider,external_channel_id' })
+      .select('id, account_id, provider, display_name, queue_id, zernio_account_id, zernio_metadata')
+      .single()
     if (connectorError) throw connectorError
     await db.from('zernio_connection_attempts').update({ completed_at: now }).eq('id', attempt.id)
+    if (connector?.provider === 'zernio_google') {
+      after(async () => {
+        try {
+          await syncZernioGoogleConnector(db, connector)
+        } catch (syncError) {
+          console.error('[zernio] Initial Google sync failed:', syncError)
+        }
+      })
+    }
     return settingsRedirect(request, tab, 'connected')
   } catch (error) {
     console.error('Zernio callback failed', error)

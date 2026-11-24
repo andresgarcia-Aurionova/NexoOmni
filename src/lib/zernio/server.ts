@@ -186,6 +186,35 @@ export type ZernioContact = {
   phone: string | null
 }
 
+export type ZernioCalendar = {
+  id: string
+  summary: string
+  primary: boolean
+}
+
+export type ZernioCalendarEvent = {
+  id: string
+  calendarId: string | null
+  title: string
+  description: string | null
+  location: string | null
+  start: string
+  end: string
+  allDay: boolean
+  timezone: string | null
+  status: string | null
+}
+
+export type ZernioEmailThread = {
+  id: string
+  subject: string
+  snippet: string
+  participants: { email: string; name: string | null }[]
+  unread: boolean
+  latestMessageReceivedAt: string | null
+  latestMessageSentAt: string | null
+}
+
 export async function getZernioContact(contactId: string): Promise<ZernioContact | null> {
   const payload = await zernioFetch(`/contacts/${encodeURIComponent(contactId)}`)
   const contact = record(payload.contact ?? payload.data)
@@ -204,6 +233,152 @@ export async function getZernioContact(contactId: string): Promise<ZernioContact
     company: asText(contact.company),
     avatarUrl: asText(contact.avatarUrl ?? contact.avatar_url),
     phone,
+  }
+}
+
+export async function listZernioContacts(
+  accountId: string,
+  limit = 100,
+  skip = 0,
+) {
+  const query = new URLSearchParams({
+    accountId,
+    platform: 'google',
+    limit: String(limit),
+    skip: String(skip),
+  })
+  const payload = await zernioFetch(`/contacts?${query.toString()}`)
+  const source = Array.isArray(payload.contacts)
+    ? payload.contacts
+    : Array.isArray(payload.data)
+      ? payload.data
+      : []
+  const contacts = source.flatMap((value): ZernioContact[] => {
+    const contact = record(value)
+    const id = asText(contact.id)
+    if (!id) return []
+    const email = asText(contact.email) ?? asText(contact.platformIdentifier)
+    return [{
+      id,
+      name: asText(contact.name) ?? '',
+      email,
+      company: asText(contact.company),
+      avatarUrl: asText(contact.avatarUrl ?? contact.avatar_url),
+      phone: null,
+    }]
+  })
+  const pagination = record(payload.pagination)
+  return {
+    contacts,
+    hasMore: pagination.hasMore === true || contacts.length === limit,
+    nextSkip: skip + contacts.length,
+  }
+}
+
+export async function listZernioCalendars(accountId: string) {
+  const query = new URLSearchParams({ accountId })
+  const payload = await zernioFetch(`/calendar/calendars?${query.toString()}`)
+  const source = Array.isArray(payload.data)
+    ? payload.data
+    : Array.isArray(payload.calendars)
+      ? payload.calendars
+      : []
+  return source.flatMap((value): ZernioCalendar[] => {
+    const calendar = record(value)
+    const id = asText(calendar.id)
+    if (!id) return []
+    return [{
+      id,
+      summary: asText(calendar.summary ?? calendar.name) ?? id,
+      primary: calendar.primary === true,
+    }]
+  })
+}
+
+export async function listZernioCalendarEvents(
+  accountId: string,
+  calendarId: string,
+  from: string,
+  to: string,
+  cursor?: string | null,
+) {
+  const query = new URLSearchParams({
+    accountId,
+    calendarId,
+    from,
+    to,
+    showCancelled: 'true',
+    limit: '250',
+  })
+  if (cursor) query.set('cursor', cursor)
+  const payload = await zernioFetch(`/calendar/events?${query.toString()}`)
+  const source = Array.isArray(payload.data) ? payload.data : []
+  const events = source.flatMap((value): ZernioCalendarEvent[] => {
+    const event = record(value)
+    const id = asText(event.id)
+    const start = asText(event.start)
+    const end = asText(event.end)
+    if (!id || !start || !end) return []
+    return [{
+      id,
+      calendarId: asText(event.calendarId) ?? calendarId,
+      title: asText(event.title) ?? '',
+      description: asText(event.description),
+      location: asText(event.location),
+      start,
+      end,
+      allDay: event.allDay === true,
+      timezone: asText(event.timezone),
+      status: asText(event.status),
+    }]
+  })
+  const pagination = record(payload.pagination)
+  return {
+    events,
+    nextCursor: asText(pagination.nextCursor),
+  }
+}
+
+export async function listZernioEmailThreads(
+  accountId: string,
+  after: string,
+  cursor?: string | null,
+) {
+  const query = new URLSearchParams({
+    accountId,
+    folder: 'inbox',
+    after,
+    limit: '100',
+    sortOrder: 'desc',
+  })
+  if (cursor) query.set('cursor', cursor)
+  const payload = await zernioFetch(`/email/threads?${query.toString()}`)
+  const source = Array.isArray(payload.data) ? payload.data : []
+  const threads = source.flatMap((value): ZernioEmailThread[] => {
+    const thread = record(value)
+    const id = asText(thread.id)
+    if (!id) return []
+    const participants = Array.isArray(thread.participants)
+      ? thread.participants.flatMap((participant) => {
+        const item = record(participant)
+        const email = asText(item.email)
+        return email ? [{ email, name: asText(item.name) }] : []
+      })
+      : []
+    return [{
+      id,
+      subject: asText(thread.subject) ?? '',
+      snippet: asText(thread.snippet) ?? '',
+      participants,
+      unread: thread.unread === true,
+      latestMessageReceivedAt: asText(thread.latestMessageReceivedAt),
+      latestMessageSentAt: asText(thread.latestMessageSentAt),
+    }]
+  })
+  const pagination = record(payload.pagination)
+  return {
+    threads,
+    nextCursor: asText(pagination.nextCursor),
   }
 }
 

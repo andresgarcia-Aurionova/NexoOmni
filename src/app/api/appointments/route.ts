@@ -109,7 +109,7 @@ export async function GET(request: Request) {
     const from = date(url.searchParams.get('from')) ?? new Date(Date.now() - 7 * 86_400_000).toISOString()
     const to = date(url.searchParams.get('to')) ?? new Date(Date.now() + 30 * 86_400_000).toISOString()
     const { data, error } = await supabase.from('appointments')
-      .select('id, contact_id, assigned_agent_id, specialist_id, title, notes, starts_at, ends_at, timezone, status, google_sync_status, google_sync_error, google_calendar_connection_id, created_at, contact:contacts(name, phone)')
+      .select('id, contact_id, assigned_agent_id, specialist_id, title, notes, starts_at, ends_at, timezone, status, google_sync_status, google_sync_error, google_calendar_connection_id, zernio_calendar_connector_id, zernio_calendar_id, google_calendar_event_id, created_at, contact:contacts(name, phone)')
       .eq('account_id', accountId).gte('starts_at', from).lt('starts_at', to).order('starts_at')
     if (error) throw error
     const withAgentsResult = await withAgents(supabase, accountId, (data ?? []) as AppointmentRow[])
@@ -182,9 +182,12 @@ export async function PATCH(request: Request) {
     const id = typeof body?.id === 'string' ? body.id : ''
     const status = typeof body?.status === 'string' && (STATUSES as readonly string[]).includes(body.status) ? body.status : null
     if (!id) return NextResponse.json({ error: 'Actualización inválida.' }, { status: 400 })
-    const { data: before, error: beforeError } = await supabase.from('appointments').select('contact_id, title, starts_at, status, specialist_id').eq('id', id).eq('account_id', accountId).maybeSingle()
+    const { data: before, error: beforeError } = await supabase.from('appointments').select('contact_id, title, starts_at, status, specialist_id, zernio_calendar_connector_id').eq('id', id).eq('account_id', accountId).maybeSingle()
     if (beforeError) throw beforeError
     if (!before) return NextResponse.json({ error: 'La cita no existe.' }, { status: 404 })
+    if (before.zernio_calendar_connector_id) {
+      return NextResponse.json({ error: 'Este evento fue importado desde Google Calendar. Modifícalo en Google.' }, { status: 409 })
+    }
     const startsAt = body?.starts_at === undefined ? undefined : date(body.starts_at)
     const endsAt = body?.ends_at === undefined ? undefined : date(body.ends_at)
     if ((body?.starts_at !== undefined && !startsAt) || (body?.ends_at !== undefined && !endsAt)) return NextResponse.json({ error: 'Fecha u hora inválida.' }, { status: 400 })
@@ -288,9 +291,12 @@ export async function DELETE(request: Request) {
     const url = new URL(request.url)
     const id = url.searchParams.get('id') || ''
     if (!id) return NextResponse.json({ error: 'Falta la cita a eliminar.' }, { status: 400 })
-    const { data, error } = await supabase.from('appointments').select('id, google_calendar_connection_id, google_calendar_event_id, specialist_id, assigned_agent_id').eq('id', id).eq('account_id', accountId).maybeSingle()
+    const { data, error } = await supabase.from('appointments').select('id, google_calendar_connection_id, google_calendar_event_id, specialist_id, assigned_agent_id, zernio_calendar_connector_id').eq('id', id).eq('account_id', accountId).maybeSingle()
     if (error) throw error
     if (!data) return NextResponse.json({ error: 'La cita no existe.' }, { status: 404 })
+    if (data.zernio_calendar_connector_id) {
+      return NextResponse.json({ error: 'Este evento fue importado desde Google Calendar. Elimínalo en Google.' }, { status: 409 })
+    }
     // Best-effort: if the event was already removed directly in Google this simply no-ops.
     await deleteGoogleEvent(accountId, data).catch((syncError) => {
       console.error('[appointments] Failed to remove Google Calendar event on delete:', syncError)

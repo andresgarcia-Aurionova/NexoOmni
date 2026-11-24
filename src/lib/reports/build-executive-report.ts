@@ -193,7 +193,7 @@ export async function buildExecutiveReport(accountId: string, range: ExecutiveRe
     // Appointments are date-ranged by created_at (when the booking
     // happened), not starts_at (when it's scheduled for) — that's what
     // "conversion in this period" and "cancellation rate this period" mean.
-    withRetry(() => db.from('appointments').select('status, contact_id, created_at').eq('account_id', accountId).gte('created_at', range.from).lt('created_at', range.toExclusive)),
+    withRetry(() => db.from('appointments').select('status, contact_id, created_at').eq('account_id', accountId).is('zernio_calendar_connector_id', null).gte('created_at', range.from).lt('created_at', range.toExclusive)),
     // Yeastar call transcriptions — ranged by started_at (when the call
     // happened), same rationale as conversations. Calls whose date Yeastar
     // never published (see transcripcion-de-llamadas) fall outside any

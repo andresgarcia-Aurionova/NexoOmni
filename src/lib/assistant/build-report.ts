@@ -335,6 +335,7 @@ export async function buildAssistantReport(args: {
         let query = db.from('appointments')
           .select('status,assigned_agent_id')
           .eq('account_id', accountId)
+          .is('zernio_calendar_connector_id', null)
           .gte('starts_at', range.fromTimestamp)
           .lt('starts_at', range.toExclusiveTimestamp)
         if (agentId) query = query.eq('assigned_agent_id', agentId)

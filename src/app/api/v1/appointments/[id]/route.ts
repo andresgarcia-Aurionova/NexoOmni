@@ -64,7 +64,7 @@ export async function PATCH(
 
     const { data: before, error: beforeError } = await ctx.supabase
       .from('appointments')
-      .select('contact_id, title, starts_at, status, specialist_id')
+      .select('contact_id, title, starts_at, status, specialist_id, zernio_calendar_connector_id')
       .eq('id', id)
       .eq('account_id', ctx.accountId)
       .maybeSingle();
@@ -73,6 +73,9 @@ export async function PATCH(
       return fail('internal', 'Failed to read appointment', 500);
     }
     if (!before) return fail('not_found', 'Appointment not found', 404);
+    if (before.zernio_calendar_connector_id) {
+      return fail('conflict', 'Google Calendar events imported by the connector are read-only', 409);
+    }
 
     const status = typeof body.status === 'string' && (STATUSES as readonly string[]).includes(body.status) ? body.status : null;
     if ('status' in body && !status) {

@@ -4,6 +4,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { resolveAuditUserId } from '@/lib/api/v1/contacts'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { evaluateCriticalCaseSafely } from '@/lib/critical-cases/evaluate'
+import { syncZernioGoogleConnector } from '@/lib/zernio/google-sync'
 import { dispatchInboundAutomations } from '@/lib/automations/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { deferredFirstInbound, getClosure, sendClosureNotice } from '@/lib/business-hours/inbound'
@@ -54,6 +55,15 @@ function admin() {
 
 function text(...values: unknown[]) {
   for (const value of values) if (typeof value === 'string' && value.trim()) return value.trim()
+  return ''
+}
+
+function emailAddress(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const candidate = value.trim()
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) return candidate
+  }
   return ''
 }
 
@@ -360,6 +370,59 @@ async function syncZernioContactEvent(db: ReturnType<typeof admin>, event: Json,
   }).eq('connector_id', typed.id).eq('external_message_id', eventId)
 }
 
+async function syncZernioCalendarEvent(db: ReturnType<typeof admin>, event: Json, eventId: string) {
+  const account = record(event.account)
+  const zernioAccountId = text(account.accountId, account.id, account._id)
+  if (!zernioAccountId || platformFrom(account.platform) !== 'google') return
+
+  const { data: connector, error: connectorError } = await db.from('omnichannel_connectors')
+    .select('id, account_id, provider, display_name, zernio_account_id, queue_id, zernio_metadata')
+    .eq('provider', 'zernio_google')
+    .eq('zernio_account_id', zernioAccountId)
+    .neq('status', 'paused')
+    .maybeSingle()
+  if (connectorError) throw connectorError
+  if (!connector) return
+  const typed = connector as Connector & { zernio_metadata: Json | null }
+  const entitlements = await getAccountEntitlements(db, typed.account_id)
+  if (!entitlements?.features.channel_google) return
+  if (!(await registerReceipt(db, typed, eventId, text(event.event), event))) return
+  try {
+    await syncZernioGoogleConnector(db, {
+      id: typed.id,
+      account_id: typed.account_id,
+      provider: 'zernio_google',
+      display_name: typed.display_name,
+      queue_id: typed.queue_id,
+      zernio_account_id: typed.zernio_account_id,
+      zernio_metadata: typed.zernio_metadata,
+    }, { contacts: false, email: false, calendar: true })
+    await db.from('zernio_webhook_receipts').update({
+      outcome: 'processed',
+      detail: 'Calendario de Google sincronizado.',
+      processed_at: new Date().toISOString(),
+    }).eq('connector_id', typed.id).eq('external_message_id', eventId)
+  } catch (error) {
+    console.error('[zernio] calendar event sync failed:', error)
+    await db.from('zernio_webhook_receipts').update({
+      outcome: 'failed',
+      detail: errorMessage(error).slice(0, 500),
+      processed_at: new Date().toISOString(),
+    }).eq('connector_id', typed.id).eq('external_message_id', eventId)
+  }
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  const value = record(error)
+  const detail = typeof value.message === 'string'
+    ? value.message
+    : typeof value.details === 'string'
+      ? value.details
+      : 'Error desconocido'
+  return value.code ? `${detail} (${String(value.code)})` : detail
+}
+
 /**
  * Keeps our connector row in sync when Zernio reports a connect/disconnect
  * that didn't originate from our own Settings UI — e.g. a phone-side
@@ -658,6 +721,15 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         if (eventId) await syncZernioContactEvent(db, event, eventId)
         continue
       }
+      if (
+        eventType === 'calendar.event.created'
+        || eventType === 'calendar.event.updated'
+        || eventType === 'calendar.event.deleted'
+      ) {
+        const eventId = text(event.id, eventIdHeader)
+        if (eventId) await syncZernioCalendarEvent(db, event, eventId)
+        continue
+      }
       if (eventType === 'message.delivered' || eventType === 'message.read' || eventType === 'message.failed') {
         await handleOutboundStatusEvent(db, eventType, record(event.message), record(event.error), {
           conversation: record(event.conversation),
@@ -695,7 +767,6 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       const participantSource = conversation.contact ?? conversation.customer ?? conversation.participant
       const participant = record(participantSource)
       const sender = record(incoming.sender ?? event.sender ?? participantSource ?? comment.author ?? incoming.reviewer)
-      const externalUserId = text(businessReview?.reviewerId, conversation.participantId, incoming.senderId, sender.id, sender._id, sender.userId, participant.id, participant._id, comment.author_id, comment.authorId, conversation.customerId, conversation.contactId, event.senderId)
       const externalMessageId = text(incoming.platformMessageId, incoming.id, incoming._id, event.messageId, event.id)
       const externalEventId = text(event.id, eventIdHeader, externalMessageId)
       const externalConversationId = text(
@@ -707,6 +778,35 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         businessReview ? `review:${businessReview.id}` : '',
       )
       const channel = channelFrom(account.platform ?? account.channel ?? account.type ?? conversation.platform ?? event.channel ?? event.platform ?? incoming.platform ?? incoming.channel ?? conversation.channel ?? payload.channel)
+      const isEmailChannel = channel === 'google' || channel === 'imap'
+      const externalUserId = isEmailChannel
+        ? text(
+          sender.contactId,
+          sender.contact_id,
+          conversation.contactId,
+          conversation.customerId,
+          incoming.contactId,
+          conversation.participantId,
+          sender.id,
+          sender._id,
+          sender.userId,
+          event.senderId,
+        )
+        : text(
+          businessReview?.reviewerId,
+          conversation.participantId,
+          incoming.senderId,
+          sender.id,
+          sender._id,
+          sender.userId,
+          participant.id,
+          participant._id,
+          comment.author_id,
+          comment.authorId,
+          conversation.customerId,
+          conversation.contactId,
+          event.senderId,
+        )
       // Zernio's webhook docs name this field `account.accountId` explicitly
       // (see the "Resolve message attachment" guide); `.id`/`._id` kept as a
       // fallback for the generic accounts-list shape.
@@ -878,10 +978,26 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
       // document/sticker with no caption falls back to its filename (mirrors
       // the native WhatsApp webhook's content_text convention) instead of the
       // generic placeholder, so the bubble shows something useful.
-      const content = normalizeMetaText(text(incoming.message, incoming.text, incoming.content, incoming.body, comment.message, comment.text, event.text), attachment?.caption || attachment?.fileName)
+      const emailMetadata = record(record(event.metadata).email)
+      const emailSubject = isEmailChannel ? text(emailMetadata.subject) : ''
+      const body = normalizeMetaText(
+        text(incoming.message, incoming.text, incoming.content, incoming.body, comment.message, comment.text, event.text),
+        attachment?.caption || attachment?.fileName,
+      )
+      const content = emailSubject && body && emailSubject !== body
+        ? `${emailSubject}\n\n${body}`
+        : emailSubject || body
       const auditUserId = await resolveAuditUserId(db, typed.account_id)
       const contactName = firstZernioContactName(sender.name, incoming.senderName, sender.displayName, sender.fullName, comment.author_name, comment.authorName, participant.name, conversation.participantName)
-      const contactEmail = text(sender.email, participant.email, incoming.email, comment.author_email, comment.authorEmail)
+      const contactEmail = emailAddress(
+        sender.email,
+        participant.email,
+        incoming.email,
+        comment.author_email,
+        comment.authorEmail,
+        isEmailChannel ? sender.id : '',
+        isEmailChannel ? conversation.participantId : '',
+      )
       // WhatsApp has no separate "phone" field on the sender/conversation —
       // the platform's own contact identity (senderId/participantId) IS the
       // E.164 phone number, so that's the phone-dedupe key on this channel.
@@ -913,7 +1029,12 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         contactAvatarUrl ?? undefined,
       )
       const { row: conversationRow, created } = await findOrCreateZernioConversation(db, typed, contactId, auditUserId, externalConversationId)
-      if (publicComment) {
+      if (isEmailChannel && emailSubject) {
+        const { error: contextError } = await db.from('conversations').update({
+          channel_source_label: `${typed.display_name} · ${emailSubject}`.slice(0, 180),
+        }).eq('id', conversationRow.id).eq('account_id', typed.account_id)
+        if (contextError) throw contextError
+      } else if (publicComment) {
         const { error: contextError } = await db.from('conversations').update({
           channel_source_label: `${typed.display_name} · Comentario público`,
           social_comment_id: publicComment.rootCommentId,
@@ -1172,7 +1293,7 @@ async function processZernioWebhook(payload: Json, eventIdHeader: string | null)
         // unique constraint) must not abort the rest of the batch nor
         // make Zernio retry-and-fail this same payload forever.
         console.error('[zernio] message event failed, skipping:', eventError)
-        await db.from('zernio_webhook_receipts').update({ outcome: 'failed', detail: eventError instanceof Error ? eventError.message.slice(0, 500) : 'Error desconocido', processed_at: new Date().toISOString() })
+        await db.from('zernio_webhook_receipts').update({ outcome: 'failed', detail: errorMessage(eventError).slice(0, 500), processed_at: new Date().toISOString() })
           .eq('connector_id', typed.id).eq('external_message_id', externalEventId)
       }
     }

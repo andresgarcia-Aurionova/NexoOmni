@@ -40,6 +40,7 @@ type Appointment = {
   status: string;
   notes: string | null;
   google_calendar_connection_id: string | null;
+  zernio_calendar_connector_id: string | null;
   google_sync_status: 'not_connected' | 'pending' | 'synced' | 'failed';
   google_sync_error: string | null;
   contact: { name: string | null; phone: string | null } | null;
@@ -1320,7 +1321,7 @@ export default function AppointmentsPage() {
                     ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {appointment.google_sync_status !== 'synced' ? (
+                    {!appointment.zernio_calendar_connector_id && appointment.google_sync_status !== 'synced' ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1335,7 +1336,7 @@ export default function AppointmentsPage() {
                         Reintentar Google
                       </Button>
                     ) : null}
-                    {['scheduled', 'confirmed'].includes(appointment.status) ? (
+                    {!appointment.zernio_calendar_connector_id && ['scheduled', 'confirmed'].includes(appointment.status) ? (
                       <>
                         <Button
                           variant="outline"
@@ -1390,15 +1391,17 @@ export default function AppointmentsPage() {
                         </Button>
                       </>
                     ) : null}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => void deleteAppointment(appointment)}
-                    >
-                      <Trash2 />
-                      Eliminar
-                    </Button>
+                    {!appointment.zernio_calendar_connector_id ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => void deleteAppointment(appointment)}
+                      >
+                        <Trash2 />
+                        Eliminar
+                      </Button>
+                    ) : null}
                   </div>
                 </CardContent>
                 {appointment.status === 'completed' ? (

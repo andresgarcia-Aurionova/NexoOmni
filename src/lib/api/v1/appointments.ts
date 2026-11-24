@@ -16,6 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const APPOINTMENT_SELECT =
   'id, contact_id, assigned_agent_id, specialist_id, title, notes, starts_at, ends_at, timezone, status, ' +
   'google_calendar_event_id, google_calendar_connection_id, google_sync_status, google_sync_error, ' +
+  'zernio_calendar_connector_id, ' +
   'created_at, updated_at, contact:contacts(id,name,phone)';
 
 export interface ApiAppointment {
@@ -33,6 +34,7 @@ export interface ApiAppointment {
   google_calendar_connection_id: string | null;
   google_sync_status: string | null;
   google_sync_error: string | null;
+  zernio_calendar_connector_id: string | null;
   created_at: string;
   updated_at: string;
   contact: { id: string; name: string | null; phone: string | null } | null;

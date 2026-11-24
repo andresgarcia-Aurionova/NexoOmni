@@ -45,6 +45,13 @@ TikTok no permite abrir una conversación nueva.
 5. Al volver, comprueba que el estado aparece como **Conectado**. Puedes
    pausar, reactivar o eliminar la conexión en cualquier momento.
 
+Al conectar una cuenta Google, NexoOmni realiza una carga inicial de los
+últimos 90 días de hilos del buzón de entrada, importa los contactos que ya
+sincroniza Zernio y carga los eventos de Calendar desde 30 días antes hasta
+90 días adelante. Después, Gmail y los cambios de Calendar siguen entrando
+por webhook. Los eventos de Google se muestran en **Agenda** como lectura
+de calendario; para modificarlos o eliminarlos, usa Google Calendar.
+
 Los add-ons se habilitan por cuenta y por canal desde el panel de
 operación de NexoOmni. Esto incluye WhatsApp, Facebook, Instagram,
 Google Business, cuenta Google, correo, TikTok, X, Threads, Telegram,
@@ -62,7 +69,7 @@ volver a intentar.
 | Integración | Qué entra a NexoOmni | Respuesta desde NexoOmni |
 |---|---|---|
 | Google Business | Reseñas nuevas de una ubicación | Una respuesta por reseña; responde de nuevo solo si se pretende sustituir la respuesta anterior |
-| Cuenta Google | Conversaciones de Gmail; autorización para Calendar, Drive y Contacts | Respuestas y nuevos mensajes dentro del hilo permitido |
+| Cuenta Google | Conversaciones de Gmail; contactos sincronizados; eventos de Calendar | Respuestas y nuevos mensajes dentro del hilo permitido |
 | Correo IMAP / SMTP | Hilos de correo del buzón conectado | Respuesta por el mismo hilo o envío SMTP cuando el proveedor lo admite |
 | TikTok | DMs y comentarios de cuentas Business admitidas | Solo responder después de que el cliente escriba; máximo vigente del proveedor |
 | X | DMs y respuestas o menciones | Respuesta donde la cuenta y el plan de X lo permitan |

@@ -241,7 +241,7 @@ export async function runAssistantTool(args: {
           db.from('deals').select('id', { count: 'exact', head: true })
             .eq('account_id', accountId),
           db.from('appointments').select('id', { count: 'exact', head: true })
-            .eq('account_id', accountId),
+            .eq('account_id', accountId).is('zernio_calendar_connector_id', null),
         ])
       const results = [['contacts', contacts], ['deals', deals], ['appointments', appointments]] as const
       for (const [name, result] of results) {
