@@ -62,6 +62,25 @@ describe('voice receptionist provider', () => {
       description: 'Indica si NexoOmni guardó el contexto antes de transferir.',
     })
     expect(body.conversation_config.turn).not.toHaveProperty('noisy_environment_detection')
+    expect(body.conversation_config.agent.prompt.custom_llm.url)
+      .toBe('https://nexoomni.example/custom-llm')
+    expect(body.conversation_config.agent.prompt.built_in_tools.transfer_to_number.params)
+      .toMatchObject({
+        system_tool_type: 'transfer_to_number',
+        transfer_rules: [{
+          provider_configs: [{
+            type: 'sip_trunk',
+            config: {
+              type: 'sip_cold_refer_transfer',
+              transfer_destination: {
+                type: 'sip_uri',
+                destination: 'sip:2004@pbx.example.com',
+              },
+              play_dialtone: true,
+            },
+          }],
+        }],
+      })
   })
 
   it('preserves structured validation details from ElevenLabs', async () => {

@@ -172,7 +172,7 @@ export async function PUT(request: Request) {
           next,
           providerKey,
           {
-            customLlmUrl: `${origin}/api/telephony/voice-receptionist/custom-llm/${accountId}/chat/completions`,
+            customLlmUrl: `${origin}/api/telephony/voice-receptionist/custom-llm/${accountId}`,
             initiationWebhookUrl: `${origin}/api/telephony/voice-receptionist/webhooks/${accountId}/initiation`,
             initiationWebhookSecret: decryptSecret(initiationSecretEncrypted, 'el secreto de inicio'),
             postCallWebhookId: next.post_call_webhook_id,
