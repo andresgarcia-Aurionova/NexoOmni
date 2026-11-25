@@ -98,7 +98,6 @@ export async function syncVoiceReceptionistAgent(
         turn_eagerness: 'normal',
         spelling_patience: 'auto',
         silence_end_call_timeout: config.silence_end_call_seconds,
-        noisy_environment_detection: true,
       },
       tts: {
         model_id: RECEPTIONIST_TTS_MODEL,

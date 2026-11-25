@@ -61,6 +61,7 @@ describe('voice receptionist provider', () => {
       type: 'boolean',
       description: 'Indica si NexoOmni guardó el contexto antes de transferir.',
     })
+    expect(body.conversation_config.turn).not.toHaveProperty('noisy_environment_detection')
   })
 
   it('preserves structured validation details from ElevenLabs', async () => {
