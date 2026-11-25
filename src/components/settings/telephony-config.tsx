@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { SettingsPanelHead } from './settings-panel-head';
 import { YeastarMonitoringConfig } from './yeastar-monitoring-config';
+import { VoiceReceptionistConfig } from './voice-receptionist-config';
 
 export function TelephonyConfig() {
   const { profile } = useAuth();
@@ -164,6 +165,7 @@ export function TelephonyConfig() {
         </CardContent>
       </Card> : null}
       {canManageIntegration ? <YeastarMonitoringConfig /> : null}
+      {canManageIntegration ? <VoiceReceptionistConfig /> : null}
       {canManageIntegration ? <Card className="mt-6">
         <CardHeader>
           <CardTitle>Manual: transcripción y resumen de llamadas</CardTitle>

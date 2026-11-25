@@ -85,10 +85,22 @@ export async function loadOwnCallContext(
       !call.channel_id.startsWith('wacrm:') && normalizeKey(call.peer_number ?? '') === phone))
     : own.call_id)
   const contact = await findExistingContact(db, accountId, own.peer_number)
+  const handoffCutoff = new Date(Date.now() - 30 * 60_000).toISOString()
+  const loadHandoff = async () => {
+    const byCall = pbxCall
+      ? await db.from('yeastar_call_handoffs').select('summary, customer_need, next_action')
+        .eq('account_id', accountId).eq('call_id', pbxCall)
+        .gte('created_at', handoffCutoff).maybeSingle()
+      : { data: null, error: null }
+    if (byCall.error) throw byCall.error
+    if (byCall.data) return byCall
+    return db.from('yeastar_call_handoffs').select('summary, customer_need, next_action')
+      .eq('account_id', accountId).eq('customer_phone', phone)
+      .gte('created_at', handoffCutoff)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  }
   const [handoff, memory, previousCall, commitments] = await Promise.all([
-    pbxCall ? db.from('yeastar_call_handoffs').select('summary, customer_need, next_action')
-      .eq('account_id', accountId).eq('call_id', pbxCall)
-      .gte('created_at', new Date(Date.now() - 30 * 60_000).toISOString()).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    loadHandoff(),
     contact ? db.from('contact_memory').select('current_summary, next_best_action')
       .eq('account_id', accountId).eq('contact_id', contact.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     contact ? db.from('yeastar_call_transcriptions').select('summary, started_at, created_at, direction')

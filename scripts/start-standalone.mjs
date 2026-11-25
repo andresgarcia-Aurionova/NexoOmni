@@ -26,6 +26,9 @@ let webhookDeliveryRunning = false;
 let retentionTimer = null;
 let initialRetentionTimer = null;
 let retentionRunning = false;
+let voiceMonitor = null;
+let voiceMonitorRestartTimer = null;
+let stopped = false;
 const canRunAnalysisWorker = Boolean(
   process.env.APP_URL && process.env.AI_ANALYSIS_WORKER_SECRET,
 );
@@ -86,6 +89,22 @@ const runRetentionCron = () => {
   worker.on('exit', () => { retentionRunning = false; });
 };
 
+const runVoiceReceptionistMonitor = () => {
+  if (!canRunAnalysisWorker || stopped || voiceMonitor) return;
+  voiceMonitor = spawn(process.execPath, ['scripts/run-voice-receptionist-monitor.mjs'], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  voiceMonitor.on('error', (error) => console.error('[voice receptionist monitor] spawn failed:', error));
+  voiceMonitor.on('exit', (code) => {
+    voiceMonitor = null;
+    if (!stopped && code !== 0) {
+      console.error(`[voice receptionist monitor] exited with ${code}; restarting.`);
+      voiceMonitorRestartTimer = setTimeout(runVoiceReceptionistMonitor, 15_000);
+    }
+  });
+};
+
 if (canRunAnalysisWorker) {
   // Give Next enough time to accept the first local/public request, then
   // continue at a fast, fixed cadence. processWebPushOutbox() (web push
@@ -103,6 +122,12 @@ if (canRunAnalysisWorker) {
   workerTimer = setInterval(runAnalysisWorker, 20_000);
 } else {
   console.info('[ai analysis worker] disabled: APP_URL or AI_ANALYSIS_WORKER_SECRET is missing.');
+}
+
+if (canRunAnalysisWorker) {
+  voiceMonitorRestartTimer = setTimeout(runVoiceReceptionistMonitor, 20_000);
+} else {
+  console.info('[voice receptionist monitor] disabled: APP_URL or AI_ANALYSIS_WORKER_SECRET is missing.');
 }
 
 if (canRunFlowsCron) {
@@ -128,6 +153,7 @@ if (canRunRetentionCron) {
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    stopped = true;
     if (workerTimer) clearInterval(workerTimer);
     if (initialWorkerTimer) clearTimeout(initialWorkerTimer);
     if (flowsCronTimer) clearInterval(flowsCronTimer);
@@ -136,6 +162,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     if (initialWebhookDeliveryTimer) clearTimeout(initialWebhookDeliveryTimer);
     if (retentionTimer) clearInterval(retentionTimer);
     if (initialRetentionTimer) clearTimeout(initialRetentionTimer);
+    if (voiceMonitorRestartTimer) clearTimeout(voiceMonitorRestartTimer);
+    if (voiceMonitor) voiceMonitor.kill(signal);
     child.kill(signal);
   });
 }

@@ -103,6 +103,7 @@ al día.
 | NexPhone (softphone) | [telefonia/nexphone-softphone.md](./telefonia/nexphone-softphone.md) | ✅ |
 | Extensiones de NexPhone por agente | [telefonia/extensiones-por-agente.md](./telefonia/extensiones-por-agente.md) | ✅ |
 | Contexto al transferir desde el recepcionista de IA | [telefonia/contexto-y-transferencias-ia.md](./telefonia/contexto-y-transferencias-ia.md) | ✅ |
+| Recepcionista virtual por voz con Yeastar y ElevenLabs | [telefonia/recepcionista-virtual.md](./telefonia/recepcionista-virtual.md) | ✅ |
 | Supervisión en vivo (agentes, llamadas, intervenciones) | [supervision-y-reportes/supervision-en-vivo.md](./supervision-y-reportes/supervision-en-vivo.md) | ✅ |
 | Reportes ejecutivos + reportes programados | [supervision-y-reportes/reportes-ejecutivos.md](./supervision-y-reportes/reportes-ejecutivos.md) | ✅ |
 | Transcripción y análisis de llamadas | [supervision-y-reportes/transcripcion-de-llamadas.md](./supervision-y-reportes/transcripcion-de-llamadas.md) | ✅ |

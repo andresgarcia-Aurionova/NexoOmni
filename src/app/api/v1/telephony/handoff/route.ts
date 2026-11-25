@@ -3,6 +3,7 @@ import { badRequest, forbidden, ok, toApiErrorResponse } from '@/lib/api/v1/resp
 import { getAccountEntitlements } from '@/lib/account/entitlements'
 import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 import { findLiveCallerCall } from '@/lib/telephony/call-context'
+import { findActiveVoiceReceptionistCall } from '@/lib/telephony/voice-receptionist'
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +31,14 @@ export async function POST(request: Request) {
     const suppliedId = bounded('call_id', 120)
     const aiExtension = bounded('ai_extension', 20)
     if (!phone && !aiExtension && !suppliedId) throw badRequest('Provide customer_phone, ai_extension or call_id')
-    const call = await findLiveCallerCall(ctx.supabase, ctx.accountId, phone || undefined, suppliedId ?? undefined, aiExtension ?? undefined)
+    const liveCall = await findLiveCallerCall(
+      ctx.supabase,
+      ctx.accountId,
+      phone || undefined,
+      suppliedId ?? undefined,
+      aiExtension ?? undefined,
+    ).catch(() => null)
+    const call = liveCall ?? await findActiveVoiceReceptionistCall(ctx.supabase, ctx.accountId, suppliedId)
     if (!call) throw badRequest('No unique active inbound call matches this caller. Do not transfer as though context was saved.')
     const { error } = await ctx.supabase.from('yeastar_call_handoffs').upsert({
       account_id: ctx.accountId, call_id: call.callId, customer_phone: call.phone,
