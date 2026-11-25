@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, Loader2, LockKeyhole, Phone, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
+import { canEditSettings } from '@/lib/auth/roles';
 import { useTelephony } from '@/components/telephony/telephony-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,9 +16,9 @@ import { YeastarMonitoringConfig } from './yeastar-monitoring-config';
 import { VoiceReceptionistConfig } from './voice-receptionist-config';
 
 export function TelephonyConfig() {
-  const { profile } = useAuth();
+  const { accountRole } = useAuth();
   const telephony = useTelephony();
-  const canManageIntegration = profile?.account_role === 'owner' || profile?.account_role === 'admin';
+  const canManageIntegration = accountRole ? canEditSettings(accountRole) : false;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [integrationReady, setIntegrationReady] = useState(false);
