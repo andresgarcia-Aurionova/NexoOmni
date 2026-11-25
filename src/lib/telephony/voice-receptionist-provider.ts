@@ -35,7 +35,9 @@ async function elevenLabsRequest<T>(
       ? body.detail
       : typeof body.message === 'string'
         ? body.message
-        : `HTTP ${response.status}`
+        : body.detail
+          ? JSON.stringify(body.detail)
+          : `HTTP ${response.status}`
     throw new Error(`ElevenLabs rechazó la configuración: ${detail}`)
   }
   return body
@@ -216,7 +218,10 @@ export async function syncVoiceReceptionistAgent(
                       type: 'object',
                       required: ['saved'],
                       properties: {
-                        saved: { type: 'boolean' },
+                        saved: {
+                          type: 'boolean',
+                          description: 'Indica si NexoOmni guardó el contexto antes de transferir.',
+                        },
                       },
                     },
                   },

@@ -193,7 +193,7 @@ export async function PUT(request: Request) {
         if (agentCheckpointError) throw agentCheckpointError
       } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo sincronizar el agente.'
-        return NextResponse.json({ error: message }, { status: 502 })
+        return NextResponse.json({ error: message }, { status: 422 })
       }
     }
     if (enabled && (!providerAgentId || !postCallSecretEncrypted || !next.post_call_webhook_id)) {
