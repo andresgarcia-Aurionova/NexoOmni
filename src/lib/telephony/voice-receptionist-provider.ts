@@ -74,21 +74,31 @@ export async function syncVoiceReceptionistAgent(
   },
 ): Promise<string> {
   const usesCustomLlm = config.transcription_mode === 'turns'
-  const transferDestination = config.transfer_sip_uri
-    ? { type: 'sip_uri', destination: config.transfer_sip_uri }
-    : config.fallback_phone
-      ? { type: 'phone', destination: config.fallback_phone }
-      : null
-  const transferRules = transferDestination ? [{
+  const sipUser = config.transfer_sip_uri?.match(/^sip:([^@]+)@/i)?.[1]
+  const internalTransferNumber = sipUser && /^\+?\d{2,16}$/.test(sipUser) ? sipUser : null
+  const transferProviderConfig = internalTransferNumber
+    ? {
+      type: 'sip_cold_conference_transfer',
+      transfer_destination: { type: 'phone', destination: internalTransferNumber },
+    }
+    : config.transfer_sip_uri
+      ? {
+        type: 'sip_cold_refer_transfer',
+        transfer_destination: { type: 'sip_uri', destination: config.transfer_sip_uri },
+        custom_sip_headers: [],
+        play_dialtone: true,
+      }
+      : config.fallback_phone
+        ? {
+          type: 'sip_cold_conference_transfer',
+          transfer_destination: { type: 'phone', destination: config.fallback_phone },
+        }
+        : null
+  const transferRules = transferProviderConfig ? [{
     condition: 'El cliente pide una persona o la solicitud supera los límites seguros de la recepcionista. Guarda el contexto en NexoOmni antes de transferir.',
     provider_configs: [{
       type: 'sip_trunk',
-      config: {
-        type: 'sip_cold_refer_transfer',
-        transfer_destination: transferDestination,
-        custom_sip_headers: [],
-        play_dialtone: true,
-      },
+      config: transferProviderConfig,
     }],
   }] : []
   const payload = {

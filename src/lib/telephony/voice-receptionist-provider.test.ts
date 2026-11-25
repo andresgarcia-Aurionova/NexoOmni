@@ -72,13 +72,11 @@ describe('voice receptionist provider', () => {
           provider_configs: [{
             type: 'sip_trunk',
             config: {
-              type: 'sip_cold_refer_transfer',
+              type: 'sip_cold_conference_transfer',
               transfer_destination: {
-                type: 'sip_uri',
-                destination: 'sip:2004@pbx.example.com',
+                type: 'phone',
+                destination: '2004',
               },
-              custom_sip_headers: [],
-              play_dialtone: true,
             },
           }],
         }],

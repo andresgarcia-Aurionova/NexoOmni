@@ -62,10 +62,11 @@ Next.js nunca transporta el audio de la llamada.
    no disponible o timeout. Esta contingencia debe llevar a una persona o IVR;
    una instrucción del agente no sirve si ElevenLabs completo está caído.
 7. Prueba SIP/TLS, SRTP, G.711/G.722, audio en ambos sentidos y transferencia
-   mediante `SIP REFER`.
+   a la extensión o cola elegida.
 
-Para traslados, la recepción humana debe aceptar `SIP REFER`. Si el PBX no
-lo soporta o la prueba falla, usa un teléfono de respaldo hasta corregirlo.
+NexoOmni usa conferencia SIP para destinos internos numéricos, como extensiones
+o colas. Para destinos SIP no numéricos conserva `SIP REFER`. Si la prueba falla,
+corrige la ruta o el destino antes de activar la recepcionista.
 
 ## 2. Configurar NexoOmni
 
@@ -140,8 +141,9 @@ por correcta la transferencia si NexoOmni responde:
 {"data":{"saved":true}}
 ```
 
-La transferencia principal usa SIP REFER. El destino alterno puede ser una
-cola, una extensión o un número humano. Si los dos fallan, deja una nota
+Las colas y extensiones numéricas usan conferencia SIP para evitar depender de
+que el PBX acepte `REFER` sobre una conexión TLS existente. Los destinos SIP no
+numéricos conservan `SIP REFER`. Si la transferencia falla, deja una nota
 operativa o compromiso para que el equipo responda.
 
 ## 6. Validar
