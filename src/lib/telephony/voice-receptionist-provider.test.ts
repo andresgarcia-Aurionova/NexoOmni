@@ -67,6 +67,7 @@ describe('voice receptionist provider', () => {
     expect(body.conversation_config.agent.prompt.built_in_tools.transfer_to_number.params)
       .toMatchObject({
         system_tool_type: 'transfer_to_number',
+        transfers: [],
         transfer_rules: [{
           provider_configs: [{
             type: 'sip_trunk',
@@ -76,6 +77,7 @@ describe('voice receptionist provider', () => {
                 type: 'sip_uri',
                 destination: 'sip:2004@pbx.example.com',
               },
+              custom_sip_headers: [],
               play_dialtone: true,
             },
           }],

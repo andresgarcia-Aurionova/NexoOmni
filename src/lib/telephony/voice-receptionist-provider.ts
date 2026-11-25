@@ -86,6 +86,7 @@ export async function syncVoiceReceptionistAgent(
       config: {
         type: 'sip_cold_refer_transfer',
         transfer_destination: transferDestination,
+        custom_sip_headers: [],
         play_dialtone: true,
       },
     }],
@@ -161,6 +162,7 @@ export async function syncVoiceReceptionistAgent(
                 name: 'transfer_to_number',
                 params: {
                   system_tool_type: 'transfer_to_number',
+                  transfers: [],
                   transfer_rules: transferRules,
                   enable_client_message: true,
                 },
