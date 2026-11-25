@@ -5,6 +5,10 @@ import { existsSync } from 'node:fs';
 // server otherwise binds to it, while Easypanel probes the container over
 // its network address. Bind explicitly to every interface instead.
 const serverPath = existsSync('.next/standalone/server.js') ? '.next/standalone/server.js' : 'server.js';
+const runtimeScriptPath = (path) => {
+  const standalonePath = `.next/standalone/${path}`;
+  return existsSync(standalonePath) ? standalonePath : path;
+};
 const child = spawn(process.execPath, [serverPath], {
   stdio: 'inherit',
   env: { ...process.env, HOSTNAME: '0.0.0.0' },
@@ -91,7 +95,7 @@ const runRetentionCron = () => {
 
 const runVoiceReceptionistMonitor = () => {
   if (!canRunAnalysisWorker || stopped || voiceMonitor) return;
-  voiceMonitor = spawn(process.execPath, ['scripts/run-voice-receptionist-monitor.mjs'], {
+  voiceMonitor = spawn(process.execPath, [runtimeScriptPath('scripts/run-voice-receptionist-monitor.mjs')], {
     stdio: 'inherit',
     env: process.env,
   });

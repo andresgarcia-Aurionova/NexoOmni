@@ -33,14 +33,29 @@ describe('push worker deployment launch', () => {
     }));
     timers.find((timer) => timer.delay === 15_000)?.callback();
     expect(spawn).toHaveBeenCalledWith('node', ['scripts/run-ai-analysis-worker.mjs'], expect.any(Object));
+    timers.find((timer) => timer.delay === 20_000)?.callback();
+    expect(spawn).toHaveBeenCalledWith('node', ['scripts/run-voice-receptionist-monitor.mjs'], expect.any(Object));
     const dockerfile = readFileSync(join(process.cwd(), 'Dockerfile'), 'utf8');
     expect(dockerfile).toContain('/app/scripts ./scripts');
     expect(dockerfile).toContain('CMD ["node", "scripts/start-standalone.mjs"]');
   });
 
   it('preserves the Nixpacks standalone server path', () => {
-    const { spawn } = launcher(false, true);
+    const { spawn, timers } = launcher(false, true);
     expect(spawn.mock.calls[0][1]).toEqual(['.next/standalone/server.js']);
+    timers.find((timer) => timer.delay === 20_000)?.callback();
+    expect(spawn).toHaveBeenCalledWith(
+      'node',
+      ['.next/standalone/scripts/run-voice-receptionist-monitor.mjs'],
+      expect.any(Object),
+    );
+  });
+
+  it('packages the monitor script and WebSocket runtime into standalone output', () => {
+    const script = readFileSync(join(process.cwd(), 'scripts', 'prepare-standalone.mjs'), 'utf8');
+    expect(script).toContain("join(root, 'node_modules', 'ws')");
+    expect(script).toContain("cpSync(wsSource, wsTarget, { recursive: true })");
+    expect(script).toContain("cpSync(scriptsSource, scriptsTarget, { recursive: true })");
   });
 
   it('logs missing worker configuration and never starts a success-shaped idle worker', () => {

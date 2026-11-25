@@ -161,6 +161,10 @@ effect.
   leaves that worker disabled. Rebuild older Docker images to obtain
   this entrypoint; do not run an additional external scheduler for the
   same jobs.
+- `scripts/prepare-standalone.mjs` copies the voice-monitor scripts and
+  their runtime-only `ws` dependency into the Next standalone bundle.
+  Keep that packaging step when changing Nixpacks or Docker builds; the
+  monitor must not depend on the build stage's full `node_modules`.
 - Automation **Wait** steps still need an external scheduler targeting
   `GET /api/automations/cron` with `x-cron-secret` set to
   `AUTOMATION_CRON_SECRET`; the launcher only schedules flow cleanup,
