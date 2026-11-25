@@ -4,6 +4,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { encrypt } from '@/lib/whatsapp/encryption';
 import { toErrorResponse } from '@/lib/auth/account';
 import { requireEntitlement } from '@/lib/account/entitlements';
+import { hasMinRole } from '@/lib/auth/roles';
 
 function admin() {
   return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -20,7 +21,7 @@ function validHttpsUrl(value: unknown): value is string {
 
 export async function GET() {
   try {
-    const { accountId, userId } = await requireEntitlement('yeastar_telephony', 'agent');
+    const { accountId, userId, role } = await requireEntitlement('yeastar_telephony', 'agent');
     const [integration, userConfig] = await Promise.all([
       admin()
         .from('telephony_configs')
@@ -38,8 +39,9 @@ export async function GET() {
     ]);
     if (integration.error) throw integration.error;
     if (userConfig.error) throw userConfig.error;
-    if (!integration.data) return NextResponse.json({ config: null });
+    if (!integration.data) return NextResponse.json({ config: null, can_manage_integration: hasMinRole(role, 'admin') });
     return NextResponse.json({
+      can_manage_integration: hasMinRole(role, 'admin'),
       config: {
         ...integration.data,
         extension: userConfig.data?.extension ?? null,
