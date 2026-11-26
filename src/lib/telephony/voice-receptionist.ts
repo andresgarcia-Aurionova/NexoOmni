@@ -37,6 +37,7 @@ export type VoiceReceptionistConfig = {
   first_message: string | null
   system_prompt: string | null
   use_nexo_knowledge: boolean
+  transfer_method: 'sip' | 'yeastar_api'
   transfer_sip_uri: string | null
   fallback_phone: string | null
   max_duration_seconds: number
@@ -74,6 +75,7 @@ const SAFE_CONFIG_COLUMNS = [
   'first_message',
   'system_prompt',
   'use_nexo_knowledge',
+  'transfer_method',
   'transfer_sip_uri',
   'fallback_phone',
   'max_duration_seconds',
@@ -114,6 +116,7 @@ export function publicVoiceReceptionistConfig(
       first_message: null,
       system_prompt: null,
       use_nexo_knowledge: true,
+      transfer_method: 'sip',
       transfer_sip_uri: null,
       fallback_phone: null,
       max_duration_seconds: 900,
@@ -146,6 +149,18 @@ export function publicVoiceReceptionistConfig(
     post_call_secret_configured: Boolean(post_call_secret_encrypted),
     custom_llm_configured: Boolean(custom_llm_token_encrypted),
   }
+}
+
+export function voiceReceptionistTransferTarget(
+  config: Pick<VoiceReceptionistConfig, 'transfer_sip_uri' | 'fallback_phone'>,
+): string | null {
+  for (const configured of [config.transfer_sip_uri?.trim(), config.fallback_phone?.trim()]) {
+    if (!configured) continue
+    const sipUser = /^sip:([^@;?]+)@/i.exec(configured)?.[1]
+    const target = sipUser ?? configured
+    if (/^\+?\d{2,16}$/.test(target)) return target
+  }
+  return null
 }
 
 export function encryptedReplacement(

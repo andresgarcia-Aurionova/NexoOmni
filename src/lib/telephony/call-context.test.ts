@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
-import { compactCallSummary, findLiveCallerCall, loadOwnCallContext, uniqueCallId } from './call-context'
+import {
+  compactCallSummary,
+  findLiveCallerCall,
+  findLiveCallerTransferTarget,
+  loadOwnCallContext,
+  uniqueCallId,
+} from './call-context'
 import { callAgentExtension, callCustomerPhone } from './call-party'
 import { parseTranscriptionArchive } from './transcription-archive'
 import { yeastarAiConnection } from './yeastar-ai'
@@ -114,6 +120,29 @@ describe('live handoff association', () => {
       .mockResolvedValueOnce(Response.json({ errcode: 10000 })))
     expect(await findLiveCallerCall(db, 'account-a', undefined, undefined, '7000')).toBeNull()
     await expect(findLiveCallerCall(db, 'account-a', undefined, undefined, '7000')).rejects.toThrow('verificar')
+  })
+
+  it('returns the unique inbound channel for a Yeastar blind transfer', async () => {
+    const { db } = database({})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ errcode: 0, data: [{
+      call_id: 'pbx-1',
+      members: [{
+        inbound: {
+          from: '+525512345678',
+          to: '2005',
+          channel_id: 'PJSIP/trunk-00000001',
+          member_status: 'ANSWERED',
+        },
+      }],
+    }] })))
+
+    await expect(
+      findLiveCallerTransferTarget(db, 'account-a', '525512345678', undefined, '2005'),
+    ).resolves.toEqual({
+      callId: 'pbx-1',
+      phone: '525512345678',
+      channelId: 'PJSIP/trunk-00000001',
+    })
   })
 
   it('does not expose context from a session not owned by the receiving agent', async () => {

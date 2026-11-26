@@ -243,8 +243,33 @@ export function VoiceReceptionistConfig() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="voice-receptionist-transfer">{t('transferSip')}</Label>
-          <Input id="voice-receptionist-transfer" value={config.transfer_sip_uri ?? ''} onChange={(event) => update('transfer_sip_uri', event.target.value)} placeholder="sip:1000@pbx.example.com" disabled={saving} />
+          <Label htmlFor="voice-receptionist-transfer-method">{t('transferMethod')}</Label>
+          <Select
+            value={config.transfer_method}
+            onValueChange={(value) => {
+              if (value === 'sip' || value === 'yeastar_api') update('transfer_method', value)
+            }}
+            disabled={saving}
+          >
+            <SelectTrigger id="voice-receptionist-transfer-method"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yeastar_api">{t('transferMethodYeastar')}</SelectItem>
+              <SelectItem value="sip">{t('transferMethodSip')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{t('transferMethodHint')}</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="voice-receptionist-transfer">
+            {config.transfer_method === 'yeastar_api' ? t('transferDestination') : t('transferSip')}
+          </Label>
+          <Input
+            id="voice-receptionist-transfer"
+            value={config.transfer_sip_uri ?? ''}
+            onChange={(event) => update('transfer_sip_uri', event.target.value)}
+            placeholder={config.transfer_method === 'yeastar_api' ? '6401' : 'sip:1000@pbx.example.com'}
+            disabled={saving}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="voice-receptionist-fallback-phone">{t('fallbackPhone')}</Label>

@@ -4,7 +4,7 @@ description: "Conecta una extensión de Yeastar con un agente de voz, contexto d
 section: "telefonia"
 role: ["admin", "owner", "supervisor"]
 plan: ["premium"]
-updated: "2026-11-24"
+updated: "2026-11-26"
 ---
 
 ## ¿Qué es?
@@ -64,9 +64,14 @@ Next.js nunca transporta el audio de la llamada.
 7. Prueba SIP/TLS, SRTP, G.711/G.722, audio en ambos sentidos y transferencia
    a la extensión o cola elegida.
 
-NexoOmni usa conferencia SIP para destinos internos numéricos, como extensiones
-o colas. Para destinos SIP no numéricos conserva `SIP REFER`. Si la prueba falla,
-corrige la ruta o el destino antes de activar la recepcionista.
+Para colas o extensiones internas de Yeastar, usa **API de Yeastar**. Esta
+modalidad identifica el canal activo con la extensión y el número del cliente,
+guarda el contexto y después solicita a Yeastar la transferencia ciega del
+miembro entrante. No depende de `SIP REFER` ni crea una segunda ruta entrante.
+
+Para destinos que no son controlables por Yeastar, conserva **SIP desde
+ElevenLabs** y valida REFER o conferencia. Si una transferencia falla, corrige
+la ruta o usa la ruta humana configurada en Yeastar.
 
 ## 2. Configurar NexoOmni
 
@@ -79,8 +84,9 @@ En **Configuración → Telefonía → Recepcionista virtual por voz**:
 4. Mantén activa la base de conocimiento de NexoOmni para usar los
    documentos vigentes.
 5. Selecciona la voz después de guardar la llave.
-6. Registra el destino humano SIP, el número alterno, duración máxima y
-   tiempo de silencio.
+6. Registra el método y el destino humano. Para una cola interna, selecciona
+   **API de Yeastar** y usa el número de la cola o extensión, por ejemplo
+   `6401`. También puedes mantener un número alterno.
 7. Elige **Por turnos confirmados — recomendado**.
 8. Guarda y sincroniza el agente. NexoOmni crea el webhook HMAC, los secretos,
    el LLM personalizado y asocia todo al agente automáticamente.
@@ -134,17 +140,22 @@ menor permiso necesario.
 
 ## 5. Transferencia y contexto
 
-El agente debe guardar el contexto **antes** de transferir. Solo debe dar
-por correcta la transferencia si NexoOmni responde:
+El agente debe guardar el contexto **antes** de transferir. En modo API de
+Yeastar, la herramienta realiza las dos acciones como una sola operación y
+solo debe darla por correcta si NexoOmni responde:
 
 ```json
-{"data":{"saved":true}}
+{"data":{"saved":true,"transferred":true}}
 ```
 
-Las colas y extensiones numéricas usan conferencia SIP para evitar depender de
-que el PBX acepte `REFER` sobre una conexión TLS existente. Los destinos SIP no
-numéricos conservan `SIP REFER`. Si la transferencia falla, deja una nota
-operativa o compromiso para que el equipo responda.
+NexoOmni verifica en tiempo real el `call_id` y `channel_id` mediante la API de
+Yeastar. Si existen dos llamadas compatibles, o no se recibe un canal entrante
+único, no transfiere ninguna para evitar mover una llamada equivocada.
+
+En modo API, el contexto queda guardado aunque Yeastar rechace la transferencia;
+el agente informa el fallo y no afirma que la persona ya está conectada. El
+modo SIP conserva el traspaso del proveedor de voz y devuelve
+`transferred: false` porque ElevenLabs completa esa segunda etapa después.
 
 ## 6. Validar
 
@@ -163,6 +174,10 @@ Realiza como mínimo estas pruebas:
 11. Audio entrante y saliente.
 12. La frase del cliente aparece durante la llamada y la respuesta final se
     reconcilia al colgar.
+13. En modo API de Yeastar, la cola interna recibe la llamada sin cortar al
+    cliente, y el contexto aparece al agente que responde.
+14. Si hay dos llamadas simultáneas del mismo número, ninguna transferencia se
+    ejecuta hasta que exista una coincidencia única.
 
 Solo activa la recepcionista después de aprobar estas pruebas.
 
@@ -194,6 +209,12 @@ al cliente final.
 Sí, en modo por turnos confirmados. El texto aparece durante la llamada, una
 vez que ElevenLabs confirma que terminó la frase. La visualización de palabras
 tentativas mientras la persona sigue hablando requiere Enterprise.
+
+**¿Por qué usar la API de Yeastar para transferir?**
+
+Evita depender de que el PBX acepte una solicitud `REFER` iniciada por
+ElevenLabs. Yeastar controla directamente su propio canal activo, mientras
+NexoOmni correlaciona primero la extensión virtual con el número del cliente.
 
 **¿Qué pasa si ElevenLabs no responde?**
 

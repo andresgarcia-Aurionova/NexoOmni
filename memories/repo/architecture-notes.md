@@ -51,3 +51,16 @@ Health symptoms, suspected food poisoning, or a group becoming ill
 deterministically raise the result to N3; branch aliases are resolved from the
 transcript after normalization. The classifier runs before auto-reply so
 N2/N3 handoffs can acknowledge safely and still trigger the alert path.
+
+## 2026-11-26: voice receptionist transfer control
+
+ElevenLabs SIP transfer and Yeastar call control are separate mechanisms.
+Internal queue handoffs should use Yeastar OpenAPI (`call/transfer`) with the
+unique inbound `channel_id` returned by `call/query` or event 30011, not a
+provider-side REFER and not a conversation-id guess. The handoff must match
+the configured AI extension plus caller number, save `yeastar_call_handoffs`
+with the real PBX `call_id`, and fail closed if multiple channels match.
+
+`transfer_method` remains `sip` by default for existing tenants. Yeastar API
+mode is opt-in and should only be enabled where OpenAPI credentials, event 30011
+and the extension dial permission are already configured.

@@ -44,9 +44,11 @@ async function elevenLabsRequest<T>(
 }
 
 export function receptionistPrompt(config: VoiceReceptionistConfig): string {
-  const transfer = config.transfer_sip_uri || config.fallback_phone
-    ? 'Cuando debas transferir, ejecuta primero la herramienta que guarda el contexto en NexoOmni y transfiere solo si esa herramienta confirma data.saved = true.'
-    : 'No prometas transferencias. Si no puedes resolver, informa que pasarás la solicitud al equipo y usa la herramienta de handoff disponible.'
+  const transfer = config.transfer_method === 'yeastar_api'
+    ? 'Para transferir a una persona, usa una sola vez la herramienta nexoomni_transferir_a_persona. Solo confirma la transferencia si devuelve data.saved = true y data.transferred = true.'
+    : config.transfer_sip_uri || config.fallback_phone
+      ? 'Cuando debas transferir, ejecuta primero la herramienta que guarda el contexto en NexoOmni y transfiere solo si esa herramienta confirma data.saved = true.'
+      : 'No prometas transferencias. Si no puedes resolver, informa que pasarás la solicitud al equipo y usa la herramienta de handoff disponible.'
   return [
     `Eres ${config.display_name}, la recepcionista virtual de {{account_name}}.`,
     'Habla de forma breve, cálida y natural. Haz una pregunta a la vez.',
@@ -74,6 +76,7 @@ export async function syncVoiceReceptionistAgent(
   },
 ): Promise<string> {
   const usesCustomLlm = config.transcription_mode === 'turns'
+  const usesYeastarApiTransfer = config.transfer_method === 'yeastar_api'
   const sipUser = config.transfer_sip_uri?.match(/^sip:([^@]+)@/i)?.[1]
   const internalTransferNumber = sipUser && /^\+?\d{2,16}$/.test(sipUser) ? sipUser : null
   const transferProviderConfig = internalTransferNumber
@@ -94,7 +97,7 @@ export async function syncVoiceReceptionistAgent(
           transfer_destination: { type: 'phone', destination: config.fallback_phone },
         }
         : null
-  const transferRules = transferProviderConfig ? [{
+  const transferRules = !usesYeastarApiTransfer && transferProviderConfig ? [{
     condition: 'El cliente pide una persona o la solicitud supera los límites seguros de la recepcionista. Guarda el contexto en NexoOmni antes de transferir.',
     provider_configs: [{
       type: 'sip_trunk',
@@ -165,8 +168,8 @@ export async function syncVoiceReceptionistAgent(
             cascade_timeout_seconds: 5,
           } : {}),
           timezone: config.timezone,
-          ...(transferRules.length ? {
-            built_in_tools: {
+          built_in_tools: {
+            ...(transferRules.length ? {
               transfer_to_number: {
                 type: 'system',
                 name: 'transfer_to_number',
@@ -177,24 +180,28 @@ export async function syncVoiceReceptionistAgent(
                   enable_client_message: true,
                 },
               },
-              end_call: {
-                type: 'system',
-                name: 'end_call',
-                params: { system_tool_type: 'end_call' },
-              },
-              skip_turn: {
-                type: 'system',
-                name: 'skip_turn',
-                params: { system_tool_type: 'skip_turn' },
-              },
+            } : {}),
+            end_call: {
+              type: 'system',
+              name: 'end_call',
+              params: { system_tool_type: 'end_call' },
             },
-          } : {}),
+            skip_turn: {
+              type: 'system',
+              name: 'skip_turn',
+              params: { system_tool_type: 'skip_turn' },
+            },
+          },
           tools: [
             {
               type: 'webhook',
-              name: 'nexoomni_guardar_contexto',
-              description: 'Guarda el motivo de la llamada y la siguiente acción antes de transferir a una persona.',
-              response_timeout_secs: 15,
+              name: usesYeastarApiTransfer
+                ? 'nexoomni_transferir_a_persona'
+                : 'nexoomni_guardar_contexto',
+              description: usesYeastarApiTransfer
+                ? 'Guarda el contexto y transfiere la llamada activa a la cola humana usando la API de Yeastar.'
+                : 'Guarda el motivo de la llamada y la siguiente acción antes de transferir a una persona.',
+              response_timeout_secs: usesYeastarApiTransfer ? 30 : 15,
               pre_tool_speech: 'force',
               api_schema: {
                 url: options.handoffToolUrl,
@@ -230,11 +237,15 @@ export async function syncVoiceReceptionistAgent(
                   properties: {
                     data: {
                       type: 'object',
-                      required: ['saved'],
+                      required: ['saved', 'transferred'],
                       properties: {
                         saved: {
                           type: 'boolean',
                           description: 'Indica si NexoOmni guardó el contexto antes de transferir.',
+                        },
+                        transferred: {
+                          type: 'boolean',
+                          description: 'Indica si Yeastar aceptó la transferencia. En modo SIP directo permanece en false y se usa transfer_to_number.',
                         },
                       },
                     },

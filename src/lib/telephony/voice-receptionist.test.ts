@@ -5,6 +5,7 @@ import {
   normalizePhoneForCall,
   publicVoiceReceptionistConfig,
   transcriptText,
+  voiceReceptionistTransferTarget,
 } from './voice-receptionist'
 
 describe('voice receptionist helpers', () => {
@@ -49,6 +50,7 @@ describe('voice receptionist helpers', () => {
       first_message: null,
       system_prompt: null,
       use_nexo_knowledge: true,
+      transfer_method: 'sip',
       transfer_sip_uri: null,
       fallback_phone: null,
       max_duration_seconds: 900,
@@ -63,5 +65,20 @@ describe('voice receptionist helpers', () => {
     expect(publicConfig.api_key_configured).toBe(true)
     expect(publicConfig).not.toHaveProperty('elevenlabs_api_key_encrypted')
     expect(publicConfig).not.toHaveProperty('account_id')
+  })
+
+  it('accepts internal Yeastar destinations for API transfers', () => {
+    expect(voiceReceptionistTransferTarget({
+      transfer_sip_uri: '6401',
+      fallback_phone: null,
+    })).toBe('6401')
+    expect(voiceReceptionistTransferTarget({
+      transfer_sip_uri: 'sip:6401@voice.example.test',
+      fallback_phone: null,
+    })).toBe('6401')
+    expect(voiceReceptionistTransferTarget({
+      transfer_sip_uri: 'sip:operator@voice.example.test',
+      fallback_phone: '+525512345678',
+    })).toBe('+525512345678')
   })
 })

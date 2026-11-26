@@ -10,6 +10,7 @@ import {
   encryptedReplacement,
   loadVoiceReceptionistConfig,
   publicVoiceReceptionistConfig,
+  voiceReceptionistTransferTarget,
   type VoiceReceptionistConfig,
 } from '@/lib/telephony/voice-receptionist'
 import {
@@ -92,10 +93,21 @@ export async function PUT(request: Request) {
     const language = typeof body.language === 'string' ? body.language.trim().toLowerCase() : current?.language ?? 'es'
     if (!['es', 'en', 'ko'].includes(language)) return badRequest('language debe ser es, en o ko.')
 
+    const transferMethod = ['sip', 'yeastar_api'].includes(String(body.transfer_method))
+      ? body.transfer_method as VoiceReceptionistConfig['transfer_method']
+      : current?.transfer_method ?? 'sip'
     const transferSipUri = boundedText(body.transfer_sip_uri, current?.transfer_sip_uri ?? null, 240, 'transfer_sip_uri')
-    if (transferSipUri && !/^sip:[^\s@]+@[^\s]+$/i.test(transferSipUri)) return badRequest('transfer_sip_uri debe ser un SIP URI válido.')
+    if (transferSipUri && transferMethod === 'sip' && !/^sip:[^\s@]+@[^\s]+$/i.test(transferSipUri)) {
+      return badRequest('transfer_sip_uri debe ser un SIP URI válido.')
+    }
     const fallbackPhone = boundedText(body.fallback_phone, current?.fallback_phone ?? null, 32, 'fallback_phone')
     if (fallbackPhone && !/^\+?\d{7,16}$/.test(fallbackPhone)) return badRequest('fallback_phone debe ser un teléfono internacional.')
+    if (
+      transferMethod === 'yeastar_api'
+      && !voiceReceptionistTransferTarget({ transfer_sip_uri: transferSipUri, fallback_phone: fallbackPhone })
+    ) {
+      return badRequest('Para transferir con Yeastar registra un destino interno o un número internacional.')
+    }
     const firstMessage = boundedText(body.first_message, current?.first_message ?? null, 1200, 'first_message')
     const systemPrompt = boundedText(body.system_prompt, current?.system_prompt ?? null, 12_000, 'system_prompt')
     const voiceId = boundedText(body.elevenlabs_voice_id, current?.elevenlabs_voice_id ?? null, 160, 'elevenlabs_voice_id')
@@ -129,6 +141,7 @@ export async function PUT(request: Request) {
       first_message: firstMessage,
       system_prompt: systemPrompt,
       use_nexo_knowledge: body.use_nexo_knowledge !== false,
+      transfer_method: transferMethod,
       transfer_sip_uri: transferSipUri,
       fallback_phone: fallbackPhone,
       max_duration_seconds: boundedNumber(body.max_duration_seconds, current?.max_duration_seconds ?? 900, 60, 7200, 'max_duration_seconds'),

@@ -20,6 +20,7 @@ const config: VoiceReceptionistConfig = {
   first_message: 'Hola.',
   system_prompt: 'Sé breve.',
   use_nexo_knowledge: true,
+  transfer_method: 'sip',
   transfer_sip_uri: 'sip:2004@pbx.example.com',
   fallback_phone: null,
   max_duration_seconds: 900,
@@ -61,6 +62,8 @@ describe('voice receptionist provider', () => {
       type: 'boolean',
       description: 'Indica si NexoOmni guardó el contexto antes de transferir.',
     })
+    expect(body.conversation_config.agent.prompt.tools[0].api_schema.response_body_schema
+      .properties.data.required).toEqual(['saved', 'transferred'])
     expect(body.conversation_config.turn).not.toHaveProperty('noisy_environment_detection')
     expect(body.conversation_config.agent.prompt.custom_llm.url)
       .toBe('https://nexoomni.example/custom-llm')
@@ -81,6 +84,24 @@ describe('voice receptionist provider', () => {
           }],
         }],
       })
+  })
+
+  it('uses the Yeastar handoff webhook instead of a second SIP transfer', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(Response.json({ agent_id: 'agent-1' }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await syncVoiceReceptionistAgent(
+        { ...config, transfer_method: 'yeastar_api', transfer_sip_uri: '6401' },
+        'api-key',
+        options,
+      )
+
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+      const prompt = body.conversation_config.agent.prompt
+      expect(prompt.tools[0].name).toBe('nexoomni_transferir_a_persona')
+      expect(prompt.prompt).toContain('data.transferred = true')
+      expect(prompt.built_in_tools).not.toHaveProperty('transfer_to_number')
+      expect(prompt.built_in_tools).toHaveProperty('end_call')
   })
 
   it('preserves structured validation details from ElevenLabs', async () => {

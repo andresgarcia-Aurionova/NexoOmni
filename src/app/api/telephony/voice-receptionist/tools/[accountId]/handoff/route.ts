@@ -6,7 +6,10 @@ import {
   findActiveVoiceReceptionistCall,
   loadVoiceReceptionistConfig,
   secretsMatch,
+  voiceReceptionistTransferTarget,
 } from '@/lib/telephony/voice-receptionist'
+import { findLiveCallerTransferTarget } from '@/lib/telephony/call-context'
+import { transferYeastarCall } from '@/lib/telephony/yeastar-call-transfer'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,10 +38,27 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
     if (!conversationId || !summary) {
       return NextResponse.json({ error: 'conversation_id and summary are required.' }, { status: 400 })
     }
-    const call = await findActiveVoiceReceptionistCall(db, accountId, conversationId)
-    if (!call) {
+    const voiceCall = await findActiveVoiceReceptionistCall(db, accountId, conversationId)
+    if (!voiceCall) {
       return NextResponse.json({ error: 'No active voice conversation matches the request.' }, { status: 409 })
     }
+    const transferTarget = voiceReceptionistTransferTarget(config)
+    const liveTransfer = config.transfer_method === 'yeastar_api'
+      ? await findLiveCallerTransferTarget(
+        db,
+        accountId,
+        voiceCall.phone,
+        undefined,
+        config.yeastar_extension,
+      )
+      : null
+    if (config.transfer_method === 'yeastar_api' && (!liveTransfer || !transferTarget)) {
+      return NextResponse.json(
+        { error: 'No unique active Yeastar call or transfer destination is available.' },
+        { status: 409 },
+      )
+    }
+    const call = liveTransfer ?? voiceCall
     const { error } = await db.from('yeastar_call_handoffs').upsert({
       account_id: accountId,
       call_id: call.callId,
@@ -49,7 +69,28 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
       updated_at: new Date().toISOString(),
     }, { onConflict: 'account_id,call_id' })
     if (error) throw error
-    return NextResponse.json({ data: { saved: true, call_id: call.callId } })
+    if (liveTransfer && transferTarget) {
+      try {
+        await transferYeastarCall(db, accountId, {
+          channelId: liveTransfer.channelId,
+          number: transferTarget,
+          dialPermission: config.yeastar_extension,
+        })
+      } catch (transferError) {
+        console.error('[voice receptionist] Yeastar transfer failed:', transferError)
+        return NextResponse.json(
+          { error: 'The handoff context was saved, but Yeastar did not accept the transfer.' },
+          { status: 502 },
+        )
+      }
+    }
+    return NextResponse.json({
+      data: {
+        saved: true,
+        transferred: Boolean(liveTransfer),
+        call_id: call.callId,
+      },
+    })
   } catch (error) {
     console.error('[voice receptionist] handoff tool failed:', error)
     return NextResponse.json({ error: 'Could not save handoff context.' }, { status: 500 })

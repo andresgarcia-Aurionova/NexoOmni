@@ -24,9 +24,15 @@ export function uniqueCallId(rows: { call_id: string }[]): string | null {
   return ids.length === 1 ? ids[0] : null
 }
 
-export async function findLiveCallerCall(
+type LiveCallerCandidate = {
+  call_id: string
+  from_number: string
+  channel_id: string | null
+}
+
+async function queryLiveCallerCalls(
   db: SupabaseClient, accountId: string, phone?: string, callId?: string, aiExtension?: string,
-) {
+): Promise<LiveCallerCandidate[] | null> {
   if (!phone && !aiExtension && !callId) return null
   const { pbxUrl, token } = await yeastarAiConnection(db, accountId)
   const url = apiUrl(pbxUrl, 'call/query')
@@ -39,7 +45,9 @@ export async function findLiveCallerCall(
     errcode?: number
     data?: Array<{ call_id: string; members: Array<{
       extension?: { number: string; member_status: string }
-      inbound?: { from: string; member_status: string }
+      inbound?: { from: string; to?: string; channel_id?: string; member_status: string }
+      outbound?: { from: string; to?: string; member_status: string }
+      internal?: { from: string; to?: string; member_status: string }
     }> }>
   }
   if (!response.ok || result.errcode !== 0 || !Array.isArray(result.data)) {
@@ -47,20 +55,50 @@ export async function findLiveCallerCall(
   }
   // State-change webhooks are not heartbeats: an old ANSWER may be a long
   // active call or a missed BYE. Query the PBX instead of guessing by age.
-  const candidates = result.data.flatMap((call) => {
+  return result.data.flatMap((call) => {
     if (!call.call_id || !Array.isArray(call.members) || (callId && call.call_id !== callId)) return []
-    if (aiExtension && !call.members.some((member) =>
-      member.extension?.number === aiExtension && member.extension.member_status !== 'BYE')) return []
+    if (aiExtension && !call.members.some((member) => {
+      const parties = [member.extension, member.inbound, member.outbound, member.internal]
+      return member.extension?.number === aiExtension && member.extension.member_status !== 'BYE'
+        || parties.some((party) => party && party.member_status !== 'BYE'
+          && ('to' in party && party.to === aiExtension || 'from' in party && party.from === aiExtension))
+    })) return []
     return call.members.flatMap((member) => {
-      const caller = member.inbound?.from && normalizeKey(member.inbound.from)
-      return caller && isValidE164(caller) && member.inbound?.member_status !== 'BYE'
-        && (!phone || caller === normalizeKey(phone)) ? [{ call_id: call.call_id, from_number: caller }] : []
+      const inbound = member.inbound
+      if (!inbound) return []
+      const caller = inbound.from && normalizeKey(inbound.from)
+      return caller && isValidE164(caller) && inbound.member_status !== 'BYE'
+        && (!phone || caller === normalizeKey(phone)) ? [{
+          call_id: call.call_id,
+          from_number: caller,
+          channel_id: inbound.channel_id ?? null,
+        }] : []
     })
   })
+}
+
+export async function findLiveCallerCall(
+  db: SupabaseClient, accountId: string, phone?: string, callId?: string, aiExtension?: string,
+) {
+  const candidates = await queryLiveCallerCalls(db, accountId, phone, callId, aiExtension)
+  if (!candidates) return null
   const unique = uniqueCallId(candidates)
   if (!unique) return null
   const numbers = [...new Set(candidates.map((row) => normalizeKey(row.from_number ?? '')))]
   return numbers.length === 1 ? { callId: unique, phone: numbers[0] } : null
+}
+
+export async function findLiveCallerTransferTarget(
+  db: SupabaseClient, accountId: string, phone?: string, callId?: string, aiExtension?: string,
+) {
+  const candidates = await queryLiveCallerCalls(db, accountId, phone, callId, aiExtension)
+  if (!candidates) return null
+  const call = uniqueCallId(candidates)
+  const numbers = [...new Set(candidates.map((row) => normalizeKey(row.from_number)))]
+  const channels = [...new Set(candidates.flatMap((row) => row.channel_id ? [row.channel_id] : []))]
+  return call && numbers.length === 1 && channels.length === 1
+    ? { callId: call, phone: numbers[0], channelId: channels[0] }
+    : null
 }
 
 export async function loadOwnCallContext(
