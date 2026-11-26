@@ -87,18 +87,36 @@ const SAFE_CONFIG_COLUMNS = [
   'last_provider_sync_at',
   'last_provider_error',
 ].join(', ')
+const LEGACY_SAFE_CONFIG_COLUMNS = SAFE_CONFIG_COLUMNS
+  .split(', ')
+  .filter((column) => column !== 'transfer_method')
+  .join(', ')
 
 export async function loadVoiceReceptionistConfig(
   db: SupabaseClient,
   accountId: string,
 ): Promise<VoiceReceptionistConfig | null> {
-  const { data, error } = await db
+  const current = await db
     .from('voice_receptionist_configs')
     .select(SAFE_CONFIG_COLUMNS)
     .eq('account_id', accountId)
     .maybeSingle()
-  if (error) throw error
-  return data as VoiceReceptionistConfig | null
+  if (
+    current.error
+    && (current.error.code === '42703'
+      || current.error.message.includes('transfer_method'))
+  ) {
+    const legacy = await db
+      .from('voice_receptionist_configs')
+      .select(LEGACY_SAFE_CONFIG_COLUMNS)
+      .eq('account_id', accountId)
+      .maybeSingle()
+    if (legacy.error) throw legacy.error
+    const legacyRow = legacy.data as Record<string, unknown> | null
+    return legacyRow ? { ...legacyRow, transfer_method: 'sip' } as VoiceReceptionistConfig : null
+  }
+  if (current.error) throw current.error
+  return current.data as VoiceReceptionistConfig | null
 }
 
 export function publicVoiceReceptionistConfig(
