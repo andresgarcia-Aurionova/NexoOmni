@@ -38,6 +38,7 @@ async function queryLiveCallerCalls(
   const url = apiUrl(pbxUrl, 'call/query')
   url.searchParams.set('access_token', token)
   if (callId) url.searchParams.set('call_id', callId)
+  else if (phone) url.searchParams.set('type', 'inbound')
   else if (aiExtension) url.searchParams.set('extension', aiExtension)
   else url.searchParams.set('type', 'inbound')
   const response = await fetch(url, { headers: { 'User-Agent': 'OpenAPI' }, signal: AbortSignal.timeout(15_000) })

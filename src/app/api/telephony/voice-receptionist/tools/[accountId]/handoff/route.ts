@@ -43,20 +43,19 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
       return NextResponse.json({ error: 'No active voice conversation matches the request.' }, { status: 409 })
     }
     const transferTarget = voiceReceptionistTransferTarget(config)
-    const liveTransfer = config.transfer_method === 'yeastar_api'
-      ? await findLiveCallerTransferTarget(
-        db,
-        accountId,
-        voiceCall.phone,
-        undefined,
-        config.yeastar_extension,
-      )
-      : null
-    if (config.transfer_method === 'yeastar_api' && (!liveTransfer || !transferTarget)) {
-      return NextResponse.json(
-        { error: 'No unique active Yeastar call or transfer destination is available.' },
-        { status: 409 },
-      )
+    let liveTransfer: Awaited<ReturnType<typeof findLiveCallerTransferTarget>> = null
+    if (config.transfer_method === 'yeastar_api') {
+      try {
+        liveTransfer = await findLiveCallerTransferTarget(
+          db,
+          accountId,
+          voiceCall.phone,
+          undefined,
+          config.yeastar_extension,
+        )
+      } catch (lookupError) {
+        console.error('[voice receptionist] Yeastar call lookup failed:', lookupError)
+      }
     }
     const call = liveTransfer ?? voiceCall
     const { error } = await db.from('yeastar_call_handoffs').upsert({
@@ -69,6 +68,19 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
       updated_at: new Date().toISOString(),
     }, { onConflict: 'account_id,call_id' })
     if (error) throw error
+    if (config.transfer_method === 'yeastar_api' && (!liveTransfer || !transferTarget)) {
+      console.warn(
+        '[voice receptionist] Yeastar transfer target was not uniquely resolved:',
+        { accountId, conversationId },
+      )
+      return NextResponse.json({
+        data: {
+          saved: true,
+          transferred: false,
+          call_id: call.callId,
+        },
+      })
+    }
     if (liveTransfer && transferTarget) {
       try {
         await transferYeastarCall(db, accountId, {
@@ -78,10 +90,13 @@ export async function POST(request: Request, context: { params: Promise<{ accoun
         })
       } catch (transferError) {
         console.error('[voice receptionist] Yeastar transfer failed:', transferError)
-        return NextResponse.json(
-          { error: 'The handoff context was saved, but Yeastar did not accept the transfer.' },
-          { status: 502 },
-        )
+        return NextResponse.json({
+          data: {
+            saved: true,
+            transferred: false,
+            call_id: call.callId,
+          },
+        })
       }
     }
     return NextResponse.json({

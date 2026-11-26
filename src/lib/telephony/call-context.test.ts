@@ -145,6 +145,38 @@ describe('live handoff association', () => {
     })
   })
 
+  it('queries all active inbound legs before matching the AI extension locally', async () => {
+    const { db } = database({})
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ errcode: 0, data: [{
+      call_id: 'pbx-1',
+      members: [
+        { inbound: {
+          from: '+525512345678',
+          to: '+525599595570',
+          channel_id: 'PJSIP/trunk-inbound-00000001',
+          member_status: 'ANSWERED',
+        } },
+        { outbound: {
+          from: '2005',
+          to: '+525599595570',
+          member_status: 'ANSWER',
+        } },
+      ],
+    }] }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(
+      findLiveCallerTransferTarget(db, 'account-a', '525512345678', undefined, '2005'),
+    ).resolves.toEqual({
+      callId: 'pbx-1',
+      phone: '525512345678',
+      channelId: 'PJSIP/trunk-inbound-00000001',
+    })
+    const url = fetcher.mock.calls[0][0] as URL
+    expect(url.searchParams.get('type')).toBe('inbound')
+    expect(url.searchParams.has('extension')).toBe(false)
+  })
+
   it('does not expose context from a session not owned by the receiving agent', async () => {
     const { db, urls } = database({
       telephony_user_configs: [{ extension: '1001' }],
