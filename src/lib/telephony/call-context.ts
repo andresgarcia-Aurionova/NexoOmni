@@ -105,14 +105,18 @@ export async function findLiveCallerCall(
 export async function findLiveCallerTransferTarget(
   db: SupabaseClient, accountId: string, phone?: string, callId?: string, aiExtension?: string,
 ) {
-  const candidates = await queryLiveCallerCalls(db, accountId, phone, callId, aiExtension)
-  if (!candidates) return null
-  const call = uniqueCallId(candidates)
-  const numbers = [...new Set(candidates.map((row) => normalizeKey(row.from_number)))]
-  const channels = [...new Set(candidates.flatMap((row) => row.channel_id ? [row.channel_id] : []))]
-  return call && numbers.length === 1 && channels.length === 1
-    ? { callId: call, phone: numbers[0], channelId: channels[0] }
-    : null
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const candidates = await queryLiveCallerCalls(db, accountId, phone, callId, aiExtension)
+    if (!candidates) return null
+    const call = uniqueCallId(candidates)
+    const numbers = [...new Set(candidates.map((row) => normalizeKey(row.from_number)))]
+    const channels = [...new Set(candidates.flatMap((row) => row.channel_id ? [row.channel_id] : []))]
+    if (call && numbers.length === 1 && channels.length === 1) {
+      return { callId: call, phone: numbers[0], channelId: channels[0] }
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return null
 }
 
 export async function loadOwnCallContext(
