@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeKey, findExistingContact } from '@/lib/contacts/dedupe'
-import { apiUrl, yeastarAiConnection, yeastarFetch } from './yeastar-ai'
+import {
+  apiUrl,
+  normalizeYeastarCallList,
+  yeastarAiConnection,
+  yeastarFetch,
+} from './yeastar-ai'
 import { isValidE164 } from '@/lib/whatsapp/phone-utils'
 import { normalizeCallSummary } from './call-summary'
 
@@ -47,19 +52,24 @@ async function queryLiveCallerCalls(
   })
   const result = await response.json() as {
     errcode?: number
-    data?: Array<{ call_id: string; members: Array<{
+    data?: unknown
+  }
+  type YeastarLiveCall = {
+    call_id: string
+    members: Array<{
       extension?: { number: string; member_status: string }
       inbound?: { from: string; to?: string; channel_id?: string; member_status: string }
       outbound?: { from: string; to?: string; member_status: string }
       internal?: { from: string; to?: string; member_status: string }
-    }> }>
+    }>
   }
-  if (!response.ok || result.errcode !== 0 || !Array.isArray(result.data)) {
+  const calls = normalizeYeastarCallList<YeastarLiveCall>(result.data)
+  if (!response.ok || result.errcode !== 0 || !calls) {
     throw new Error('Yeastar no pudo verificar las llamadas activas para guardar el contexto.')
   }
   // State-change webhooks are not heartbeats: an old ANSWER may be a long
   // active call or a missed BYE. Query the PBX instead of guessing by age.
-  return result.data.flatMap((call) => {
+  return calls.flatMap((call) => {
     if (!call.call_id || !Array.isArray(call.members) || (callId && call.call_id !== callId)) return []
     if (aiExtension && !call.members.some((member) => {
       const parties = [member.extension, member.inbound, member.outbound, member.internal]

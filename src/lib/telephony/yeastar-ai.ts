@@ -20,6 +20,15 @@ export async function yeastarFetch(input: URL, init?: RequestInit): Promise<Resp
   }
 }
 
+export function normalizeYeastarCallList<T>(value: unknown): T[] | null {
+  if (Array.isArray(value)) return value as T[]
+  if (value && typeof value === 'object') {
+    const list = (value as Record<string, unknown>).list
+    return Array.isArray(list) ? list as T[] : null
+  }
+  return null
+}
+
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number }
 
 function localPartsFromDate(date: Date, timezone: string): LocalParts {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { normalizeYeastarCallList } from './yeastar-ai'
 
 // Shared by the live-calls board and the operational-agents board — both
 // render "in call" from the `yeastar_live_calls` cache, which is only ever
@@ -13,7 +14,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 
 type YeastarReply = { errcode?: number; errmsg?: string; access_token?: string; access_token_expire_time?: number }
 type YeastarCallReply = YeastarReply & {
-  data?: Array<{ members?: Array<{ extension?: { number?: string; member_status?: string } }> }>
+  data?: unknown
 }
 type CachedToken = { value: string; expiresAt: number }
 const tokenCache = new Map<string, CachedToken>()
@@ -64,7 +65,11 @@ export async function reconcileYeastarLiveCalls(
   const result = await parseReply(response) as YeastarCallReply
   if (!response.ok || result.errcode !== 0) throw new Error(result.errmsg || 'Yeastar no pudo consultar las llamadas activas.')
 
-  const activeExtensions = new Set((result.data ?? []).flatMap((call) => (call.members ?? []).flatMap((member) => {
+  const activeCalls = normalizeYeastarCallList<{
+    members?: Array<{ extension?: { number?: string; member_status?: string } }>
+  }>(result.data)
+  if (!activeCalls) throw new Error('Yeastar devolvió una lista de llamadas activa con formato no reconocido.')
+  const activeExtensions = new Set(activeCalls.flatMap((call) => (call.members ?? []).flatMap((member) => {
     const extension = member.extension
     return extension?.number && extension.member_status !== 'BYE' ? [extension.number] : []
   })))
