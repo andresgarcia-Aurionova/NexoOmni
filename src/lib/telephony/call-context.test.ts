@@ -177,6 +177,33 @@ describe('live handoff association', () => {
     expect(url.searchParams.has('extension')).toBe(false)
   })
 
+  it('retries one transient Yeastar network failure before resolving the call', async () => {
+    const { db } = database({})
+    const fetcher = vi.fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(Response.json({ errcode: 0, data: [{
+        call_id: 'pbx-1',
+        members: [{
+          inbound: {
+            from: '+525512345678',
+            to: '2005',
+            channel_id: 'PJSIP/trunk-00000001',
+            member_status: 'ANSWERED',
+          },
+        }],
+      }] }))
+    vi.stubGlobal('fetch', fetcher)
+
+    await expect(
+      findLiveCallerTransferTarget(db, 'account-a', '525512345678', undefined, '2005'),
+    ).resolves.toEqual({
+      callId: 'pbx-1',
+      phone: '525512345678',
+      channelId: 'PJSIP/trunk-00000001',
+    })
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
   it('does not expose context from a session not owned by the receiving agent', async () => {
     const { db, urls } = database({
       telephony_user_configs: [{ extension: '1001' }],

@@ -10,6 +10,16 @@ export function apiUrl(pbxUrl: string, endpoint: string, version = 'v1.0') {
   return new URL(`openapi/${version}/${endpoint}`, `${pbxUrl.replace(/\/+$/, '')}/`)
 }
 
+export async function yeastarFetch(input: URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    return fetch(input, init)
+  }
+}
+
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number }
 
 function localPartsFromDate(date: Date, timezone: string): LocalParts {
@@ -72,7 +82,7 @@ export function parsePbxLocalTime(value: string, timezone = 'America/Mexico_City
 export async function accessToken(accountId: string, pbxUrl: string, clientId: string, clientSecret: string) {
   const cached = tokenCache.get(accountId)
   if (cached && cached.expiresAt > Date.now()) return cached.value
-  const response = await fetch(apiUrl(pbxUrl, 'get_token'), {
+  const response = await yeastarFetch(apiUrl(pbxUrl, 'get_token'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': 'OpenAPI' },
     body: JSON.stringify({ username: clientId, password: clientSecret }),

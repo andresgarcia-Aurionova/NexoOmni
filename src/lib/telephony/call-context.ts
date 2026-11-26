@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeKey, findExistingContact } from '@/lib/contacts/dedupe'
-import { apiUrl, yeastarAiConnection } from './yeastar-ai'
+import { apiUrl, yeastarAiConnection, yeastarFetch } from './yeastar-ai'
 import { isValidE164 } from '@/lib/whatsapp/phone-utils'
 import { normalizeCallSummary } from './call-summary'
 
@@ -41,7 +41,10 @@ async function queryLiveCallerCalls(
   else if (phone) url.searchParams.set('type', 'inbound')
   else if (aiExtension) url.searchParams.set('extension', aiExtension)
   else url.searchParams.set('type', 'inbound')
-  const response = await fetch(url, { headers: { 'User-Agent': 'OpenAPI' }, signal: AbortSignal.timeout(15_000) })
+  const response = await yeastarFetch(url, {
+    headers: { 'User-Agent': 'OpenAPI' },
+    signal: AbortSignal.timeout(15_000),
+  })
   const result = await response.json() as {
     errcode?: number
     data?: Array<{ call_id: string; members: Array<{
