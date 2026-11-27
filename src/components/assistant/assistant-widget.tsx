@@ -1,6 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { BookOpen, ChevronDown, Download, LoaderCircle, MessageCircle, Plus, Printer, Send, Trash2, X } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { usePathname } from 'next/navigation'
@@ -23,6 +32,13 @@ import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { displayContactPhone } from '@/lib/contacts/contact-identity'
+import {
+  clampAssistantBubblePosition,
+  type AssistantBubblePosition,
+} from './assistant-widget-position'
+
+const BUBBLE_POSITION_STORAGE_KEY = 'nexoomni:assistant-bubble-position'
+const DRAG_HOLD_MS = 300
 
 interface Thread {
   id: string
@@ -98,8 +114,22 @@ export function AssistantWidget() {
   const [sending, setSending] = useState(false)
   const [workingActionId, setWorkingActionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const [bubblePosition, setBubblePosition] = useState<AssistantBubblePosition | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const selectedThreadIdRef = useRef<string | null>(null)
+  const bubblePositionRef = useRef<AssistantBubblePosition | null>(null)
+  const bubbleButtonRef = useRef<HTMLButtonElement>(null)
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressClickRef = useRef(false)
+  const dragRef = useRef<{
+    pointerId: number
+    active: boolean
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+  } | null>(null)
   const reportLabels: AssistantReportExportLabels = {
     language: locale,
     title: t('report.title'),
@@ -242,6 +272,147 @@ export function AssistantWidget() {
       analysis: t('report.values.analysis'),
     },
   }
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)')
+    const updateMobile = () => setIsMobile(media.matches)
+    updateMobile()
+    media.addEventListener('change', updateMobile)
+    return () => media.removeEventListener('change', updateMobile)
+  }, [])
+
+  useEffect(() => {
+    if (!isMobile) return
+    const bounds = () => ({
+      width: window.visualViewport?.width ?? window.innerWidth,
+      height: window.visualViewport?.height ?? window.innerHeight,
+    })
+    let saved: AssistantBubblePosition | null = null
+    try {
+      const parsed = JSON.parse(
+        window.localStorage.getItem(BUBBLE_POSITION_STORAGE_KEY) ?? 'null',
+      )
+      if (
+        parsed
+        && typeof parsed === 'object'
+        && Number.isFinite(parsed.x)
+        && Number.isFinite(parsed.y)
+      ) {
+        const viewport = bounds()
+        saved = clampAssistantBubblePosition(parsed, viewport.width, viewport.height)
+      }
+    } catch {
+      saved = null
+    }
+    bubblePositionRef.current = saved
+    setBubblePosition(saved)
+
+    const clampToViewport = () => {
+      setBubblePosition((current) => {
+        if (!current) return current
+        const viewport = bounds()
+        const next = clampAssistantBubblePosition(current, viewport.width, viewport.height)
+        bubblePositionRef.current = next
+        return next
+      })
+    }
+    window.addEventListener('resize', clampToViewport)
+    window.visualViewport?.addEventListener('resize', clampToViewport)
+    return () => {
+      window.removeEventListener('resize', clampToViewport)
+      window.visualViewport?.removeEventListener('resize', clampToViewport)
+    }
+  }, [isMobile])
+
+  useEffect(() => () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current)
+  }, [])
+
+  const finishBubbleDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+    const drag = dragRef.current
+    if (drag?.pointerId !== event.pointerId) return
+    if (drag.active) {
+      suppressClickRef.current = true
+      const position = bubblePositionRef.current
+      if (position) {
+        try {
+          window.localStorage.setItem(BUBBLE_POSITION_STORAGE_KEY, JSON.stringify(position))
+        } catch {
+          // The bubble remains draggable when storage is unavailable.
+        }
+      }
+      window.setTimeout(() => {
+        suppressClickRef.current = false
+      }, 500)
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    dragRef.current = null
+  }, [])
+
+  const handleBubblePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!isMobile || open || event.pointerType !== 'touch') return
+      const button = event.currentTarget
+      const rect = button.getBoundingClientRect()
+      dragRef.current = {
+        pointerId: event.pointerId,
+        active: false,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: rect.left,
+        originY: rect.top,
+      }
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = setTimeout(() => {
+        const drag = dragRef.current
+        if (!drag || drag.pointerId !== event.pointerId) return
+        drag.active = true
+        const position = clampAssistantBubblePosition(
+          { x: rect.left, y: rect.top },
+          window.visualViewport?.width ?? window.innerWidth,
+          window.visualViewport?.height ?? window.innerHeight,
+        )
+        bubblePositionRef.current = position
+        setBubblePosition(position)
+        button.setPointerCapture(event.pointerId)
+      }, DRAG_HOLD_MS)
+    },
+    [isMobile, open],
+  )
+
+  const handleBubblePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const drag = dragRef.current
+      if (!drag?.active || drag.pointerId !== event.pointerId) return
+      event.preventDefault()
+      const position = clampAssistantBubblePosition(
+        {
+          x: drag.originX + event.clientX - drag.startX,
+          y: drag.originY + event.clientY - drag.startY,
+        },
+        window.visualViewport?.width ?? window.innerWidth,
+        window.visualViewport?.height ?? window.innerHeight,
+      )
+      bubblePositionRef.current = position
+      setBubblePosition(position)
+    },
+    [],
+  )
+
+  const handleBubbleClick = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (suppressClickRef.current) {
+      event.preventDefault()
+      suppressClickRef.current = false
+      return
+    }
+    setOpen((value) => !value)
+  }, [])
 
   const selectThread = useCallback((id: string | null) => {
     selectedThreadIdRef.current = id
@@ -466,6 +637,16 @@ export function AssistantWidget() {
   if (profileLoading || unavailable || !accountRole || !hasMinRole(accountRole, 'supervisor')) {
     return null
   }
+
+  const savedBubblePosition = isMobile && !open ? bubblePosition : null
+  const bubbleStyle: CSSProperties | undefined = savedBubblePosition
+    ? {
+      left: savedBubblePosition.x,
+      top: savedBubblePosition.y,
+      right: 'auto',
+      bottom: 'auto',
+    }
+    : undefined
 
   return (
     <>
@@ -743,11 +924,19 @@ export function AssistantWidget() {
         aria-expanded={open}
         aria-label={open ? t('close') : t('open')}
         className={
-          isInboxMobileComposer && !open
-            ? 'fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-50 size-12 rounded-full shadow-lg sm:bottom-4'
-            : 'fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-lg'
+          savedBubblePosition
+            ? 'fixed z-50 size-12 touch-none rounded-full shadow-lg select-none'
+            : isInboxMobileComposer && !open
+              ? 'fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-50 size-12 touch-none rounded-full shadow-lg select-none sm:bottom-4'
+              : 'fixed right-4 bottom-4 z-50 size-12 touch-none rounded-full shadow-lg select-none'
         }
-        onClick={() => setOpen((value) => !value)}
+        onClick={handleBubbleClick}
+        onPointerCancel={finishBubbleDrag}
+        onPointerDown={handleBubblePointerDown}
+        onPointerMove={handleBubblePointerMove}
+        onPointerUp={finishBubbleDrag}
+        ref={bubbleButtonRef}
+        style={bubbleStyle}
         type="button"
       >
         {open
