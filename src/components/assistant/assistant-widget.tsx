@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { BookOpen, ChevronDown, Download, LoaderCircle, MessageCircle, Plus, Printer, Send, Trash2, X } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
+import { usePathname } from 'next/navigation'
 import { hasMinRole } from '@/lib/auth/roles'
 import { AssistantActionProposalSchema, type AssistantActionRequest } from '@/lib/assistant/action-types'
 import {
@@ -83,6 +84,8 @@ function readReportData(value: unknown) {
 export function AssistantWidget() {
   const t = useTranslations('Assistant')
   const locale = useLocale()
+  const pathname = usePathname()
+  const isInboxMobileComposer = pathname === '/inbox'
   const { accountRole, profileLoading } = useAuth()
   const [open, setOpen] = useState(false)
   const [unavailable, setUnavailable] = useState(false)
@@ -739,7 +742,11 @@ export function AssistantWidget() {
       <Button
         aria-expanded={open}
         aria-label={open ? t('close') : t('open')}
-        className="fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-lg"
+        className={
+          isInboxMobileComposer && !open
+            ? 'fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-50 size-12 rounded-full shadow-lg sm:bottom-4'
+            : 'fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-lg'
+        }
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
